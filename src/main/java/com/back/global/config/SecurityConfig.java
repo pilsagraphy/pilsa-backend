@@ -1,6 +1,31 @@
 package com.back.global.config;
 
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.web.SecurityFilterChain;
+
+@Configuration
+@EnableWebSecurity
 public class SecurityConfig {
+
+    // 임시작성하였으므로 윤정민씨는 아래 주석 코드를 참고하여 더 정교하게 바꿔주시기 바랍니다.
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/mail/**"))
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(
+                                "/api/mail/**", // 인증번호 관련
+                                "/swagger-ui/**", // 스웨거 관련
+                                "/v3/api-docs/**" // 스웨거 관련
+                        ).permitAll()
+                        .anyRequest().authenticated()
+                );
+
+        return http.build();
+    }
 }
 
 //package com.blue.global.config;
