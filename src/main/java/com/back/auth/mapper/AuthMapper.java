@@ -1,6 +1,12 @@
 package com.back.auth.mapper;
 
+import com.back.auth.dto.UserDto;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+
+@Mapper
 public interface AuthMapper {
+    UserDto findByLoginId(@Param("loginId") String loginId);
 }
 
 //@Mapper

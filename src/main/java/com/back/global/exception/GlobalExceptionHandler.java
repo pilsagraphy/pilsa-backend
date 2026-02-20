@@ -10,8 +10,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 // 전역 예외 처리기
 public class GlobalExceptionHandler {
   
-  @ExceptionHandler(AuthException.class)
-  public ResponseEntity<String> handleAuthException(AuthException e) {
+  @ExceptionHandler(BaseException.class)
+  public ResponseEntity<String> handleAuthException(BaseException e) {
     log.debug("AuthException handled: {}", e.getMessage());
     return ResponseEntity.status(e.getStatus()).body(e.getMessage());
   }
