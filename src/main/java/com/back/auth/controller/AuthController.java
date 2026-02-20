@@ -1,46 +1,45 @@
 package com.back.auth.controller;
 
-public class AuthController {
-}
-
-//package com.blue.auth.controller;
-//
-//import com.blue.auth.dto.*;
-//    import com.blue.auth.service.AuthService;
-//import com.blue.global.exception.AuthException;
-//import jakarta.servlet.http.Cookie;
-//import jakarta.servlet.http.HttpServletRequest;
-//import jakarta.servlet.http.HttpServletResponse;
-//import lombok.RequiredArgsConstructor;
-//import org.springframework.http.HttpStatus;
-//import org.springframework.http.ResponseEntity;
+import com.back.auth.dto.*;
+import com.back.auth.exception.AuthException;
+import com.back.auth.service.AuthService;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 //import org.springframework.security.core.Authentication;
 //import org.springframework.security.core.annotation.AuthenticationPrincipal;
-//import org.springframework.web.bind.annotation.*;
-//
-//    import java.util.Map;
-//
-//@RestController
-//@RequestMapping("/api/auth")
-//@RequiredArgsConstructor
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/auth")
+@RequiredArgsConstructor
+public class AuthController {
+
+    private final AuthService authService;
+
+    @PostMapping("/login")
+    public ResponseEntity<?> login(@RequestBody LoginRequest request,
+                                              HttpServletRequest httpRequest, // 쿠키 확인을 위해 필요함.
+                                              HttpServletResponse response) {
+        try {
+            AuthResponse authResponse = authService.login(request, httpRequest, response);
+            return ResponseEntity.ok(authResponse);
+        } catch (AuthException e) {
+            // 사용자 예외
+            return ResponseEntity.status(e.getStatus()).body(e.getMessage());
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body("로그인 중 예기치 못한 에러가 발생했습니다.");
+        }
+    } // ResponseEntity<?> : 성공은 AuthResponse, 실패는 String/Map으로 섞어 내려도 됨
+}
+
 //public class AuthController {
 //  private final AuthService authService;
-//
-//  @PostMapping("/login")
-//  public ResponseEntity<?> login(@RequestBody LoginRequest request,
-//                                 HttpServletRequest httpRequest,
-//                                 HttpServletResponse response) {
-//    try {
-//      AuthResponse authResponse = authService.login(request, httpRequest, response);
-//      return ResponseEntity.ok(authResponse);
-//    }  catch (AuthException e) {
-//      // 사용자 예외
-//      return ResponseEntity.status(e.getStatus()).body(e.getMessage());
-//    } catch (RuntimeException e) {
-//      return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-//          .body("로그인 중 예기치 못한 에러가 발생했습니다.");
-//    }
-//  }
 //
 //  // 공통 메소드 : /refresh, /extend
 //  // 쿠키에서 refreshToken 추출
