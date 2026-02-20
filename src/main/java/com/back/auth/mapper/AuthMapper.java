@@ -1,12 +1,19 @@
 package com.back.auth.mapper;
 
 import com.back.auth.dto.UserDto;
+import com.back.auth.dto.UserSignupDto;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 @Mapper
 public interface AuthMapper {
+    // 로그인
     UserDto findByLoginId(@Param("loginId") String loginId);
+    // 회원가입
+    void insertUser(UserSignupDto user);
+    // 회원가입 - 아이디 & 이메일 중복 확인
+    boolean existsByLoginId(@Param("loginId") String loginId);
+    boolean existsByEmail(@Param("email") String email);
 }
 
 //@Mapper

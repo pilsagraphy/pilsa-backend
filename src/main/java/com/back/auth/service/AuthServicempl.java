@@ -9,10 +9,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
-public class AuthServicempl implements AuthService{
+public class AuthServicempl implements AuthService {
 
     private final AuthMapper authMapper;
     private final PasswordEncoder passwordEncoder;
@@ -34,6 +35,49 @@ public class AuthServicempl implements AuthService{
             throw new AuthException("승인되지 않은 계정입니다.", HttpStatus.UNAUTHORIZED);
         }
         return new AuthResponse(user.getUserId(), user.getRole());
+    }
+
+    // 회원가입
+    @Transactional
+    public void signup(SignupRequest request) {
+
+        // 중복 아이디 확인
+        if (authMapper.existsByLoginId(request.getLoginId())) {
+            throw new AuthException("이미 존재하는 아이디입니다.", HttpStatus.CONFLICT);
+        }
+
+        // 중복 이메일 확인
+        if (authMapper.existsByEmail(request.getEmail())) {
+            throw new AuthException("이미 존재하는 이메일입니다.", HttpStatus.CONFLICT);
+        }
+
+        // 비밀번호 암호화
+        String encodedPw = passwordEncoder.encode(request.getPassword());
+
+        UserSignupDto user = new UserSignupDto();
+
+        user.setName(request.getName());
+        user.setMajor(request.getMajor());
+        user.setStudentNo(request.getStudentNo());
+        user.setEmail(request.getEmail());
+        user.setLoginId(request.getLoginId());
+        user.setPasswordHash(encodedPw);
+        user.setRole(request.getRole());
+        user.setIsDeleted(Boolean.FALSE);
+
+        authMapper.insertUser(user);
+    }
+
+    // 회원가입 - 아이디 중복
+    @Override
+    public boolean existsByLoginId(String loginId) {
+        return authMapper.existsByLoginId(loginId);
+    }
+
+    // 회원가입 - 이메일 중복 확인
+    @Override
+    public boolean existsByEmail(String email) {
+        return authMapper.existsByEmail(email);
     }
 }
 

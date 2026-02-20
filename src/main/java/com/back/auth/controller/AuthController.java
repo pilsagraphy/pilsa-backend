@@ -21,6 +21,7 @@ public class AuthController {
 
     private final AuthService authService;
 
+    // 로그인
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest request,
                                               HttpServletRequest httpRequest, // 쿠키 확인을 위해 필요함.
@@ -36,6 +37,46 @@ public class AuthController {
                     .body("로그인 중 예기치 못한 에러가 발생했습니다.");
         }
     } // ResponseEntity<?> : 성공은 AuthResponse, 실패는 String/Map으로 섞어 내려도 됨
+
+    // 회원가입
+    @PostMapping("/register")
+    public ResponseEntity<?> signup(@RequestBody SignupRequest request) {
+        try {
+            authService.signup(request);
+            return ResponseEntity.ok().build(); // 200
+        } catch (AuthException e) {
+            // 사용자 예외
+            return ResponseEntity.status(e.getStatus()).body(e.getMessage());
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body("회원가입 중 예기치 못한 에러가 발생했습니다.");
+        }
+    }
+
+    // 회원가입용 - 아이디 & 이메일 중복 확인 API
+    @GetMapping("/check")
+    public ResponseEntity<?> check(
+            @RequestParam(required = false) String email,
+            @RequestParam(required = false) String loginId
+    ) {
+        // 이메일 체크
+        if (email != null && !email.isBlank()) {
+            boolean exists = authService.existsByEmail(email);
+            if (exists) {
+                return ResponseEntity.badRequest().body("이미 가입된 이메일 주소입니다.");
+            }
+            return ResponseEntity.ok().build(); // 200
+        }
+        // 아이디 체크
+        if (loginId != null && !loginId.isBlank()) {
+            boolean exists = authService.existsByLoginId(loginId);
+            if (exists) {
+                return ResponseEntity.badRequest().body("이미 사용 중인 아이디입니다.");
+            }
+            return ResponseEntity.ok().build(); // 200,
+        }
+        return ResponseEntity.badRequest().body("회원가입-중복확인 중 예기치 못한 에러가 발생했습니다."); // 둘 다 없으면 400
+    }
 }
 
 //public class AuthController {
