@@ -15,6 +15,20 @@
         FROM users
         WHERE login_id = #{loginId}
     </select>
+
+    <!-- 회원가입 -->
+    <insert id="insertUser" useGeneratedKeys="true" keyProperty="userId">
+        INSERT INTO users (name, major, student_no, email, login_id, password_hash, role, is_deleted)
+        VALUES (#{name}, #{major}, #{studentNo}, #{email}, #{loginId}, #{passwordHash}, #{role}, #{isDeleted})
+    </insert>
+
+    <!-- 회원가입 - 아이디 & 이메일 중복 확인 -->
+    <select id="existsByLoginId" resultType="boolean">
+        SELECT COUNT(*) > 0 FROM users WHERE login_id = #{loginId}
+    </select>
+    <select id="existsByEmail" resultType="boolean">
+        SELECT COUNT(*) > 0 FROM users WHERE email = #{email}
+    </select>
 </mapper>
 
         <!--<mapper namespace="com.back.auth.mapper.AuthMapper">-->
