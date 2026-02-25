@@ -17,11 +17,11 @@ import static org.springframework.security.config.Customizer.withDefaults;
 @EnableWebSecurity
 public class SecurityConfig {
 
-//    private final JwtAuthenticationFilter jwtFilter;
-//
-//    public SecurityConfig(JwtAuthenticationFilter jwtFilter) {
-//        this.jwtFilter = jwtFilter;
-//    }
+    private final JwtAuthenticationFilter jwtFilter;
+
+    public SecurityConfig(JwtAuthenticationFilter jwtFilter) {
+        this.jwtFilter = jwtFilter;
+    }
 
     // 임시작성하였으므로 윤정민씨는 아래 주석 코드를 참고하여 더 정교하게 바꿔주시기 바랍니다.
     @Bean
@@ -42,14 +42,14 @@ public class SecurityConfig {
 
                         // 역할별 접근
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/api/stu/**").hasRole("STUDENTS")
-                        .requestMatchers("/api/alu/**").hasRole("ALUMNI")
+                        .requestMatchers("/api/stu/**").hasAnyRole("STUDENTS", "ADMIN")
+                        .requestMatchers("/api/alu/**").hasAnyRole("ALUMNI", "ADMIN")
 
                         // 그 외는 로그인 필요
                         .anyRequest().authenticated()
-                );
+                )
                 // 필터 입히기
-//                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
