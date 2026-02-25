@@ -8,6 +8,7 @@ public class UserDto {
     private String loginId;
     private String password;
     private String passwordHash;
+    private String name;
     private String email;
     private String role;
     private Boolean isDeleted;

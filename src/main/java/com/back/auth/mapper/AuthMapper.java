@@ -9,6 +9,9 @@ import org.apache.ibatis.annotations.Param;
 public interface AuthMapper {
     // 로그인
     UserDto findByLoginId(@Param("loginId") String loginId);
+    void updateLastLoginAt(@Param("loginId") String loginId);
+    // jti 회전
+//    void rotateSessionKey(String oldJti, String newJti);
     // 회원가입
     void insertUser(UserSignupDto user);
     // 회원가입 - 아이디 & 이메일 중복 확인
