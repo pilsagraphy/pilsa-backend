@@ -6,6 +6,7 @@ import com.back.auth.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import jakarta.servlet.http.Cookie;
 //import org.springframework.security.core.Authentication;
 //import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.http.HttpStatus;
@@ -77,6 +78,49 @@ public class AuthController {
         }
         return ResponseEntity.badRequest().body("회원가입-중복확인 중 예기치 못한 에러가 발생했습니다."); // 둘 다 없으면 400
     }
+
+    // 리프레시 토큰을 가지고 있는 쿠키의 존재 여부 확인
+    @PostMapping("/token/refresh/validate")
+    public ResponseEntity<Void> check(HttpServletRequest request) {
+        boolean exists = authService.checkRefreshToken(request);
+        if (!exists) {
+            return ResponseEntity.noContent().build(); // 204 → 쿠키 없음
+        }
+        return ResponseEntity.ok().build(); // 200 → 쿠키 있음
+    }
+
+    // 쿠키에서 리프레시 토큰 검사 (refreshToken 추출)
+    private String extractRefreshToken(HttpServletRequest request) {
+        if (request.getCookies() != null) {
+            for (Cookie cookie : request.getCookies()) {
+                if ("refreshToken".equals(cookie.getName())) {
+                    return cookie.getValue();
+                }
+            }
+        }
+        return null;
+    }
+
+    // 리프레시토큰 연장(재발급) -> 로그인 시 수동 연장
+    @PostMapping("/token/refresh/extend")
+    public ResponseEntity<AuthResponse> extend(HttpServletRequest request, HttpServletResponse response) {
+        String refreshToken = extractRefreshToken(request);
+        if (refreshToken == null) {
+            return ResponseEntity.status(401).build();
+        }
+        return ResponseEntity.ok(authService.extend(refreshToken, response));
+    }
+
+    // 엑세스 토큰 발급/재발급
+    @PostMapping("/token/access/refresh")
+    public ResponseEntity<AuthResponse> refresh(HttpServletRequest request) {
+        String refreshToken = extractRefreshToken(request);
+        if (refreshToken == null) {
+            return ResponseEntity.status(401).build();
+        }
+        return ResponseEntity.ok(authService.refresh(refreshToken));
+    }
+
 }
 
 //public class AuthController {
