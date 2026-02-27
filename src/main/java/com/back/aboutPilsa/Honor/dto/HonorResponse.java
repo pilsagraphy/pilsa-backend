@@ -15,4 +15,6 @@ public class HonorResponse {
     private String message;
     private LocalDateTime donatedAt;
     private boolean isAnonymous;
+
+    private String photoUrl;
 }

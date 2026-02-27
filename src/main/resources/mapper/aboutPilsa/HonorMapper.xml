@@ -12,7 +12,8 @@
             affiliation,
             major,
             message,
-            donated_at AS donatedAt
+            donated_at AS donatedAt,
+            photo_url AS photoUrl
         FROM
             donations
         ORDER BY
