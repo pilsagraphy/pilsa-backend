@@ -76,6 +76,45 @@ public class AuthServicempl implements AuthService {
         return new AuthResponse(accessToken, user.getUserId(), user.getRole(), refreshExp);
     }
 
+    // 로그아웃
+    public void logout(HttpServletResponse response, HttpServletRequest request) {
+        // 1) refreshToken 쿠키 제거
+        Cookie cookie = new Cookie("refreshToken", "");
+        cookie.setMaxAge(0); // 즉시 만료
+        cookie.setPath("/api/auth/token");
+        cookie.setHttpOnly(true);
+        cookie.setSecure(cookieSecure);
+        response.addCookie(cookie);
+
+        // 2) 세션키로 닫기 (쿠키에서 값 읽고 jti 추출)
+        try {
+            String refreshToken = null;
+            if (request.getCookies() != null) {
+                for (Cookie c : request.getCookies()) {
+                    if ("refreshToken".equals(c.getName())) {
+                        refreshToken = c.getValue();
+                        break;
+                    }
+                }
+            }
+//            if (refreshToken != null && !refreshToken.isBlank()) {
+//                String sessionKey = jwtUtil.extractJti(refreshToken);
+//                if (sessionKey != null) {
+//                    int n = authMapper.updateLogoutLogBySession(sessionKey);
+//                    if (n == 0) {
+//                        log.debug("닫을 세션 로그가 없음 (이미 로그아웃 되었을 수 있음). sessionKey={}", sessionKey);
+//                    }
+//                } else {
+//                    log.debug("refreshToken에서 jti를 추출할 수 없음 (만료/위조 가능). 이메일 기반 닫기는 생략.");
+//                }
+//            } else {
+//                log.debug("refreshToken 쿠키 없음. 이메일 기반 닫기는 생략.");
+//            }
+        } catch (Exception e) {
+            log.warn("로그아웃 로그 기록 실패: {}", e.getMessage(), e);
+        }
+    }
+
     // 회원가입
     @Transactional
     public void signup(SignupRequest request) {
@@ -220,47 +259,6 @@ public class AuthServicempl implements AuthService {
         }
     }
 }
-
-
-
-//  // 로그아웃
-//  public void logout(HttpServletResponse response, HttpServletRequest request) {
-//    // 1) refreshToken 쿠키 제거
-//    Cookie cookie = new Cookie("refreshToken", "");
-//    cookie.setMaxAge(0); // 즉시 만료
-//    cookie.setPath("/api/auth/token");
-//    cookie.setHttpOnly(true);
-//    cookie.setSecure(cookieSecure);
-//    response.addCookie(cookie);
-//
-//    // 2) 세션키로 닫기 (쿠키에서 값 읽고 jti 추출)
-//    try {
-//      String refreshToken = null;
-//      if (request.getCookies() != null) {
-//        for (Cookie c : request.getCookies()) {
-//          if ("refreshToken".equals(c.getName())) {
-//            refreshToken = c.getValue();
-//            break;
-//          }
-//        }
-//      }
-//      if (refreshToken != null && !refreshToken.isBlank()) {
-//        String sessionKey = jwtUtil.extractJti(refreshToken);
-//        if (sessionKey != null) {
-//          int n = loginLogMapper.updateLogoutLogBySession(sessionKey);
-//          if (n == 0) {
-//            log.debug("닫을 세션 로그가 없음 (이미 로그아웃 되었을 수 있음). sessionKey={}", sessionKey);
-//          }
-//        } else {
-//          log.debug("refreshToken에서 jti를 추출할 수 없음 (만료/위조 가능). 이메일 기반 닫기는 생략.");
-//        }
-//      } else {
-//        log.debug("refreshToken 쿠키 없음. 이메일 기반 닫기는 생략.");
-//      }
-//    } catch (Exception e) {
-//      log.warn("로그아웃 로그 기록 실패: {}", e.getMessage(), e);
-//    }
-//  }
 //
 //
 //

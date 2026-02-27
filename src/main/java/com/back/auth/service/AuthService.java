@@ -10,6 +10,8 @@ import jakarta.servlet.http.HttpServletResponse;
 public interface AuthService {
     // 로그인
     AuthResponse login(LoginRequest request, HttpServletRequest httpRequest, HttpServletResponse response);
+    // 로그아웃
+    void logout(HttpServletResponse response, HttpServletRequest request);
     //회원가입
     void signup(SignupRequest request);
     // 회원가입 - 아이디 & 이메일 중복 확인
