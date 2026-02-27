@@ -39,6 +39,14 @@ public class AuthController {
         }
     } // ResponseEntity<?> : 성공은 AuthResponse, 실패는 String/Map으로 섞어 내려도 됨
 
+    // 로그아웃
+    @PostMapping("/token/logout")
+    public ResponseEntity<Void> logout(HttpServletResponse response,
+                                       HttpServletRequest request) {
+        authService.logout(response, request);
+        return ResponseEntity.ok().build();
+    }
+
     // 회원가입
     @PostMapping("/register")
     public ResponseEntity<?> signup(@RequestBody SignupRequest request) {
@@ -120,74 +128,14 @@ public class AuthController {
         }
         return ResponseEntity.ok(authService.refresh(refreshToken));
     }
-
 }
 
-//public class AuthController {
-//  private final AuthService authService;
-//
-//  // 공통 메소드 : /refresh, /extend
-//  // 쿠키에서 refreshToken 추출
-//  private String extractRefreshToken(HttpServletRequest request) {
-//    if (request.getCookies() != null) {
-//      for (Cookie cookie : request.getCookies()) {
-//        if ("refreshToken".equals(cookie.getName())) {
-//          return cookie.getValue();
-//        }
-//      }
-//    }
-//    return null;
-//  }
-//
-//  // 엑세스 토큰의 재발급
-//  @PostMapping("/token/refresh")
-//  public ResponseEntity<AuthResponse> refresh(HttpServletRequest request) {
-//    String refreshToken = extractRefreshToken(request);
-//    if (refreshToken == null) {
-//      return ResponseEntity.status(401).build();
-//    }
-//    return ResponseEntity.ok(authService.refresh(refreshToken));
-//  }
-//
-//  // 로그인 수동 연장 (리프레시 토큰의 재발급)
-//  @PostMapping("/token/extend")
-//  public ResponseEntity<AuthResponse> extend(HttpServletRequest request, HttpServletResponse response) {
-//    String refreshToken = extractRefreshToken(request);
-//    if (refreshToken == null) {
-//      return ResponseEntity.status(401).build();
-//    }
-//    return ResponseEntity.ok(authService.extend(refreshToken, response));
-//  }
-//
-//  // 리프레시 토큰을 가지고 있는 쿠키의 존재 여부 확인
-//  @PostMapping("/token/check")
-//  public ResponseEntity<Void> check(HttpServletRequest request) {
-//    boolean exists = authService.checkRefreshToken(request);
-//    if (!exists) {
-//      return ResponseEntity.noContent().build(); // 204 → 쿠키 없음
-//    }
-//    return ResponseEntity.ok().build(); // 200 → 쿠키 있음
-//  }
-//
-//  // 로그아웃
-//  @PostMapping("/token/logout")
-//  public ResponseEntity<Void> logout(HttpServletResponse response,
-//                                     HttpServletRequest request) {
-//    authService.logout(response, request);
-//    return ResponseEntity.ok().build();
-//  }
-//
+
 //  // 이메일 중복 확인 API
 //  @GetMapping("/check-email")
 //  public ResponseEntity<Boolean> checkEmail(@RequestParam String email) {
 //    boolean exists = authService.checkEmailDuplicate(email);
 //    return ResponseEntity.ok(exists); // true = 중복, false = 사용 가능
-//  }
-//
-//  // 회원가입
-//  @PostMapping("/signup")
-//  public ResponseEntity<SignupResponse> signup(@RequestBody SignupRequest request) {
-//    return ResponseEntity.ok(authService.signup(request));
 //  }
 //
 //  // 비밀번호 재설정
