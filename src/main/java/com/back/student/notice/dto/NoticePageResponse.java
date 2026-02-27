@@ -7,6 +7,7 @@ import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
 
+// 공지사항 전체 조회
 @Getter
 @Setter
 public class NoticePageResponse {

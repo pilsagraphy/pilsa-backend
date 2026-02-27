@@ -31,14 +31,20 @@ public interface NoticeMapper {
 
     // 공지사항 단일글 조회
     void updateViewCount(@Param("postId") Long postId);
-    NoticeDetailResponse findNoticeDetailById(@Param("postId") Long postId, @Param("boardId") Long boardId);
+    NoticeDetailResponse findNoticeDetailById(
+            @Param("postId") Long postId,
+            @Param("boardId") Long boardId,
+            @Param("sort") String sort
+    );
     List<AttachmentFileResponse> findAttachmentIdsByPostId(@Param("postId") Long postId);
-    List<Long> findImageIdsByPostId(@Param("postId") Long postId);
+    // 게시글 전체 좋아요 개수 조회
+    int countLikesByPostId(@Param("postId") Long postId);
+    // 특정 유저의 좋아요 여부 확인
+    boolean existsLikeByPostIdAndUserId(@Param("postId") Long postId, @Param("userId") Long userId);
 
     // 좋아요
-    int checkLikeExists(@Param("postId") Long postId, @Param("userId") Long userId);
     void insertLike(@Param("postId") Long postId, @Param("userId") Long userId);
-    void deleteLike(@Param("postId") Long postId, @Param("userId") Long userId);
+    int deleteLike(@Param("postId") Long postId, @Param("userId") Long userId);
 
     // 공지사항 등록 수정 삭제
     void insertNotice(@Param("request") NoticeRequest request, @Param("userId") Long userId, @Param("boardId") Long boardId);
@@ -49,5 +55,4 @@ public interface NoticeMapper {
                           @Param("fileUrl") String fileUrl,
                           @Param("fileSize") Long fileSize,
                           @Param("fileType") String fileType);
-//    void linkAttachments(@Param("attachmentIds") List<Long> attachmentIds, @Param("postId") Long postId);
 }

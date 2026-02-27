@@ -5,6 +5,7 @@ import lombok.Setter;
 
 import java.time.LocalDateTime;
 
+// 첨부파일
 @Getter
 @Setter
 public class AttachmentFileResponse {

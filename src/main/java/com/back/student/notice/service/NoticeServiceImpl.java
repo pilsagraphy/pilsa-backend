@@ -80,20 +80,41 @@ public class NoticeServiceImpl implements NoticeService {
     // 공지사항 단일글 조회
     @Override
     @Transactional // 조회수 업데이트가 포함되므로 readOnly 제거 또는 별도 처리
-    public NoticeDetailResponse getNoticeDetail(Long postId) {
-        // 1. 조회수 1 증가
-        noticeMapper.updateViewCount(postId);
-        // 2. 상세 데이터 조회
-        NoticeDetailResponse detail = noticeMapper.findNoticeDetailById(postId, NOTICE_BOARD_ID);
-        // 3. 존재하지 않는 게시글 예외 처리
+    public NoticeDetailResponse getNoticeDetail(Long postId, String sort) { // 정렬기준과 현재 기준값을 받음
+        // 1. 상세 데이터 조회
+        NoticeDetailResponse detail = noticeMapper.findNoticeDetailById(postId, NOTICE_BOARD_ID, sort);
+        //[예외처리] 존재하지 않는 게시글 예외 처리
         if (detail == null) {
             throw new NoticeException("존재하지 않는 게시글입니다.", HttpStatus.NOT_FOUND);
         }
+        // 2. ID 숫자들을 API 경로 문자열로 변환
+        String baseApi = "/api/stu/notices/";
+        // 이전글 URL 생성
+        if (detail.getPrevPostApi() != null) {
+            detail.setPrevPostApi(baseApi + detail.getPrevPostApi());
+        }
+        // 다음글 URL 생성
+        if (detail.getNextPostApi() != null) {
+            detail.setNextPostApi(baseApi + detail.getNextPostApi());
+        }
+        // 3. 조회수 1 증가
+        noticeMapper.updateViewCount(postId);
         // 4. 첨부파일 ID 리스트 조회 (필요 시 매퍼에서 별도 호출)
-        detail.setAttachments(noticeMapper.findAttachmentIdsByPostId(postId));
-        // + 이미지 ID들만 따로 채우기
-        detail.setImageIds(noticeMapper.findImageIdsByPostId(postId));
-        // 첨부파일하고 이미지가 중복되기는 하는데 본문에 삽입한 이미지도 첨부파일 내역에 남겨야 하나 싶어서 일단 중복되게 냅둠
+        List<AttachmentFileResponse> attachments = noticeMapper.findAttachmentIdsByPostId(postId);
+        detail.setAttachments(attachments);
+        detail.setAttachmentCount(attachments != null ? attachments.size() : 0); // 첨부파일 개수 세팅 (리스트의 size 활용)
+        // 5. 좋아요 개수 추가
+        detail.setLikeCount(noticeMapper.countLikesByPostId(postId));
+        // 6. 로그인한 사용자의 좋아요 여부 체크
+        try {
+            // 토큰이 없거나 잘못되면 예외 발생
+            Long userId = getCurrentUserId();
+            detail.setLiked(noticeMapper.existsLikeByPostIdAndUserId(postId, userId));
+        } catch (Exception e) {
+            // 비로그인 상태이거나 토큰 오류 시 false 처리
+            detail.setLiked(false);
+        }
+
         return detail;
     }
 
@@ -104,9 +125,9 @@ public class NoticeServiceImpl implements NoticeService {
         // 내부에서 현재 로그인한 유저 ID를 가져옴
         Long userId = getCurrentUserId();
         // 1. 해당 게시글에 내가 이미 좋아요를 눌렀는지 확인
-        int count = noticeMapper.checkLikeExists(postId, userId);
+        boolean isLiked = noticeMapper.existsLikeByPostIdAndUserId(postId, userId);
         String message;
-        if (count > 0) {
+        if (isLiked) {
             // 3. 이미 있다면? 좋아요 취소 (삭제)
             noticeMapper.deleteLike(postId, userId);
             message = "좋아요 취소";

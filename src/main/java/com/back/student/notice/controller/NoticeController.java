@@ -42,10 +42,11 @@ public class NoticeController {
 
     // 공지사항 단일글 조회
     @GetMapping("/api/stu/notices/{postId}")
-    public ResponseEntity<NoticeDetailResponse> getNoticeDetail(@PathVariable Long postId) {
+    public ResponseEntity<NoticeDetailResponse> getNoticeDetail(@PathVariable Long postId,
+                                                                @RequestParam(required = false, defaultValue = "created") String sort) {
         log.info("공지사항 상세 조회 요청 - ID: {}", postId);
         // 조회수 증가와 상세 데이터 반환을 한 번에 처리
-        NoticeDetailResponse response = noticeService.getNoticeDetail(postId);
+        NoticeDetailResponse response = noticeService.getNoticeDetail(postId, sort);
         return ResponseEntity.ok(response);
     }
 

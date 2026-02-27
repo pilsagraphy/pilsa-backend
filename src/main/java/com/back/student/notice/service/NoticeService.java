@@ -11,7 +11,7 @@ public interface NoticeService {
     // 메인 화면용 중요 공지 최신 5개 조회
     List<NoticeTop5Response> getTop5Notices();
     // 공지사항 단일글 조회
-    NoticeDetailResponse getNoticeDetail(Long postId);
+    NoticeDetailResponse getNoticeDetail(Long postId, String sort);
     // 좋아요 기능
     NoticeResponse toggleNoticeLike(Long postId);
     // 공지사항 등록 수정 삭제

@@ -11,6 +11,6 @@ public class NoticeUpdateRequest {
     private String title;
     private String content;
     private boolean isPinned;
-    private List<Long> attachmentIds;
-    private List<Long> imageIds;
+    // private List<Long> attachmentIds;
+    // private List<Long> imageIds;
 }

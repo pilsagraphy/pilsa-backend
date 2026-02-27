@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
 
+// 공지사항 전체조회 - 글 정보
 @Getter
 @Setter
 public class NoticeListResponse {
