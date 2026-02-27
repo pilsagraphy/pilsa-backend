@@ -22,6 +22,7 @@ public class HonorServiceImpl implements HonorService {
             if (honor.isAnonymous()) {
                 honor.setDisplayName("익명후원자");
                 honor.setAffiliation(null); // 소속도 숨김 처리
+                honor.setPhotoUrl(null); // 익명일 경우 사진 경로도 제거
             }
             return honor;
         }).collect(Collectors.toList());
