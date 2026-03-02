@@ -12,7 +12,7 @@ public class FreeRequest {
     private String title;
     private String content;
     private boolean isAnonymous;
-    private Long categoryId; // 없어도 등록됨
+    private Long categoryId;
     private List<MultipartFile> files;
 
     private Long postId; // DB 저장 후 ID 반환용

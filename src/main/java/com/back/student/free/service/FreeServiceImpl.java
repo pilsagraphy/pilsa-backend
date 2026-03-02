@@ -140,6 +140,12 @@ public class FreeServiceImpl implements FreeService {
     @Transactional
     public FreeResponse createPost(FreeRequest request) {
         Long userId = getCurrentUserId();
+
+        // 카테고리 미선택 시 기본값 1번으로 넣도록 함
+        if (request.getCategoryId() == null) {
+            request.setCategoryId(1L);
+        }
+
         // 게시글 본문 저장
         freeMapper.insertPost(request, userId, FREE_BOARD_ID);
 
