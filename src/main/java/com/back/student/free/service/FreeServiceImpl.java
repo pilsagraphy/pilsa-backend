@@ -205,7 +205,7 @@ public class FreeServiceImpl implements FreeService {
     public CommentResponse createComment(Long postId, CommentRequest request) {
         Long userId = getCurrentUserId();
         freeMapper.insertComment(postId, userId, request);
-        return new CommentResponse("댓글이 성공적으로 등록되었습니다.", LocalDateTime.now());
+        return new CommentResponse("댓글이 성공적으로 등록되었습니다.");
     }
 
     // 댓글 수정: 관리자 권한이 있거나 작성자 본인일 경우 가능
@@ -220,7 +220,7 @@ public class FreeServiceImpl implements FreeService {
         }
 
         freeMapper.updateComment(commentId, request);
-        return new CommentResponse("댓글이 성공적으로 수정되었습니다.", LocalDateTime.now());
+        return new CommentResponse("댓글이 성공적으로 수정되었습니다.");
     }
 
     // 댓글 삭제: 오직 댓글 작성자 본인만 가능 (관리자 권한 제외)

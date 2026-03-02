@@ -1,13 +1,14 @@
-package com.back.student.free.dto;
+package com.back.student.info.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
-import java.time.LocalDateTime;
 
 @Getter
 @Setter
 @AllArgsConstructor
-public class CommentResponse {
+@NoArgsConstructor
+public class InfoResponse {
     private String message;
 }
