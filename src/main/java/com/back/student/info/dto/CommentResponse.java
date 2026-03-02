@@ -1,4 +1,4 @@
-package com.back.student.free.dto;
+package com.back.student.info.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
