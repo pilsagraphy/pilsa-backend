@@ -2,6 +2,7 @@ package com.back.global.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -31,6 +32,8 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable) // JWT 사용할 예정: CSRF 비활성(운영도 JWT면 보통 disable)
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // 프리플라이트 요청 전체 허용
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         // 누구나 접근
                         .requestMatchers(
                                 "/api/auth/**",
