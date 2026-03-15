@@ -195,3 +195,14 @@ public class AuthController {
 //    return ResponseEntity.ok(exists); // true = 중복, false = 사용 가능
 //  }
 //
+//  // 비밀번호 재설정
+//  @PostMapping("/password/reset")
+//  public ResponseEntity<?> resetPassword(@RequestBody PasswordResetRequest req) {
+//    try {
+//      authService.resetPassword(req);
+//      return ResponseEntity.ok().build();
+//    } catch (AuthException e) {
+//      return ResponseEntity.status(e.getStatus()).body(e.getMessage());
+//    }
+//  }
+//}

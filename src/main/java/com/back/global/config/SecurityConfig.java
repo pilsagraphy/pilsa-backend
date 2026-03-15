@@ -17,46 +17,47 @@ import static org.springframework.security.config.Customizer.withDefaults;
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
-
+    
     private final JwtAuthenticationFilter jwtFilter;
-
+    
     public SecurityConfig(JwtAuthenticationFilter jwtFilter) {
         this.jwtFilter = jwtFilter;
     }
-
+    
     // 임시작성하였으므로 윤정민씨는 아래 주석 코드를 참고하여 더 정교하게 바꿔주시기 바랍니다.
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                .cors(withDefaults())
-                .csrf(AbstractHttpConfigurer::disable) // JWT 사용할 예정: CSRF 비활성(운영도 JWT면 보통 disable)
-                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        // 프리플라이트 요청 전체 허용
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        // 누구나 접근
-                        .requestMatchers(
-                                "/api/auth/**",
-                                "/api/public/**",
-                                "/api/mail/**", // 인증번호 관련
-                                "/swagger-ui/**", // 스웨거 관련
-                                "/v3/api-docs/**" // 스웨거 관련
-                        ).permitAll()
-
-                        // 역할별 접근
-                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/api/stu/**").hasAnyRole("STUDENTS", "ADMIN")
-                        .requestMatchers("/api/alu/**").hasAnyRole("ALUMNI", "ADMIN")
-
-                        // 그 외는 로그인 필요
-                        .anyRequest().authenticated()
-                )
-                // 필터 입히기
-                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
-
+            .cors(withDefaults())
+            .csrf(AbstractHttpConfigurer::disable) // JWT 사용할 예정: CSRF 비활성(운영도 JWT면 보통 disable)
+            .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(auth -> auth
+                // 프리플라이트 요청 전체 허용
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                // 누구나 접근
+                .requestMatchers(
+                    "/api/auth/**",
+                    "/api/public/**",
+                    "/api/mail/**", // 인증번호 관련
+                    "/swagger-ui/**", // 스웨거 관련
+                    "/v3/api-docs/**", // 스웨거 관련
+                    "/uploads/**" // 파일 경로
+                ).permitAll()
+                
+                // 역할별 접근
+                .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                .requestMatchers("/api/stu/**").hasAnyRole("STUDENTS", "ADMIN")
+                .requestMatchers("/api/alu/**").hasAnyRole("ALUMNI", "ADMIN")
+                
+                // 그 외는 로그인 필요
+                .anyRequest().authenticated()
+            )
+            // 필터 입히기
+            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+        
         return http.build();
     }
-
+    
     // 비밀번호 암호화
     @Bean
     public PasswordEncoder passwordEncoder() {

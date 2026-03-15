@@ -141,7 +141,6 @@ public class AuthServicempl implements AuthService {
         UserSignupDto user = new UserSignupDto();
 
         user.setName(request.getName());
-        user.setPhone(request.getPhone());
         user.setMajor(request.getMajor());
         user.setStudentNo(request.getStudentNo());
         user.setEmail(request.getEmail());
