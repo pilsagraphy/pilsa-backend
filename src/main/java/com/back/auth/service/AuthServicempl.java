@@ -16,9 +16,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.beans.factory.annotation.Value;
-
+import com.back.global.mail.service.MailService;
+import com.back.auth.dto.FindIdVerifyRequest;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.http.HttpStatus;
 
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -28,6 +32,8 @@ public class AuthServicempl implements AuthService {
     private final AuthMapper authMapper;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+    private final MailService mailService;
+    private final StringRedisTemplate redisTemplate;
 
     // 운영과 개발 구분
     @Value("${jwt.cookie.secure:false}")
@@ -135,6 +141,7 @@ public class AuthServicempl implements AuthService {
         UserSignupDto user = new UserSignupDto();
 
         user.setName(request.getName());
+        user.setPhone(request.getPhone());
         user.setMajor(request.getMajor());
         user.setStudentNo(request.getStudentNo());
         user.setEmail(request.getEmail());
@@ -156,6 +163,91 @@ public class AuthServicempl implements AuthService {
     @Override
     public boolean existsByEmail(String email) {
         return authMapper.existsByEmail(email);
+    }
+
+    @Override
+    public void verifyFindIdCode(FindIdVerifyRequest request) {
+        if (request.getEmail() == null || request.getEmail().isBlank()
+                || request.getCode() == null || request.getCode().isBlank()) {
+            throw new AuthException("이메일과 인증번호를 모두 입력해주세요.", HttpStatus.BAD_REQUEST);
+        }
+
+        boolean exists = authMapper.existsByEmail(request.getEmail());
+        if (!exists) {
+            throw new AuthException("해당 이메일로 가입된 계정을 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
+        }
+
+        boolean verified = mailService.verifyCode(request.getEmail(), request.getCode());
+        if (!verified) {
+            throw new AuthException("인증번호가 일치하지 않거나 만료되었습니다.", HttpStatus.UNAUTHORIZED);
+        }
+
+        redisTemplate.opsForValue().set(
+                "auth:findid:verified:" + request.getEmail(),
+                "true",
+                10,
+                TimeUnit.MINUTES
+        );
+    }
+
+    @Override
+    public String findLoginIdAfterVerification(String email) {
+        if (email == null || email.isBlank()) {
+            throw new AuthException("이메일을 입력해주세요.", HttpStatus.BAD_REQUEST);
+        }
+
+        String verifiedKey = "auth:findid:verified:" + email;
+        String verified = redisTemplate.opsForValue().get(verifiedKey);
+
+        if (!"true".equals(verified)) {
+            throw new AuthException("이메일 인증이 완료되지 않았습니다.", HttpStatus.UNAUTHORIZED);
+        }
+
+        String loginId = authMapper.findLoginIdByEmail(email);
+        if (loginId == null || loginId.isBlank()) {
+            throw new AuthException("해당 이메일로 가입된 아이디를 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
+        }
+
+        // 1회 조회 후 제거
+        redisTemplate.delete(verifiedKey);
+
+        return loginId;
+    }
+
+    // 비밀번호 초기화 전 단계 - 아이디/이메일 일치 확인 후 인증번호 발송
+    @Override
+    public long verifyLoginIdAndEmailAndSendCode(String loginId, String email) {
+        boolean exists = authMapper.existsByLoginIdAndEmail(loginId, email);
+
+        if (!exists) {
+            throw new AuthException("해당 정보를 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
+        }
+
+        long expireTime = mailService.sendCode(email);
+
+        if (expireTime <= 0) {
+            throw new AuthException("인증번호 발송에 실패했습니다.", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+
+        return expireTime;
+    }
+
+    // 비밀번호 재설정
+    @Override
+    public void resetPassword(PasswordResetRequest request) {
+        UserDto user = authMapper.findByLoginId(request.getLoginId());
+        if (user == null) {
+            throw new AuthException("해당 아이디는 존재하지 않습니다.", HttpStatus.NOT_FOUND);
+        }
+
+//        // 승인 Y / 대기 N / 탈퇴 X
+//        if ("X".equals(user.getUserApproved())) {
+//            throw new AuthException("계정이 비활성화되어 변경할 수 없습니다.", HttpStatus.GONE);
+//        }
+
+        // 비밀번호 암호화 후 저장
+        String encodedNewPassword = passwordEncoder.encode(request.getNewPassword());
+        authMapper.updatePassword(user.getLoginId(), encodedNewPassword);
     }
 
     // 리프레시 토큰을 가지고 있는 쿠키의 존재 여부 확인
@@ -259,23 +351,3 @@ public class AuthServicempl implements AuthService {
         }
     }
 }
-//
-//
-//
-//  // 비밀번호 재설정
-//  public void resetPassword(PasswordResetRequest req) {
-//    UserDto user = authMapper.findByEmail(req.getEmail());
-//    if (user == null) {
-//      throw new AuthException("가입된 이메일이 아닙니다.", HttpStatus.NOT_FOUND);
-//    }
-//
-//    // 승인 Y / 대기 N / 탈퇴 X
-//    if ("X".equals(user.getUserApproved())) {
-//      throw new AuthException("계정이 비활성화되어 변경할 수 없습니다.", HttpStatus.GONE);
-//    }
-//
-//    // 비밀번호 암호화 후 저장
-//    String encoded = passwordEncoder.encode(req.getNewPassword());
-//    authMapper.updatePassword(user.getUserId(), encoded);
-//  }
-//}

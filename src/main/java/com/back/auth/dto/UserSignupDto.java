@@ -9,6 +9,7 @@ public class UserSignupDto {
     private String password;
     private String passwordHash; // 서비스 단에서 암호화 후 세팅
     private String name;
+    private String phone;
     private String major;
     private String studentNo;
     private String email;
