@@ -29,8 +29,8 @@
 
     <!-- 회원가입 -->
     <insert id="insertUser" useGeneratedKeys="true" keyProperty="userId">
-        INSERT INTO users (name, major, student_no, email, login_id, password_hash, role, is_deleted)
-        VALUES (#{name}, #{major}, #{studentNo}, #{email}, #{loginId}, #{passwordHash}, #{role}, #{isDeleted})
+        INSERT INTO users (name, phone, major, student_no, email, login_id, password_hash, role, is_deleted)
+        VALUES (#{name},#{phone}, #{major}, #{studentNo}, #{email}, #{loginId}, #{passwordHash}, #{role}, #{isDeleted})
     </insert>
 
     <!-- 회원가입 - 아이디 & 이메일 중복 확인 -->
@@ -40,6 +40,28 @@
     <select id="existsByEmail" resultType="boolean">
         SELECT COUNT(*) > 0 FROM users WHERE email = #{email}
     </select>
+
+    <!-- 아이디 찾기 - 이메일로 login_id 조회 -->
+    <select id="findLoginIdByEmail" resultType="string">
+        SELECT login_id
+        FROM users
+        WHERE email = #{email}
+            LIMIT 1
+    </select>
+
+    <!-- 비밀번호 초기화 전 단계 - 아이디/이메일 일치 확인 -->
+    <select id="existsByLoginIdAndEmail" resultType="boolean">
+        SELECT COUNT(*) > 0
+        FROM users
+        WHERE login_id = #{loginId}
+          AND email = #{email}
+    </select>
+
+    <!-- 비밀번호 초기화 -->
+    <update id="updatePassword">
+        UPDATE users SET password_hash = #{password}
+        WHERE login_id = #{loginId}
+    </update>
 </mapper>
 
         <!--<mapper namespace="com.back.auth.mapper.AuthMapper">-->

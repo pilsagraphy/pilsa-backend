@@ -128,7 +128,64 @@ public class AuthController {
         }
         return ResponseEntity.ok(authService.refresh(refreshToken));
     }
+
+    // 아이디 찾기 전용 - 이메일+인증번호 검증
+    @PostMapping("/id/verify")
+    public ResponseEntity<?> verifyFindIdCode(@RequestBody FindIdVerifyRequest request) {
+        try {
+            authService.verifyFindIdCode(request);
+            return ResponseEntity.ok(Map.of(
+                    "message", "이메일 인증이 완료되었습니다."
+            ));
+        } catch (AuthException e) {
+            return ResponseEntity.status(e.getStatus()).body(e.getMessage());
+        }
+    }
+
+    // 아이디 찾기 전용 - 인증 완료된 이메일에 한해 loginId 반환
+    @GetMapping("/id/find")
+    public ResponseEntity<?> findLoginId(@RequestParam String email) {
+        try {
+            String loginId = authService.findLoginIdAfterVerification(email);
+            return ResponseEntity.ok(Map.of(
+                    "message", "아이디 조회 성공",
+                    "loginId", loginId
+            ));
+        } catch (AuthException e) {
+            return ResponseEntity.status(e.getStatus()).body(e.getMessage());
+        }
+    }
+
+    // 비밀번호 초기화 전 단계 - 아이디 이메일 유효성 확인
+    @GetMapping("/verification")
+    public ResponseEntity<?> verification(
+            @RequestParam String loginId,
+            @RequestParam String email
+    ) {
+        try {
+            long expireTime = authService.verifyLoginIdAndEmailAndSendCode(loginId, email);
+            return ResponseEntity.ok(Map.of(
+                    "message", "인증번호를 발송했습니다.",
+                    "expireTime", expireTime
+            ));
+        } catch (AuthException e) {
+            return ResponseEntity.status(e.getStatus()).body(e.getMessage());
+        }
+    }
+
+    // 비밀번호 초기화
+    @PutMapping("/password/reset")
+    public ResponseEntity<?> resetPassword(@RequestBody PasswordResetRequest request) {
+        try {
+            authService.resetPassword(request);
+            return ResponseEntity.ok().build(); // 200
+        } catch (AuthException e) {
+            // 사용자 예외
+            return ResponseEntity.status(e.getStatus()).body(e.getMessage());
+        }
+    }
 }
+
 
 
 //  // 이메일 중복 확인 API
@@ -138,14 +195,3 @@ public class AuthController {
 //    return ResponseEntity.ok(exists); // true = 중복, false = 사용 가능
 //  }
 //
-//  // 비밀번호 재설정
-//  @PostMapping("/password/reset")
-//  public ResponseEntity<?> resetPassword(@RequestBody PasswordResetRequest req) {
-//    try {
-//      authService.resetPassword(req);
-//      return ResponseEntity.ok().build();
-//    } catch (AuthException e) {
-//      return ResponseEntity.status(e.getStatus()).body(e.getMessage());
-//    }
-//  }
-//}
