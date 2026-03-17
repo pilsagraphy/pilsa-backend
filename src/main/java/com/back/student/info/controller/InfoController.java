@@ -58,7 +58,7 @@ public class InfoController {
     }
 
     // 정게 좋아요
-    @PatchMapping("/api/stu/boards/info/posts/{postId}/like")
+    @PatchMapping("/api/stu/info/posts/{postId}/like")
     public ResponseEntity<InfoResponse> toggleLike(@PathVariable Long postId) {
         log.info("정게 좋아요 토글 요청 - 게시글 ID: {}", postId);
         return ResponseEntity.ok(infoService.togglePostLike(postId));
