@@ -58,7 +58,7 @@ public class FreeController {
     }
 
     // 자게 좋아요
-    @PatchMapping("/api/stu/boards/free/posts/{postId}/like")
+    @PatchMapping("/api/stu/free/posts/{postId}/like")
     public ResponseEntity<FreeResponse> toggleLike(@PathVariable Long postId) {
         log.info("자게 좋아요 토글 요청 - 게시글 ID: {}", postId);
         return ResponseEntity.ok(freeService.togglePostLike(postId));

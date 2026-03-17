@@ -46,7 +46,7 @@ public class SecurityConfig {
                 
                 // 역할별 접근
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                .requestMatchers("/api/stu/**").hasAnyRole("STUDENTS", "ADMIN")
+                .requestMatchers("/api/stu/**").hasAnyRole("STUDENTS", "ADMIN", "ALUMNI") // ALUMNI는 임시!
                 .requestMatchers("/api/alu/**").hasAnyRole("ALUMNI", "ADMIN")
                 
                 // 그 외는 로그인 필요
