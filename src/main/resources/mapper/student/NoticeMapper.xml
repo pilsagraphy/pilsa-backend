@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.student.notice.mapper.NoticeMapper">
+
+    <select id="findAllNotices" resultType="com.back.student.notice.dto.NoticeListResponse">
+        SELECT
+        p.post_id AS postId,
+        p.title,
+        u.name AS authorName,
+        p.view_count AS viewCount,
+        p.is_pinned AS isPinned,
+        p.created_at AS created,
+        EXISTS (SELECT 1 FROM attachments a WHERE a.post_id = p.post_id) AS hasAttachment,
+        -- (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.post_id) AS commentCount,
+        (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.post_id) AS likeCount
+        FROM posts p
+        INNER JOIN users u ON p.user_id = u.user_id
+        WHERE p.board_id = #{boardId}
+        <if test="keyword != null and keyword != ''">
+            AND (p.title LIKE CONCAT('%', #{keyword}, '%') OR p.content LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        ORDER BY p.is_pinned DESC,
+        <choose>
+            <when test="sort == 'created'">p.created_at DESC</when>
+            <when test="sort == 'viewCount'">p.view_count DESC</when>
+            <otherwise>p.created_at DESC</otherwise>
+        </choose>
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countNotices" resultType="int">
+        SELECT COUNT(*)
+        FROM posts
+        WHERE board_id = #{boardId}
+        <if test="keyword != null and keyword != ''">
+            AND (title LIKE CONCAT('%', #{keyword}, '%') OR content LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </select>
+
+    <select id="findTop5Notices" resultType="com.back.student.notice.dto.NoticeTop5Response">
+        SELECT post_id AS postId,
+               title,
+               is_pinned AS isPinned
+        FROM posts
+        WHERE board_id = #{boardId}
+        ORDER BY is_pinned DESC, created_at DESC
+            LIMIT 5
+    </select>
+
+    <!--    공지사항 단일글 조회 -->
+    <update id="updateViewCount">
+        UPDATE posts
+        SET view_count = view_count + 1
+        WHERE post_id = #{postId}
+    </update>
+
+    <select id="findNoticeDetailById" resultType="com.back.student.notice.dto.NoticeDetailResponse">
+        SELECT p.post_id AS postId,
+        p.title,
+        p.content,
+        p.user_id AS userId,
+        u.name AS authorName,
+        p.view_count AS viewCount,
+        p.updated_at AS updated,
+        p.is_pinned AS isPinned,
+        <choose>
+            <when test="sort == 'viewCount'">
+                -- 이전글: 현재 글(p)의 view_count보다 크거나, 같으면서 ID가 큰 글 조회
+                (SELECT post_id FROM posts
+                WHERE board_id = #{boardId} AND post_id != p.post_id
+                AND (view_count &gt; p.view_count OR (view_count = p.view_count AND post_id &gt; p.post_id))
+                ORDER BY view_count ASC, post_id ASC LIMIT 1) AS prevPostApi,
+                -- 다음글: 현재 글(p)의 view_count보다 작거나, 같으면서 ID가 작은 글 조회
+                (SELECT post_id FROM posts
+                WHERE board_id = #{boardId} AND post_id != p.post_id
+                AND (view_count &lt; p.view_count OR (view_count = p.view_count AND post_id &lt; p.post_id))
+                ORDER BY view_count DESC, post_id DESC LIMIT 1) AS nextPostApi
+            </when>
+            <otherwise>
+                (SELECT MAX(post_id) FROM posts WHERE board_id = #{boardId} AND post_id &lt; #{postId}) AS prevPostApi,
+                (SELECT MIN(post_id) FROM posts WHERE board_id = #{boardId} AND post_id &gt; #{postId}) AS nextPostApi
+            </otherwise>
+        </choose>
+        FROM posts p
+        JOIN users u ON p.user_id = u.user_id
+        WHERE p.post_id = #{postId}
+        AND p.board_id = #{boardId}
+    </select>
+
+    <select id="findAttachmentIdsByPostId" resultType="com.back.student.notice.dto.AttachmentFileResponse">
+        SELECT attachment_id AS attachmentId,
+               file_name     AS originName,
+               file_size     AS fileSize,
+               file_url      AS fileUrl
+        FROM attachments
+        WHERE post_id = #{postId}
+    </select>
+
+<!--    좋아요 개수-->
+    <select id="countLikesByPostId" resultType="int">
+        SELECT COUNT(*)
+        FROM post_likes
+        WHERE post_id = #{postId}
+    </select>
+
+<!--    좋아요 여부 -->
+    <select id="existsLikeByPostIdAndUserId" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1
+            FROM post_likes
+            WHERE post_id = #{postId} AND user_id = #{userId}
+        )
+    </select>
+
+    <insert id="insertLike">
+        INSERT INTO post_likes (post_id, user_id)
+        VALUES (#{postId}, #{userId})
+    </insert>
+
+    <delete id="deleteLike">
+        DELETE
+        FROM post_likes
+        WHERE post_id = #{postId}
+          AND user_id = #{userId}
+    </delete>
+
+    <!--    공지사항 등록-->
+    <insert id="insertNotice" useGeneratedKeys="true" keyProperty="request.postId">
+        INSERT INTO posts (title, content, is_pinned, user_id, board_id, created_at)
+        VALUES (#{request.title}, #{request.content}, #{request.isPinned}, #{userId}, #{boardId}, NOW())
+    </insert>
+
+    <insert id="insertAttachment">
+        INSERT INTO attachments (post_id, file_name, file_url, file_size, file_type, created_at)
+        VALUES (#{postId}, #{originName}, #{fileUrl}, #{fileSize}, #{fileType}, NOW())
+    </insert>
+
+    <!--    공지사항 수정 -->
+    <update id="updateNotice">
+        UPDATE posts
+        <set>
+            <if test="request.title != null">title = #{request.title},</if>
+            <if test="request.content != null">content = #{request.content},</if>
+            <if test="request.isPinned != null">is_pinned = #{request.isPinned},</if>
+            updated_at = NOW()
+        </set>
+        WHERE post_id = #{postId}
+    </update>
+
+    <!--    공지사항 삭제 -->
+    <delete id="deleteNotice">
+        DELETE
+        FROM posts
+        WHERE post_id = #{postId}
+    </delete>
+
+
+</mapper>
