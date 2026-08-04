@@ -11,4 +11,7 @@ public class QuoteDataResponse {
     private String content;
     private String startDate;
     private String endDate;
+    private Long writerId;
+    private String createdAt;
+    private String updatedAt;
 }

@@ -13,6 +13,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,13 +43,15 @@ public class QuoteServiceImpl implements QuoteService {
 
     // 노출 기간(startDate ~ endDate) 선후 관계 검증
     private void validateExposurePeriod(String startDate, String endDate) {
-        if (startDate == null || endDate == null) {
-            throw new QuoteException("노출 시작일과 종료일은 필수 입력 항목입니다.", HttpStatus.BAD_REQUEST);
-        }
-
         if (startDate.compareTo(endDate) > 0) {
             throw new QuoteException("노출 시작일이 종료일보다 늦을 수 없습니다.", HttpStatus.BAD_REQUEST);
         }
+    }
+
+    // 로그인한 사용자의 id 추출
+    private Long getCurrentUserId() {
+        String sub = SecurityContextHolder.getContext().getAuthentication().getName();
+        return Long.parseLong(sub);
     }
 
     @Override
@@ -56,15 +59,25 @@ public class QuoteServiceImpl implements QuoteService {
     public QuoteResponse createQuote(QuoteRequest request) {
         checkAdminRole();
         validateContent(request.getContent());
+
+        // startDate/endDate는 선택값: 미입력 시 오늘 ~ 오늘+7일로 자동 설정
+        if (request.getStartDate() == null) {
+            request.setStartDate(LocalDate.now().toString());
+        }
+        if (request.getEndDate() == null) {
+            request.setEndDate(LocalDate.now().plusDays(7).toString());
+        }
         validateExposurePeriod(request.getStartDate(), request.getEndDate());
 
-        quoteMapper.insertQuote(request);
+        Long writerId = getCurrentUserId();
+        quoteMapper.insertQuote(request, writerId);
 
         Map<String, Object> data = new HashMap<>();
         data.put("quoteId", request.getQuoteId());
         data.put("content", request.getContent());
         data.put("startDate", request.getStartDate());
         data.put("endDate", request.getEndDate());
+        data.put("writerId", writerId);
 
         return new QuoteResponse("이주의 문장이 등록되었습니다.", data);
     }
@@ -74,9 +87,12 @@ public class QuoteServiceImpl implements QuoteService {
     public QuoteResponse updateQuote(Long quoteId, QuoteRequest request) {
         checkAdminRole();
         validateContent(request.getContent());
-        validateExposurePeriod(request.getStartDate(), request.getEndDate());
+        if (request.getStartDate() != null && request.getEndDate() != null) {
+            validateExposurePeriod(request.getStartDate(), request.getEndDate());
+        }
 
-        int updated = quoteMapper.updateQuote(quoteId, request);
+        Long writerId = getCurrentUserId();
+        int updated = quoteMapper.updateQuote(quoteId, request, writerId);
         if (updated == 0) {
             throw new QuoteException("해당 문장을 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
         }
@@ -86,6 +102,7 @@ public class QuoteServiceImpl implements QuoteService {
         data.put("content", request.getContent());
         data.put("startDate", request.getStartDate());
         data.put("endDate", request.getEndDate());
+        data.put("writerId", writerId);
 
         return new QuoteResponse("문장이 성공적으로 수정되었습니다.", data);
     }

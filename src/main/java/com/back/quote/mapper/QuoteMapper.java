@@ -11,10 +11,10 @@ import java.util.List;
 public interface QuoteMapper {
 
     // 1. 문장 등록
-    void insertQuote(@Param("request") QuoteRequest request);
+    void insertQuote(@Param("request") QuoteRequest request, @Param("writerId") Long writerId);
 
-    // 2. 문장 수정
-    int updateQuote(@Param("quoteId") Long quoteId, @Param("request") QuoteRequest request);
+    // 2. 문장 수정 (마지막 수정자로 writerId 갱신)
+    int updateQuote(@Param("quoteId") Long quoteId, @Param("request") QuoteRequest request, @Param("writerId") Long writerId);
 
     // 3. 문장 삭제
     int deleteQuote(@Param("quoteId") Long quoteId);
