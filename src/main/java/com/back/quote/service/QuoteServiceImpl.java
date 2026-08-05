@@ -35,15 +35,20 @@ public class QuoteServiceImpl implements QuoteService {
         }
     }
 
+    private static final int CONTENT_MAX_LENGTH = 500; // DB content 컬럼(VARCHAR(500))과 동일하게 유지
+
     private void validateContent(String content) {
         if (content == null || content.isBlank()) {
             throw new QuoteException("문장 내용은 필수 입력 항목입니다.", HttpStatus.BAD_REQUEST);
         }
+        if (content.length() > CONTENT_MAX_LENGTH) {
+            throw new QuoteException("문장 내용은 " + CONTENT_MAX_LENGTH + "자를 초과할 수 없습니다.", HttpStatus.BAD_REQUEST);
+        }
     }
 
     // 노출 기간(startDate ~ endDate) 선후 관계 검증
-    private void validateExposurePeriod(String startDate, String endDate) {
-        if (startDate.compareTo(endDate) > 0) {
+    private void validateExposurePeriod(LocalDate startDate, LocalDate endDate) {
+        if (startDate.isAfter(endDate)) {
             throw new QuoteException("노출 시작일이 종료일보다 늦을 수 없습니다.", HttpStatus.BAD_REQUEST);
         }
     }
@@ -62,10 +67,10 @@ public class QuoteServiceImpl implements QuoteService {
 
         // startDate/endDate는 선택값: 미입력 시 오늘 ~ 오늘+7일로 자동 설정
         if (request.getStartDate() == null) {
-            request.setStartDate(LocalDate.now().toString());
+            request.setStartDate(LocalDate.now());
         }
         if (request.getEndDate() == null) {
-            request.setEndDate(LocalDate.now().plusDays(7).toString());
+            request.setEndDate(LocalDate.now().plusDays(7));
         }
         validateExposurePeriod(request.getStartDate(), request.getEndDate());
 

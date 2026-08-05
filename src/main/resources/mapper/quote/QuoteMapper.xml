@@ -41,11 +41,11 @@
         SELECT
             quote_id AS quoteId,
             content,
-            DATE_FORMAT(start_date, '%Y-%m-%d') AS startDate,
-            DATE_FORMAT(end_date, '%Y-%m-%d') AS endDate,
+            start_date AS startDate,
+            end_date AS endDate,
             writer_id AS writerId,
-            DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
-            DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+            created_at AS createdAt,
+            updated_at AS updatedAt
         FROM quotes
         ORDER BY quote_id DESC
     </select>
@@ -54,11 +54,11 @@
         SELECT
             quote_id AS quoteId,
             content,
-            DATE_FORMAT(start_date, '%Y-%m-%d') AS startDate,
-            DATE_FORMAT(end_date, '%Y-%m-%d') AS endDate,
+            start_date AS startDate,
+            end_date AS endDate,
             writer_id AS writerId,
-            DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS createdAt,
-            DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i:%s') AS updatedAt
+            created_at AS createdAt,
+            updated_at AS updatedAt
         FROM quotes
         WHERE CURDATE() BETWEEN start_date AND end_date
         ORDER BY RAND()
