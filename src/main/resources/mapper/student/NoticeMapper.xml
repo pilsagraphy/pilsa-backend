@@ -16,6 +16,7 @@
         FROM posts p
         INNER JOIN users u ON p.user_id = u.user_id
         WHERE p.board_id = #{boardId}
+          AND p.state = 'normal'
         <if test="keyword != null and keyword != ''">
             AND (p.title LIKE CONCAT('%', #{keyword}, '%') OR p.content LIKE CONCAT('%', #{keyword}, '%'))
         </if>
@@ -32,6 +33,7 @@
         SELECT COUNT(*)
         FROM posts
         WHERE board_id = #{boardId}
+          AND state = 'normal'
         <if test="keyword != null and keyword != ''">
             AND (title LIKE CONCAT('%', #{keyword}, '%') OR content LIKE CONCAT('%', #{keyword}, '%'))
         </if>
@@ -43,6 +45,7 @@
                is_pinned AS isPinned
         FROM posts
         WHERE board_id = #{boardId}
+          AND state = 'normal'
         ORDER BY is_pinned DESC, created_at DESC
             LIMIT 5
     </select>
@@ -67,24 +70,25 @@
             <when test="sort == 'viewCount'">
                 -- 이전글: 현재 글(p)의 view_count보다 크거나, 같으면서 ID가 큰 글 조회
                 (SELECT post_id FROM posts
-                WHERE board_id = #{boardId} AND post_id != p.post_id
+                WHERE board_id = #{boardId} AND state = 'normal' AND post_id != p.post_id
                 AND (view_count &gt; p.view_count OR (view_count = p.view_count AND post_id &gt; p.post_id))
                 ORDER BY view_count ASC, post_id ASC LIMIT 1) AS prevPostApi,
                 -- 다음글: 현재 글(p)의 view_count보다 작거나, 같으면서 ID가 작은 글 조회
                 (SELECT post_id FROM posts
-                WHERE board_id = #{boardId} AND post_id != p.post_id
+                WHERE board_id = #{boardId} AND state = 'normal' AND post_id != p.post_id
                 AND (view_count &lt; p.view_count OR (view_count = p.view_count AND post_id &lt; p.post_id))
                 ORDER BY view_count DESC, post_id DESC LIMIT 1) AS nextPostApi
             </when>
             <otherwise>
-                (SELECT MAX(post_id) FROM posts WHERE board_id = #{boardId} AND post_id &lt; #{postId}) AS prevPostApi,
-                (SELECT MIN(post_id) FROM posts WHERE board_id = #{boardId} AND post_id &gt; #{postId}) AS nextPostApi
+                (SELECT MAX(post_id) FROM posts WHERE board_id = #{boardId} AND state = 'normal' AND post_id &lt; #{postId}) AS prevPostApi,
+                (SELECT MIN(post_id) FROM posts WHERE board_id = #{boardId} AND state = 'normal' AND post_id &gt; #{postId}) AS nextPostApi
             </otherwise>
         </choose>
         FROM posts p
         JOIN users u ON p.user_id = u.user_id
         WHERE p.post_id = #{postId}
         AND p.board_id = #{boardId}
+        AND p.state = 'normal'
     </select>
 
     <select id="findAttachmentIdsByPostId" resultType="com.back.student.notice.dto.AttachmentFileResponse">

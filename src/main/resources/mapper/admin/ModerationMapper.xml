@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.admin.moderation.mapper.ModerationMapper">
+
+    <update id="updatePostState">
+        UPDATE posts
+        SET state = #{state}
+        WHERE post_id = #{postId}
+    </update>
+
+    <update id="updateCommentState">
+        UPDATE comments
+        SET state = #{state}
+        WHERE comment_id = #{commentId}
+    </update>
+
+    <select id="findPostAuthorId" resultType="long">
+        SELECT user_id FROM posts WHERE post_id = #{postId}
+    </select>
+
+    <select id="findCommentAuthorId" resultType="long">
+        SELECT user_id FROM comments WHERE comment_id = #{commentId}
+    </select>
+
+    <insert id="insertModerationLog" useGeneratedKeys="true" keyProperty="entry.actionId">
+        INSERT INTO moderation_log (target_type, target_id, applied_state, reason_id, detail, acted_by, created_at)
+        VALUES (#{entry.targetType}, #{entry.targetId}, #{entry.appliedState},
+                #{entry.reasonId}, #{entry.detail}, #{entry.actedBy}, NOW())
+    </insert>
+
+    <!-- points/시효는 policy_settings 에서 읽고, 없으면 기본값(2/365) 적용 -->
+    <insert id="insertPenalty">
+        INSERT INTO penalty_log (user_id, points, target_type, target_id, source_action_id, created_at, expires_at)
+        SELECT #{userId},
+               CAST(COALESCE((SELECT setting_value FROM policy_settings WHERE code = 'caution_per_delete'), '2') AS SIGNED),
+               #{targetType},
+               #{targetId},
+               #{sourceActionId},
+               NOW(),
+               DATE_ADD(NOW(), INTERVAL CAST(COALESCE((SELECT setting_value FROM policy_settings WHERE code = 'caution_ttl_days'), '365') AS SIGNED) DAY)
+    </insert>
+
+    <!-- 대상에 걸린, 아직 회수되지 않은 주의 포인트를 복원 조치로 void 처리 -->
+    <update id="voidPenaltiesByTarget">
+        UPDATE penalty_log
+        SET voided_at = NOW(),
+            void_action_id = #{voidActionId}
+        WHERE target_type = #{targetType}
+          AND target_id = #{targetId}
+          AND voided_at IS NULL
+    </update>
+
+</mapper>

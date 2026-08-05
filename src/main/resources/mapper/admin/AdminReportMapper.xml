@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.admin.report.mapper.AdminReportMapper">
+
+    <!-- ORDER BY 조각 (최신순 기본) -->
+    <sql id="orderBy">
+        ORDER BY
+        <choose>
+            <when test="sort == 'oldest'">t.first_reported_at ASC</when>
+            <otherwise>t.first_reported_at DESC</otherwise>
+        </choose>
+    </sql>
+
+    <!-- ===================== 게시글 신고 ===================== -->
+    <!-- 대상별로 그룹핑: 최초 신고일시/누적건수/대표(최신)신고 -->
+    <sql id="reportedPostsFrom">
+        FROM (
+            SELECT target_id,
+                   MIN(created_at) AS first_reported_at,
+                   COUNT(*)        AS report_count,
+                   MAX(report_id)  AS last_report_id
+            FROM reports_log
+            WHERE target_type = 'post'
+            GROUP BY target_id
+        ) t
+        JOIN reports_log r ON r.report_id = t.last_report_id
+        JOIN posts   p  ON p.post_id = t.target_id
+        JOIN boards  b  ON p.board_id = b.board_id
+        JOIN users   u  ON p.user_id = u.user_id
+        JOIN reasons rs ON r.reason_id = rs.reason_id
+        <where>
+            <if test="status != null and status != ''">AND r.status = #{status}</if>
+            <if test="boardId != null">AND p.board_id = #{boardId}</if>
+        </where>
+    </sql>
+
+    <select id="findReportedPosts" resultType="com.back.admin.report.dto.ReportedItemResponse">
+        SELECT
+            'post'                       AS targetType,
+            t.target_id                  AS targetId,
+            LEFT(p.content, 30)          AS preview,
+            p.board_id                   AS boardId,
+            b.code                       AS boardCode,
+            u.name                       AS authorName,
+            rs.label                     AS reasonLabel,
+            t.first_reported_at          AS firstReportedAt,
+            t.report_count               AS reportCount,
+            r.status                     AS reportStatus,
+            p.state                      AS state
+        <include refid="reportedPostsFrom"/>
+        <include refid="orderBy"/>
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countReportedPosts" resultType="int">
+        SELECT COUNT(*)
+        <include refid="reportedPostsFrom"/>
+    </select>
+
+    <!-- ===================== 댓글 신고 ===================== -->
+    <sql id="reportedCommentsFrom">
+        FROM (
+            SELECT target_id,
+                   MIN(created_at) AS first_reported_at,
+                   COUNT(*)        AS report_count,
+                   MAX(report_id)  AS last_report_id
+            FROM reports_log
+            WHERE target_type = 'comment'
+            GROUP BY target_id
+        ) t
+        JOIN reports_log r ON r.report_id = t.last_report_id
+        JOIN comments c ON c.comment_id = t.target_id
+        JOIN posts    p ON c.post_id = p.post_id
+        JOIN boards   b ON p.board_id = b.board_id
+        JOIN users    u ON c.user_id = u.user_id
+        JOIN reasons  rs ON r.reason_id = rs.reason_id
+        <where>
+            <if test="status != null and status != ''">AND r.status = #{status}</if>
+            <if test="boardId != null">AND p.board_id = #{boardId}</if>
+        </where>
+    </sql>
+
+    <select id="findReportedComments" resultType="com.back.admin.report.dto.ReportedItemResponse">
+        SELECT
+            'comment'                    AS targetType,
+            t.target_id                  AS targetId,
+            LEFT(c.content, 30)          AS preview,
+            p.board_id                   AS boardId,
+            b.code                       AS boardCode,
+            u.name                       AS authorName,
+            rs.label                     AS reasonLabel,
+            t.first_reported_at          AS firstReportedAt,
+            t.report_count               AS reportCount,
+            r.status                     AS reportStatus,
+            c.state                      AS state
+        <include refid="reportedCommentsFrom"/>
+        <include refid="orderBy"/>
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countReportedComments" resultType="int">
+        SELECT COUNT(*)
+        <include refid="reportedCommentsFrom"/>
+    </select>
+
+    <!-- ===================== 조치 보조 ===================== -->
+    <select id="findLatestReasonId" resultType="long">
+        SELECT reason_id
+        FROM reports_log
+        WHERE target_type = #{targetType}
+          AND target_id = #{targetId}
+        ORDER BY report_id DESC
+        LIMIT 1
+    </select>
+
+    <update id="updatePendingReportsStatus">
+        UPDATE reports_log
+        SET status = #{status}
+        WHERE target_type = #{targetType}
+          AND target_id = #{targetId}
+          AND status = 'pending'
+    </update>
+
+</mapper>
