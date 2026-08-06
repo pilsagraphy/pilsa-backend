@@ -1,19 +1,19 @@
 package com.back.admin.report.service;
 
+import com.back.admin.common.AdminServiceSupport;
 import com.back.admin.common.dto.BulkResultResponse;
 import com.back.admin.report.dto.ReportPageResponse;
 import com.back.admin.report.dto.ReportedItemResponse;
 import com.back.admin.report.exception.AdminReportException;
 import com.back.admin.report.mapper.AdminReportMapper;
-import com.back.global.exception.BaseException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 import static com.back.admin.moderation.service.ModerationServiceImpl.TARGET_COMMENT;
@@ -27,15 +27,6 @@ public class AdminReportServiceImpl implements AdminReportService {
     private final AdminReportMapper adminReportMapper;
     private final ReportBulkExecutor reportBulkExecutor;
 
-    private Long getCurrentAdminId() {
-        String subValue = SecurityContextHolder.getContext().getAuthentication().getName();
-        try {
-            return Long.parseLong(subValue);
-        } catch (NumberFormatException e) {
-            throw new AdminReportException("로그인이 필요한 서비스입니다.", HttpStatus.UNAUTHORIZED);
-        }
-    }
-
     // targetType 검증 (post/comment 만 허용)
     private void validateTargetType(String targetType) {
         if (!TARGET_POST.equals(targetType) && !TARGET_COMMENT.equals(targetType)) {
@@ -45,6 +36,8 @@ public class AdminReportServiceImpl implements AdminReportService {
 
     @Override
     public ReportPageResponse getReportedPosts(int page, int size, String status, Long boardId, String sort) {
+        page = AdminServiceSupport.clampPage(page);
+        size = AdminServiceSupport.clampSize(size);
         int totalCount = adminReportMapper.countReportedPosts(status, boardId);
         int totalPages = (int) Math.ceil((double) totalCount / size);
         int offset = (page - 1) * size;
@@ -54,6 +47,8 @@ public class AdminReportServiceImpl implements AdminReportService {
 
     @Override
     public ReportPageResponse getReportedComments(int page, int size, String status, Long boardId, String sort) {
+        page = AdminServiceSupport.clampPage(page);
+        size = AdminServiceSupport.clampSize(size);
         int totalCount = adminReportMapper.countReportedComments(status, boardId);
         int totalPages = (int) Math.ceil((double) totalCount / size);
         int offset = (page - 1) * size;
@@ -64,15 +59,13 @@ public class AdminReportServiceImpl implements AdminReportService {
     @Override
     public void reject(String targetType, Long targetId) {
         validateTargetType(targetType);
-        Long adminId = getCurrentAdminId();
-        reportBulkExecutor.rejectItem(targetType, targetId, adminId);
+        reportBulkExecutor.rejectItem(targetType, targetId, AdminServiceSupport.currentAdminId());
     }
 
     @Override
     public void delete(String targetType, Long targetId) {
         validateTargetType(targetType);
-        Long adminId = getCurrentAdminId();
-        reportBulkExecutor.deleteItem(targetType, targetId, adminId);
+        reportBulkExecutor.deleteItem(targetType, targetId, AdminServiceSupport.currentAdminId());
     }
 
     @Override
@@ -81,16 +74,16 @@ public class AdminReportServiceImpl implements AdminReportService {
         if (CollectionUtils.isEmpty(targetIds)) {
             throw new AdminReportException("반려할 항목을 선택해 주세요.", HttpStatus.BAD_REQUEST);
         }
-        Long adminId = getCurrentAdminId();
+        Long adminId = AdminServiceSupport.currentAdminId();
 
         int successCount = 0;
         List<BulkResultResponse.FailureItem> failures = new ArrayList<>();
-        for (Long targetId : targetIds) {
+        for (Long targetId : new LinkedHashSet<>(targetIds)) {
             try {
                 reportBulkExecutor.rejectItem(targetType, targetId, adminId);
                 successCount++;
             } catch (Exception e) {
-                failures.add(new BulkResultResponse.FailureItem(targetId, resolveMessage(e)));
+                failures.add(new BulkResultResponse.FailureItem(targetId, AdminServiceSupport.resolveFailureMessage(e)));
             }
         }
         return new BulkResultResponse(successCount, failures);
@@ -102,24 +95,19 @@ public class AdminReportServiceImpl implements AdminReportService {
         if (CollectionUtils.isEmpty(targetIds)) {
             throw new AdminReportException("삭제할 항목을 선택해 주세요.", HttpStatus.BAD_REQUEST);
         }
-        Long adminId = getCurrentAdminId();
+        Long adminId = AdminServiceSupport.currentAdminId();
 
         int successCount = 0;
         List<BulkResultResponse.FailureItem> failures = new ArrayList<>();
-        for (Long targetId : targetIds) {
+        for (Long targetId : new LinkedHashSet<>(targetIds)) {
             try {
                 reportBulkExecutor.deleteItem(targetType, targetId, adminId);
                 successCount++;
             } catch (Exception e) {
-                failures.add(new BulkResultResponse.FailureItem(targetId, resolveMessage(e)));
+                failures.add(new BulkResultResponse.FailureItem(targetId, AdminServiceSupport.resolveFailureMessage(e)));
             }
         }
         return new BulkResultResponse(successCount, failures);
-    }
-
-    // 실패 사유 메시지 추출 (도메인 예외는 그대로, 그 외는 일반 메시지)
-    private String resolveMessage(Exception e) {
-        return (e instanceof BaseException) ? e.getMessage() : "처리 중 오류가 발생했습니다.";
     }
 
     private ReportPageResponse toPage(int totalPages, int totalCount, List<ReportedItemResponse> items) {

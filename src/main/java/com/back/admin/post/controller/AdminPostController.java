@@ -1,6 +1,7 @@
 package com.back.admin.post.controller;
 
 import com.back.admin.common.dto.BulkResultResponse;
+import com.back.admin.post.dto.AdminPostDetailResponse;
 import com.back.admin.post.dto.AdminPostPageResponse;
 import com.back.admin.post.dto.AdminPostResponse;
 import com.back.admin.post.dto.BulkPostDeleteRequest;
@@ -27,6 +28,13 @@ public class AdminPostController {
             @RequestParam(value = "keyword", required = false) String keyword) {
         log.info("[관리자] 게시글 목록 조회 - page:{}, size:{}, boardId:{}, keyword:{}", page, size, boardId, keyword);
         return ResponseEntity.ok(adminPostService.getPostList(page, size, boardId, keyword));
+    }
+
+    // 게시글 상세 (블라인드/삭제 글도 열람, 댓글·첨부 포함)
+    @GetMapping("/api/admin/posts/{postId}")
+    public ResponseEntity<AdminPostDetailResponse> getPostDetail(@PathVariable Long postId) {
+        log.info("[관리자] 게시글 상세 조회 - postId:{}", postId);
+        return ResponseEntity.ok(adminPostService.getPostDetail(postId));
     }
 
     // 블라인드

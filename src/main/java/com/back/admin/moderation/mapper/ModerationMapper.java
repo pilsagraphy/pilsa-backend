@@ -13,6 +13,12 @@ public interface ModerationMapper {
     // 댓글 표시 상태 변경
     int updateCommentState(@Param("commentId") Long commentId, @Param("state") String state);
 
+    // 게시글 현재 표시 상태 조회 (없으면 null)
+    String findPostState(@Param("postId") Long postId);
+
+    // 댓글 현재 표시 상태 조회 (없으면 null)
+    String findCommentState(@Param("commentId") Long commentId);
+
     // 게시글 작성자 user_id 조회
     Long findPostAuthorId(@Param("postId") Long postId);
 

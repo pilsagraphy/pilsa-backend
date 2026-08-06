@@ -13,4 +13,7 @@ public interface ModerationService {
 
     // 소프트 삭제: state=deleted + 조치이력 기록 + 작성자에게 주의 포인트 적립(+2)
     void softDelete(String targetType, Long targetId, Long actorId, Long reasonId, String detail);
+
+    // 대상의 현재 표시 상태(normal/blind/deleted) 조회. 없으면 null.
+    String currentState(String targetType, Long targetId);
 }

@@ -30,7 +30,7 @@
         p.created_at AS created,
         c.name AS categoryName,
         EXISTS (SELECT 1 FROM attachments a WHERE a.post_id = p.post_id) AS hasAttachment,
-        (SELECT COUNT(*) FROM comments cm WHERE cm.post_id = p.post_id) AS commentCount,
+        (SELECT COUNT(*) FROM comments cm WHERE cm.post_id = p.post_id AND cm.state = 'normal') AS commentCount,
         (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.post_id) AS likeCount
         FROM posts p
         INNER JOIN users u ON p.user_id = u.user_id
@@ -183,11 +183,12 @@
         WHERE post_id = #{postId}
     </update>
 
-    <delete id="deletePost">
-        DELETE
-        FROM posts
+    <!-- 학생 본인 삭제도 소프트 삭제(state=deleted)로 통일. 물리 삭제하지 않음 -->
+    <update id="deletePost">
+        UPDATE posts
+        SET state = 'deleted'
         WHERE post_id = #{postId}
-    </delete>
+    </update>
 
     <insert id="insertComment">
         INSERT INTO comments (post_id, user_id, content, is_anonymous, created_at)
@@ -206,8 +207,11 @@
         WHERE comment_id = #{commentId}
     </update>
 
-    <delete id="deleteComment">
-        DELETE FROM comments WHERE comment_id = #{commentId}
-    </delete>
+    <!-- 학생 본인 댓글 삭제도 소프트 삭제로 통일 -->
+    <update id="deleteComment">
+        UPDATE comments
+        SET state = 'deleted'
+        WHERE comment_id = #{commentId}
+    </update>
 
 </mapper>

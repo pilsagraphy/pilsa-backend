@@ -1,5 +1,8 @@
 package com.back.admin.post.mapper;
 
+import com.back.admin.post.dto.AdminAttachmentResponse;
+import com.back.admin.post.dto.AdminCommentResponse;
+import com.back.admin.post.dto.AdminPostDetailResponse;
 import com.back.admin.post.dto.AdminPostListResponse;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -23,4 +26,13 @@ public interface AdminPostMapper {
             @Param("boardId") Long boardId,
             @Param("keyword") String keyword
     );
+
+    // 게시글 상세 (state 필터 없음 → 블라인드/삭제 글도 조회). 없으면 null
+    AdminPostDetailResponse findPostDetail(@Param("postId") Long postId);
+
+    // 게시글의 첨부파일 목록
+    List<AdminAttachmentResponse> findAttachments(@Param("postId") Long postId);
+
+    // 게시글의 댓글 목록 (모든 state 포함)
+    List<AdminCommentResponse> findComments(@Param("postId") Long postId);
 }

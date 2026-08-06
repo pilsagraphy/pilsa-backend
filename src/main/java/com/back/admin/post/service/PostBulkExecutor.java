@@ -1,6 +1,8 @@
 package com.back.admin.post.service;
 
 import com.back.admin.moderation.service.ModerationService;
+import com.back.admin.report.dto.ReportStatus;
+import com.back.admin.report.mapper.AdminReportMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -16,9 +18,13 @@ import static com.back.admin.moderation.service.ModerationServiceImpl.TARGET_POS
 public class PostBulkExecutor {
 
     private final ModerationService moderationService;
+    private final AdminReportMapper adminReportMapper;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void deletePost(Long postId, Long adminId, Long reasonId, String detail) {
         moderationService.softDelete(TARGET_POST, postId, adminId, reasonId, detail);
+        // 삭제 시 해당 게시글의 미처리(pending) 신고도 함께 종료 (게시글 관리 ↔ 신고 관리 상태 일치).
+        // 신고가 없으면 0건 갱신되어 무해.
+        adminReportMapper.updatePendingReportsStatus(TARGET_POST, postId, ReportStatus.RESOLVED.dbValue());
     }
 }

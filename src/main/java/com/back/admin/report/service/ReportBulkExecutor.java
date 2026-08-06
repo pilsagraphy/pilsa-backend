@@ -1,6 +1,8 @@
 package com.back.admin.report.service;
 
+import com.back.admin.moderation.dto.ModerationState;
 import com.back.admin.moderation.service.ModerationService;
+import com.back.admin.report.dto.ReportStatus;
 import com.back.admin.report.mapper.AdminReportMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -14,17 +16,17 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ReportBulkExecutor {
 
-    private static final String STATUS_REJECTED = "rejected";
-    private static final String STATUS_RESOLVED = "resolved";
-
     private final ModerationService moderationService;
     private final AdminReportMapper adminReportMapper;
 
     // 반려: 블라인드 → 공개 복원 + 신고 rejected
+    // 단, 이미 삭제(deleted)된 대상은 되살리지 않는다 (게시글 관리에서 의도적으로 삭제된 콘텐츠·벌점 보호)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void rejectItem(String targetType, Long targetId, Long adminId) {
-        moderationService.restore(targetType, targetId, adminId);
-        adminReportMapper.updatePendingReportsStatus(targetType, targetId, STATUS_REJECTED);
+        if (!ModerationState.DELETED.dbValue().equals(moderationService.currentState(targetType, targetId))) {
+            moderationService.restore(targetType, targetId, adminId);
+        }
+        adminReportMapper.updatePendingReportsStatus(targetType, targetId, ReportStatus.REJECTED.dbValue());
     }
 
     // 삭제: 소프트 삭제(주의 +2) + 신고 resolved. 사유는 대표(최신) 신고 사유 사용
@@ -32,6 +34,6 @@ public class ReportBulkExecutor {
     public void deleteItem(String targetType, Long targetId, Long adminId) {
         Long reasonId = adminReportMapper.findLatestReasonId(targetType, targetId);
         moderationService.softDelete(targetType, targetId, adminId, reasonId, null);
-        adminReportMapper.updatePendingReportsStatus(targetType, targetId, STATUS_RESOLVED);
+        adminReportMapper.updatePendingReportsStatus(targetType, targetId, ReportStatus.RESOLVED.dbValue());
     }
 }

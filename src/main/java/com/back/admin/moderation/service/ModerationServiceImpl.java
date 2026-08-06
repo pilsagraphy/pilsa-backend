@@ -21,13 +21,13 @@ public class ModerationServiceImpl implements ModerationService {
 
     @Override
     public void blind(String targetType, Long targetId, Long actorId, Long reasonId, String detail) {
-        applyState(targetType, targetId, ModerationState.BLIND);
+        if (!changeState(targetType, targetId, ModerationState.BLIND)) return; // 이미 blind면 no-op
         writeLog(targetType, targetId, ModerationState.BLIND, reasonId, detail, actorId);
     }
 
     @Override
     public void restore(String targetType, Long targetId, Long actorId) {
-        applyState(targetType, targetId, ModerationState.NORMAL);
+        if (!changeState(targetType, targetId, ModerationState.NORMAL)) return; // 이미 normal이면 no-op
         // 복원은 사유 없음(reasonId=null). 조치 이력을 남기고 그 action_id 로 주의 포인트를 회수한다.
         ModerationLogEntry entry = writeLog(targetType, targetId, ModerationState.NORMAL, null, null, actorId);
         moderationMapper.voidPenaltiesByTarget(targetType, targetId, entry.getActionId());
@@ -35,7 +35,7 @@ public class ModerationServiceImpl implements ModerationService {
 
     @Override
     public void softDelete(String targetType, Long targetId, Long actorId, Long reasonId, String detail) {
-        applyState(targetType, targetId, ModerationState.DELETED);
+        if (!changeState(targetType, targetId, ModerationState.DELETED)) return; // 이미 deleted면 no-op (벌점 중복 방지)
         ModerationLogEntry entry = writeLog(targetType, targetId, ModerationState.DELETED, reasonId, detail, actorId);
 
         Long authorId = findAuthorId(targetType, targetId);
@@ -46,10 +46,22 @@ public class ModerationServiceImpl implements ModerationService {
         moderationMapper.insertPenalty(authorId, targetType, targetId, entry.getActionId());
     }
 
+    @Override
+    public String currentState(String targetType, Long targetId) {
+        if (TARGET_POST.equals(targetType)) {
+            return moderationMapper.findPostState(targetId);
+        } else if (TARGET_COMMENT.equals(targetType)) {
+            return moderationMapper.findCommentState(targetId);
+        }
+        throw new ModerationException("잘못된 대상 유형입니다: " + targetType, HttpStatus.BAD_REQUEST);
+    }
+
     // ---- 내부 헬퍼 ----
 
-    // targetType 에 맞는 테이블의 state 를 변경. 대상이 없으면 예외.
-    private void applyState(String targetType, Long targetId, ModerationState state) {
+    // 상태를 변경한다. 실제로 바뀌면 true, 이미 같은 상태면 false(no-op), 대상이 없으면 예외.
+    // 조건부 UPDATE(state <> #{state})로 원자적 처리 → 동시 요청/재시도에도 중복 로그·벌점 방지.
+    // (이미 그 상태인 행은 WHERE 에 걸리지 않아 0건 반환 → CLIENT_FOUND_ROWS 모드에서도 신뢰 가능)
+    private boolean changeState(String targetType, Long targetId, ModerationState state) {
         int updated;
         if (TARGET_POST.equals(targetType)) {
             updated = moderationMapper.updatePostState(targetId, state.dbValue());
@@ -58,9 +70,14 @@ public class ModerationServiceImpl implements ModerationService {
         } else {
             throw new ModerationException("잘못된 대상 유형입니다: " + targetType, HttpStatus.BAD_REQUEST);
         }
-        if (updated == 0) {
+        if (updated > 0) {
+            return true; // 실제로 상태가 바뀜
+        }
+        // 0건: 이미 목표 상태이거나 대상이 없음 → 존재 여부로 구분
+        if (currentState(targetType, targetId) == null) {
             throw new ModerationException("대상을 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
         }
+        return false; // 이미 목표 상태 → no-op
     }
 
     private ModerationLogEntry writeLog(String targetType, Long targetId, ModerationState state,
