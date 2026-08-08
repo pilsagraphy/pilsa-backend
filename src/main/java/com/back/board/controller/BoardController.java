@@ -2,6 +2,9 @@ package com.back.board.controller;
 
 import com.back.board.dto.*;
 import com.back.board.service.BoardService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -19,34 +22,48 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/stu/{boardId}")
+@Tag(name = "게시판 (공지/자유/정보)", description = "재학생 게시판 통합 API. boardId 로 게시판 구분 → 1=공지사항, 2=자유게시판, 3=정보게시판")
 public class BoardController {
 
     private final BoardService boardService;
 
-    // 카테고리 불러오기 (공지사항은 빈 목록)
+    // boardId 경로변수 공통 설명 (모든 엔드포인트에서 재사용)
+    private static final String BOARD_ID_DESC = "게시판 ID (1=공지사항, 2=자유게시판, 3=정보게시판)";
+
+    @Operation(summary = "카테고리 목록 조회",
+            description = "게시판의 카테고리 목록을 조회합니다. 공지사항(boardId=1)은 카테고리가 없어 빈 목록이 반환됩니다.")
     @GetMapping("/categories")
-    public ResponseEntity<List<CategoryResponse>> getCategories(@PathVariable Long boardId) {
+    public ResponseEntity<List<CategoryResponse>> getCategories(
+            @Parameter(description = BOARD_ID_DESC, example = "2") @PathVariable Long boardId) {
         log.info("게시판 카테고리 목록 조회 요청 - boardId: {}", boardId);
         List<CategoryResponse> responses = boardService.getCategoryList(boardId);
         return ResponseEntity.ok(responses);
     }
 
-    // 신규(상단) 5개 조회
+    @Operation(summary = "상단 5개 조회",
+            description = "메인 화면용 상단 5개 글을 조회합니다. 공지사항은 중요표시(is_pinned) 글이 우선 정렬됩니다.")
     @GetMapping("/top5")
-    public ResponseEntity<List<BoardTop5Response>> getTop5Posts(@PathVariable Long boardId) {
+    public ResponseEntity<List<BoardTop5Response>> getTop5Posts(
+            @Parameter(description = BOARD_ID_DESC, example = "1") @PathVariable Long boardId) {
         log.info("메인 화면용 상단 5개 조회 요청 - boardId: {}", boardId);
         List<BoardTop5Response> responses = boardService.getTop5Posts(boardId);
         return ResponseEntity.ok(responses);
     }
 
-    // 전체 조회
+    @Operation(summary = "게시글 전체 조회 (페이징/검색/정렬)",
+            description = "게시판의 글 목록을 페이징하여 조회합니다. categoryId(카테고리 필터), keyword(제목·내용 검색), sort(created=최신순, viewCount=조회순) 지원.")
     @GetMapping("/posts")
     public ResponseEntity<BoardPageResponse> getAllPosts(
-            @PathVariable Long boardId,
+            @Parameter(description = BOARD_ID_DESC, example = "2") @PathVariable Long boardId,
+            @Parameter(description = "페이지 번호 (1부터 시작)", example = "1")
             @RequestParam(value = "page", defaultValue = "1") int page,
+            @Parameter(description = "한 페이지당 글 개수", example = "10")
             @RequestParam(value = "size", defaultValue = "10") int size,
+            @Parameter(description = "카테고리 필터 (선택). 공지사항은 미사용")
             @RequestParam(value = "categoryId", required = false) Long categoryId,
+            @Parameter(description = "검색어 (제목·내용, 선택)")
             @RequestParam(value = "keyword", required = false) String keyword,
+            @Parameter(description = "정렬 기준: created(최신순, 기본값), viewCount(조회순)", example = "created")
             @RequestParam(value = "sort", defaultValue = "created") String sort) {
         log.info("게시글 목록 조회 요청 - boardId: {}, page: {}, size: {}, categoryId: {}, keyword: {}, sort: {}",
                 boardId, page, size, categoryId, keyword, sort);
@@ -55,73 +72,91 @@ public class BoardController {
         return ResponseEntity.ok(response);
     }
 
-    // 단일글 조회
+    @Operation(summary = "게시글 단일 상세 조회",
+            description = "게시글 1건의 상세 정보를 조회합니다. 조회수가 1 증가하며, 첨부파일·좋아요·댓글·이전글/다음글 링크를 함께 반환합니다.")
     @GetMapping("/posts/{postId}")
     public ResponseEntity<BoardDetailResponse> getPostDetail(
-            @PathVariable Long boardId,
-            @PathVariable Long postId,
+            @Parameter(description = BOARD_ID_DESC, example = "2") @PathVariable Long boardId,
+            @Parameter(description = "게시글 ID", example = "140") @PathVariable Long postId,
+            @Parameter(description = "이전글/다음글 정렬 기준: created(기본값), viewCount", example = "created")
             @RequestParam(required = false, defaultValue = "created") String sort) {
         log.info("게시글 상세 조회 요청 - boardId: {}, postId: {}, sort: {}", boardId, postId, sort);
         BoardDetailResponse response = boardService.getPostDetail(boardId, postId, sort);
         return ResponseEntity.ok(response);
     }
 
-    // 좋아요 토글
+    @Operation(summary = "게시글 좋아요 토글",
+            description = "게시글 좋아요를 토글합니다. 이미 눌렀으면 취소, 안 눌렀으면 추가됩니다.")
     @PatchMapping("/posts/{postId}/like")
-    public ResponseEntity<BoardResponse> toggleLike(@PathVariable Long boardId, @PathVariable Long postId) {
+    public ResponseEntity<BoardResponse> toggleLike(
+            @Parameter(description = BOARD_ID_DESC, example = "2") @PathVariable Long boardId,
+            @Parameter(description = "게시글 ID", example = "140") @PathVariable Long postId) {
         log.info("게시글 좋아요 토글 요청 - boardId: {}, postId: {}", boardId, postId);
         return ResponseEntity.ok(boardService.togglePostLike(boardId, postId));
     }
 
-    // 게시글 등록
+    @Operation(summary = "게시글 등록 (파일 업로드)",
+            description = "게시글을 등록합니다(multipart/form-data). 공지사항(boardId=1)은 관리자만 등록 가능하며, "
+                    + "isPinned(공지 중요표시)·isAnonymous(자유게시판 익명)는 해당 게시판에서만 의미가 있습니다.")
     @PostMapping(value = "/posts", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<BoardResponse> createPost(@PathVariable Long boardId, @ModelAttribute BoardRequest request) {
+    public ResponseEntity<BoardResponse> createPost(
+            @Parameter(description = BOARD_ID_DESC, example = "2") @PathVariable Long boardId,
+            @ModelAttribute BoardRequest request) {
         log.info("게시글 등록 요청 - boardId: {}, title: {}", boardId, request.getTitle());
         return ResponseEntity.ok(boardService.createPost(boardId, request));
     }
 
-    // 게시글 수정
+    @Operation(summary = "게시글 수정",
+            description = "게시글을 수정합니다. 관리자 또는 작성자 본인만 가능합니다.")
     @PutMapping("/posts/{postId}")
     public ResponseEntity<BoardResponse> updatePost(
-            @PathVariable Long boardId,
-            @PathVariable Long postId,
+            @Parameter(description = BOARD_ID_DESC, example = "2") @PathVariable Long boardId,
+            @Parameter(description = "게시글 ID", example = "140") @PathVariable Long postId,
             @RequestBody BoardUpdateRequest request) {
         log.info("게시글 수정 요청 - boardId: {}, postId: {}", boardId, postId);
         return ResponseEntity.ok(boardService.updatePost(boardId, postId, request));
     }
 
-    // 게시글 삭제
+    @Operation(summary = "게시글 삭제",
+            description = "게시글을 삭제합니다. 공지사항(boardId=1)은 관리자만, 자유·정보게시판은 작성자 본인만 삭제할 수 있습니다.")
     @DeleteMapping("/posts/{postId}")
-    public ResponseEntity<BoardResponse> deletePost(@PathVariable Long boardId, @PathVariable Long postId) {
+    public ResponseEntity<BoardResponse> deletePost(
+            @Parameter(description = BOARD_ID_DESC, example = "2") @PathVariable Long boardId,
+            @Parameter(description = "게시글 ID", example = "140") @PathVariable Long postId) {
         log.info("게시글 삭제 요청 - boardId: {}, postId: {}", boardId, postId);
         return ResponseEntity.ok(boardService.deletePost(boardId, postId));
     }
 
-    // 댓글 등록
+    @Operation(summary = "댓글 등록",
+            description = "게시글에 댓글을 등록합니다. isAnonymous(자유게시판 익명)·isPrivate(정보게시판 비밀댓글)는 해당 게시판에서만 의미가 있습니다.")
     @PostMapping("/posts/{postId}/comments")
     public ResponseEntity<CommentResponse> createComment(
-            @PathVariable Long boardId,
-            @PathVariable Long postId,
+            @Parameter(description = BOARD_ID_DESC, example = "2") @PathVariable Long boardId,
+            @Parameter(description = "게시글 ID", example = "140") @PathVariable Long postId,
             @RequestBody CommentRequest request) {
         log.info("댓글 등록 요청 - boardId: {}, postId: {}", boardId, postId);
         return ResponseEntity.ok(boardService.createComment(boardId, postId, request));
     }
 
-    // 댓글 수정
+    @Operation(summary = "댓글 수정",
+            description = "댓글을 수정합니다. 관리자 또는 작성자 본인만 가능합니다.")
     @PutMapping("/posts/{postId}/comments/{commentId}")
     public ResponseEntity<CommentResponse> updateComment(
-            @PathVariable Long boardId,
-            @PathVariable Long commentId,
+            @Parameter(description = BOARD_ID_DESC, example = "2") @PathVariable Long boardId,
+            @Parameter(description = "게시글 ID", example = "140") @PathVariable Long postId,
+            @Parameter(description = "댓글 ID", example = "189") @PathVariable Long commentId,
             @RequestBody CommentRequest request) {
         log.info("댓글 수정 요청 - boardId: {}, commentId: {}", boardId, commentId);
         return ResponseEntity.ok(boardService.updateComment(boardId, commentId, request));
     }
 
-    // 댓글 삭제
+    @Operation(summary = "댓글 삭제",
+            description = "댓글을 삭제합니다. 작성자 본인만 가능합니다.")
     @DeleteMapping("/posts/{postId}/comments/{commentId}")
     public ResponseEntity<BoardResponse> deleteComment(
-            @PathVariable Long boardId,
-            @PathVariable Long commentId) {
+            @Parameter(description = BOARD_ID_DESC, example = "2") @PathVariable Long boardId,
+            @Parameter(description = "게시글 ID", example = "140") @PathVariable Long postId,
+            @Parameter(description = "댓글 ID", example = "189") @PathVariable Long commentId) {
         log.info("댓글 삭제 요청 - boardId: {}, commentId: {}", boardId, commentId);
         return ResponseEntity.ok(boardService.deleteComment(boardId, commentId));
     }
