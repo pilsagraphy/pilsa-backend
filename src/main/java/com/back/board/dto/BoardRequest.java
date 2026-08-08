@@ -30,7 +30,8 @@ public class BoardRequest {
     @Schema(description = "중요표시 여부 (공지사항 전용). 그 외 게시판은 무시됨", example = "false")
     private boolean isPinned;
 
-    @Schema(description = "카테고리 ID (자유/정보게시판). 미입력 시 게시판별 기본값 적용, 공지사항은 미사용")
+    @Schema(description = "카테고리 ID (선택). 미입력하거나 없는 값이면 게시판별 기본값 자동 적용(자유=1, 정보=2). 공지사항은 미사용",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
     private Long categoryId;
 
     @Schema(description = "첨부파일 목록 (선택)")

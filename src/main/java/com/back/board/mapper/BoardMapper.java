@@ -17,6 +17,9 @@ public interface BoardMapper {
     // 게시판 카테고리 목록 조회 (공지사항은 데이터가 없어 빈 목록 반환)
     List<CategoryResponse> findCategoriesByBoardId(@Param("boardId") Long boardId);
 
+    // 해당 카테고리가 이 게시판에 실제로 존재하는지 확인 (등록 시 유효성 검사용)
+    boolean existsCategory(@Param("categoryId") Long categoryId, @Param("boardId") Long boardId);
+
     // 메인 화면용 상단 5개 조회 (공지사항은 is_pinned 우선 정렬)
     List<BoardTop5Response> findTop5Posts(@Param("boardId") Long boardId);
 

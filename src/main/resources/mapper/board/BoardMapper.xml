@@ -11,6 +11,14 @@
         ORDER BY category_id ASC
     </select>
 
+    <!-- 카테고리 유효성 확인 (등록 시 잘못된 categoryId 방지) -->
+    <select id="existsCategory" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1 FROM categories
+            WHERE category_id = #{categoryId} AND board_id = #{boardId}
+        )
+    </select>
+
     <!-- 메인 화면용 상단 5개 조회 (공지사항은 is_pinned 우선, 그 외는 최신순) -->
     <select id="findTop5Posts" resultType="com.back.board.dto.BoardTop5Response">
         SELECT post_id   AS postId,

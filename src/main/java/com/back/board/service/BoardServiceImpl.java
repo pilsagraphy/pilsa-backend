@@ -151,9 +151,12 @@ public class BoardServiceImpl implements BoardService {
             throw new BoardException("해당 게시판에 글을 등록할 권한이 없습니다.", HttpStatus.FORBIDDEN);
         }
 
-        // 카테고리 미선택 시 게시판별 기본값 적용 (카테고리 미사용 게시판은 그대로 null)
-        if (request.getCategoryId() == null && boardType.getDefaultCategoryId() != null) {
-            request.setCategoryId(boardType.getDefaultCategoryId());
+        // 카테고리 정리: 미선택이거나 이 게시판에 없는 값이면 게시판별 기본값으로 대체.
+        // (Swagger가 빈 값에 채워 넣는 임의의 큰 숫자 등 잘못된 값이 들어와도 등록이 실패하지 않도록 방어)
+        Long categoryId = request.getCategoryId();
+        boolean invalidCategory = categoryId == null || !boardMapper.existsCategory(categoryId, boardId);
+        if (invalidCategory) {
+            request.setCategoryId(boardType.getDefaultCategoryId()); // 카테고리 미사용 게시판(공지)은 null
         }
 
         // 게시글 본문 저장
