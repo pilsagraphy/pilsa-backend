@@ -58,4 +58,48 @@
         </trim>
     </select>
 
+    <!-- ===== 회원 정보 수정 ===== -->
+
+    <select id="existsActiveMember" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1 FROM users
+            WHERE user_id = #{userId} AND is_deleted = 0
+        )
+    </select>
+
+    <select id="existsEmailExcludingUser" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1 FROM users
+            WHERE email = #{email} AND user_id != #{userId}
+        )
+    </select>
+
+    <select id="existsPhoneExcludingUser" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1 FROM users
+            WHERE phone = #{phone} AND user_id != #{userId}
+        )
+    </select>
+
+    <select id="existsStudentNoExcludingUser" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1 FROM users
+            WHERE student_no = #{studentNo} AND user_id != #{userId}
+        )
+    </select>
+
+    <update id="updateMember">
+        UPDATE users
+        <set>
+            <if test="req.name != null">name = #{req.name},</if>
+            <if test="req.phone != null">phone = #{req.phone},</if>
+            <if test="req.studentNo != null">student_no = #{req.studentNo},</if>
+            <if test="req.email != null">email = #{req.email},</if>
+            <if test="req.status != null">status = #{req.status},</if>
+            <if test="req.role != null">role = #{req.role},</if>
+            updated_at = NOW()
+        </set>
+        WHERE user_id = #{userId} AND is_deleted = 0
+    </update>
+
 </mapper>

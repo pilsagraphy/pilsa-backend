@@ -1,11 +1,16 @@
 package com.back.member.controller;
 
 import com.back.member.dto.MemberPageResponse;
+import com.back.member.dto.MemberResponse;
+import com.back.member.dto.MemberUpdateRequest;
 import com.back.member.service.MemberService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -27,5 +32,14 @@ public class MemberController {
         MemberPageResponse response = memberService.getMembers(page, size, keyword, sort);
         log.info("회원 목록 조회 성공 - 총 {}명, 현재 페이지 {}건", response.getTotalCount(), response.getMembers().size());
         return ResponseEntity.ok(response);
+    }
+
+    // 회원 정보 수정 (이름/전화/학번/이메일 + 재학상태/권한) - 관리자 전용
+    @PutMapping("/api/admin/members/{userId}")
+    public ResponseEntity<MemberResponse> updateMember(
+            @PathVariable Long userId,
+            @RequestBody MemberUpdateRequest request) {
+        log.info("회원 정보 수정 요청 - userId: {}, 데이터: {}", userId, request);
+        return ResponseEntity.ok(memberService.updateMember(userId, request));
     }
 }
