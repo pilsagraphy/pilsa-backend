@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 @Setter
 public class CommentDetailResponse {
     private Long commentId;
+    private Long parentCommentId;  // 대댓글이면 부모 댓글 ID, 최상위 댓글이면 null
     private String content;
     private String authorName;
     private boolean isAnonymous;   // 자유게시판 익명 여부

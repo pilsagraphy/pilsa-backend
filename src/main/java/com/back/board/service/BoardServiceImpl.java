@@ -224,12 +224,19 @@ public class BoardServiceImpl implements BoardService {
         return new BoardResponse("게시글이 성공적으로 삭제되었습니다.");
     }
 
-    // 댓글 신규 등록 (자유=익명, 정보=비밀댓글)
+    // 댓글/대댓글 신규 등록 (parentCommentId 있으면 답글, 자유=익명, 정보=비밀댓글)
     @Override
     @Transactional
     public CommentResponse createComment(Long boardId, Long postId, CommentRequest request) {
         BoardType.of(boardId);
         Long userId = getCurrentUserId();
+
+        // 대댓글이면 부모 댓글이 같은 게시글에 실제로 있는지 확인 (엉뚱한 부모 지정 방지)
+        Long parentCommentId = request.getParentCommentId();
+        if (parentCommentId != null && !boardMapper.existsCommentInPost(parentCommentId, postId)) {
+            throw new BoardException("답글을 달 부모 댓글이 존재하지 않습니다.", HttpStatus.BAD_REQUEST);
+        }
+
         boardMapper.insertComment(postId, userId, request);
         return new CommentResponse("댓글이 성공적으로 등록되었습니다.");
     }

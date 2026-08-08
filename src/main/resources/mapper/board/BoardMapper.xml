@@ -131,6 +131,7 @@
     <select id="findCommentsByPostId" resultType="com.back.board.dto.CommentDetailResponse">
         SELECT
             c.comment_id AS commentId,
+            c.parent_comment_id AS parentCommentId,
             c.content,
             u.name AS authorName,
             c.is_anonymous AS isAnonymous,
@@ -208,10 +209,18 @@
         WHERE post_id = #{postId}
     </delete>
 
-    <!-- 댓글 등록 (자유=익명, 정보=비밀댓글) -->
+    <!-- 부모 댓글이 같은 게시글에 존재하는지 확인 (대댓글 등록 유효성 검사) -->
+    <select id="existsCommentInPost" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1 FROM comments
+            WHERE comment_id = #{commentId} AND post_id = #{postId}
+        )
+    </select>
+
+    <!-- 댓글 등록 (parent_comment_id 있으면 대댓글, 자유=익명, 정보=비밀댓글) -->
     <insert id="insertComment">
-        INSERT INTO comments (post_id, user_id, content, is_anonymous, is_private, created_at)
-        VALUES (#{postId}, #{userId}, #{request.content}, #{request.isAnonymous}, #{request.isPrivate}, NOW())
+        INSERT INTO comments (post_id, parent_comment_id, user_id, content, is_anonymous, is_private, created_at)
+        VALUES (#{postId}, #{request.parentCommentId}, #{userId}, #{request.content}, #{request.isAnonymous}, #{request.isPrivate}, NOW())
     </insert>
 
     <select id="findCommentAuthorId" resultType="long">

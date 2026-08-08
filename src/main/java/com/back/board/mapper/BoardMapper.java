@@ -91,6 +91,9 @@ public interface BoardMapper {
     // 게시글에 달린 댓글 목록 조회
     List<CommentDetailResponse> findCommentsByPostId(@Param("postId") Long postId);
 
+    // 대댓글 등록 시 부모 댓글이 같은 게시글에 실제로 존재하는지 확인
+    boolean existsCommentInPost(@Param("commentId") Long commentId, @Param("postId") Long postId);
+
     // 댓글 등록
     void insertComment(@Param("postId") Long postId, @Param("userId") Long userId, @Param("request") CommentRequest request);
 

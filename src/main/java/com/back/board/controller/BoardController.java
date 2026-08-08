@@ -127,8 +127,9 @@ public class BoardController {
         return ResponseEntity.ok(boardService.deletePost(boardId, postId));
     }
 
-    @Operation(summary = "댓글 등록",
-            description = "게시글에 댓글을 등록합니다. isAnonymous(자유게시판 익명)·isPrivate(정보게시판 비밀댓글)는 해당 게시판에서만 의미가 있습니다.")
+    @Operation(summary = "댓글/대댓글 등록",
+            description = "게시글에 댓글을 등록합니다. parentCommentId를 넣으면 그 댓글의 대댓글(답글)로 등록됩니다(무제한 깊이). "
+                    + "isAnonymous(자유게시판 익명)·isPrivate(정보게시판 비밀댓글)는 해당 게시판에서만 의미가 있습니다.")
     @PostMapping("/posts/{postId}/comments")
     public ResponseEntity<CommentResponse> createComment(
             @Parameter(description = BOARD_ID_DESC, example = "2") @PathVariable Long boardId,
