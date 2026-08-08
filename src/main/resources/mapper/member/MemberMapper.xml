@@ -102,4 +102,21 @@
         WHERE user_id = #{userId} AND is_deleted = 0
     </update>
 
+    <!-- ===== 회원 정지 / 영구차단 ===== -->
+
+    <!-- 차단 이력 기록 (ends_at = null 이면 영구) -->
+    <insert id="insertBanLog">
+        INSERT INTO ban_log (user_id, warning_no, ban_type, starts_at, ends_at, created_at)
+        VALUES (#{userId}, #{warningNo}, #{banType}, #{startsAt}, #{endsAt}, NOW())
+    </insert>
+
+    <!-- users 차단 상태 캐시 갱신 (banned_until = null 이면 영구) -->
+    <update id="updateUserBanStatus">
+        UPDATE users
+        SET ban_status   = #{banStatus},
+            banned_until = #{bannedUntil},
+            updated_at   = NOW()
+        WHERE user_id = #{userId} AND is_deleted = 0
+    </update>
+
 </mapper>

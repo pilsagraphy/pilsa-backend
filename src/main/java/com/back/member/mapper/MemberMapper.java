@@ -5,6 +5,7 @@ import com.back.member.dto.MemberUpdateRequest;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Mapper
@@ -35,4 +36,20 @@ public interface MemberMapper {
 
     // 회원 정보 수정 (전달된 필드만 동적 수정)
     int updateMember(@Param("userId") Long userId, @Param("req") MemberUpdateRequest req);
+
+    // 차단 이력 기록 (정지/영구차단 공통). endsAt = null 이면 영구
+    void insertBanLog(
+            @Param("userId") Long userId,
+            @Param("warningNo") int warningNo,
+            @Param("banType") String banType,
+            @Param("startsAt") LocalDateTime startsAt,
+            @Param("endsAt") LocalDateTime endsAt
+    );
+
+    // users 차단 상태 캐시 갱신. bannedUntil = null 이면 영구(none 해제 포함 재사용 가능)
+    void updateUserBanStatus(
+            @Param("userId") Long userId,
+            @Param("banStatus") String banStatus,
+            @Param("bannedUntil") LocalDateTime bannedUntil
+    );
 }

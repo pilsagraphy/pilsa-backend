@@ -1,8 +1,10 @@
 package com.back.member.service;
 
+import com.back.member.dto.MemberBanRequest;
 import com.back.member.dto.MemberListResponse;
 import com.back.member.dto.MemberPageResponse;
 import com.back.member.dto.MemberResponse;
+import com.back.member.dto.MemberSuspendRequest;
 import com.back.member.dto.MemberUpdateRequest;
 import com.back.member.exception.MemberException;
 import com.back.member.mapper.MemberMapper;
@@ -13,7 +15,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -38,6 +42,14 @@ public class MemberServiceImpl implements MemberService {
     private static final Set<Integer> ALLOWED_STATUS = Set.of(0, 1, 2);
     // 권한: DB에 저장되는 실제 role 값 (관리 Lv 체계는 추후 확장)
     private static final Set<String> ALLOWED_ROLES = Set.of("ADMIN", "STUDENTS", "ALUMNI");
+
+    // ===== 정지/차단 상수 =====
+    // ban_log.warning_no는 ban_policy FK 통과용. 수동 차단은 기존 정책값 재사용
+    // (임시=1/BAN_W1, 영구=3/BAN_W3). 실제 유형·기간은 ban_type·ends_at가 담당.
+    private static final int WARNING_NO_TEMPORARY = 1;
+    private static final int WARNING_NO_PERMANENT = 3;
+    private static final String BAN_TYPE_TEMPORARY = "temporary";
+    private static final String BAN_TYPE_PERMANENT = "permanent";
 
     // 관리자 권한 확인 (경로는 SecurityConfig에서 이미 ADMIN 제한, 방어적으로 한 번 더 확인)
     private void checkAdminRole() {
@@ -151,5 +163,68 @@ public class MemberServiceImpl implements MemberService {
         memberMapper.updateMember(userId, request);
         log.info("회원 정보 수정 완료 - userId: {}, 요청: {}", userId, request);
         return new MemberResponse("회원 정보가 수정되었습니다.", userId);
+    }
+
+    @Override
+    @Transactional
+    public MemberResponse suspendMember(Long userId, MemberSuspendRequest request) {
+        checkAdminRole();
+
+        if (!memberMapper.existsActiveMember(userId)) {
+            throw new MemberException("해당 회원을 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
+        }
+        if (request.getEndDate() == null) {
+            throw new MemberException("정지 종료일은 필수입니다.", HttpStatus.BAD_REQUEST);
+        }
+
+        // 시작 = 지금, 종료 = 종료일의 하루 끝(23:59:59). 종료는 항상 시작보다 미래여야 함
+        LocalDateTime startsAt = LocalDateTime.now();
+        LocalDateTime endsAt = request.getEndDate().atTime(23, 59, 59);
+        if (!endsAt.isAfter(startsAt)) {
+            throw new MemberException("정지 종료일은 현재 시점보다 미래여야 합니다.", HttpStatus.BAD_REQUEST);
+        }
+
+        memberMapper.insertBanLog(userId, WARNING_NO_TEMPORARY, BAN_TYPE_TEMPORARY, startsAt, endsAt);
+        memberMapper.updateUserBanStatus(userId, BAN_TYPE_TEMPORARY, endsAt);
+
+        log.info("회원 정지 완료 - userId: {}, 종료일: {}", userId, request.getEndDate());
+        return new MemberResponse("회원이 정지되었습니다. (종료일: " + request.getEndDate() + ")", userId);
+    }
+
+    @Override
+    @Transactional
+    public MemberResponse banMembers(MemberBanRequest request) {
+        checkAdminRole();
+
+        if (request.getUserIds() == null || request.getUserIds().isEmpty()) {
+            throw new MemberException("차단할 회원을 선택해야 합니다.", HttpStatus.BAD_REQUEST);
+        }
+
+        // null 제거 + 중복 제거
+        List<Long> targetIds = request.getUserIds().stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (targetIds.isEmpty()) {
+            throw new MemberException("차단할 회원을 선택해야 합니다.", HttpStatus.BAD_REQUEST);
+        }
+
+        // 존재하지 않는 회원이 섞여 있으면 전체 실패 (트랜잭션 all-or-nothing)
+        List<Long> missing = targetIds.stream()
+                .filter(id -> !memberMapper.existsActiveMember(id))
+                .toList();
+        if (!missing.isEmpty()) {
+            throw new MemberException("존재하지 않는 회원이 포함되어 있습니다: " + missing, HttpStatus.NOT_FOUND);
+        }
+
+        LocalDateTime startsAt = LocalDateTime.now();
+        for (Long id : targetIds) {
+            // 영구차단: ends_at/banned_until = null
+            memberMapper.insertBanLog(id, WARNING_NO_PERMANENT, BAN_TYPE_PERMANENT, startsAt, null);
+            memberMapper.updateUserBanStatus(id, BAN_TYPE_PERMANENT, null);
+        }
+
+        log.info("회원 영구차단 완료 - {}명, ids: {}", targetIds.size(), targetIds);
+        return new MemberResponse(targetIds.size() + "명을 영구차단했습니다.", null);
     }
 }

@@ -1,7 +1,9 @@
 package com.back.member.controller;
 
+import com.back.member.dto.MemberBanRequest;
 import com.back.member.dto.MemberPageResponse;
 import com.back.member.dto.MemberResponse;
+import com.back.member.dto.MemberSuspendRequest;
 import com.back.member.dto.MemberUpdateRequest;
 import com.back.member.service.MemberService;
 import lombok.RequiredArgsConstructor;
@@ -9,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -41,5 +44,21 @@ public class MemberController {
             @RequestBody MemberUpdateRequest request) {
         log.info("회원 정보 수정 요청 - userId: {}, 데이터: {}", userId, request);
         return ResponseEntity.ok(memberService.updateMember(userId, request));
+    }
+
+    // 회원 정지 (temporary) - 단일 회원, 종료일까지 - 관리자 전용
+    @PostMapping("/api/admin/members/{userId}/suspend")
+    public ResponseEntity<MemberResponse> suspendMember(
+            @PathVariable Long userId,
+            @RequestBody MemberSuspendRequest request) {
+        log.info("회원 정지 요청 - userId: {}, 데이터: {}", userId, request);
+        return ResponseEntity.ok(memberService.suspendMember(userId, request));
+    }
+
+    // 회원 영구차단 (permanent) - 단일/다중 회원 - 관리자 전용
+    @PostMapping("/api/admin/members/ban")
+    public ResponseEntity<MemberResponse> banMembers(@RequestBody MemberBanRequest request) {
+        log.info("회원 영구차단 요청 - 데이터: {}", request);
+        return ResponseEntity.ok(memberService.banMembers(request));
     }
 }
