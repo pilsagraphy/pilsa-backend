@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.board.mapper.BoardMapper">
+
+    <!-- 카테고리 목록 조회 (공지사항 board_id=1 은 데이터가 없어 빈 목록) -->
+    <select id="findCategoriesByBoardId" resultType="com.back.board.dto.CategoryResponse">
+        SELECT category_id AS categoryId,
+               name
+        FROM categories
+        WHERE board_id = #{boardId}
+        ORDER BY category_id ASC
+    </select>
+
+    <!-- 메인 화면용 상단 5개 조회 (공지사항은 is_pinned 우선, 그 외는 최신순) -->
+    <select id="findTop5Posts" resultType="com.back.board.dto.BoardTop5Response">
+        SELECT post_id   AS postId,
+               title,
+               is_pinned AS isPinned
+        FROM posts
+        WHERE board_id = #{boardId}
+        ORDER BY is_pinned DESC, created_at DESC
+        LIMIT 5
+    </select>
+
+    <!-- 게시글 전체 목록 조회 (페이징 / 카테고리 필터 / 검색 / 정렬) -->
+    <select id="findAllPosts" resultType="com.back.board.dto.BoardListResponse">
+        SELECT
+        p.post_id AS postId,
+        p.title,
+        u.name AS authorName,
+        p.view_count AS viewCount,
+        p.is_pinned AS isPinned,
+        p.created_at AS created,
+        c.name AS categoryName,
+        EXISTS (SELECT 1 FROM attachments a WHERE a.post_id = p.post_id) AS hasAttachment,
+        (SELECT COUNT(*) FROM comments cm WHERE cm.post_id = p.post_id) AS commentCount,
+        (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.post_id) AS likeCount
+        FROM posts p
+        INNER JOIN users u ON p.user_id = u.user_id
+        LEFT JOIN categories c ON p.category_id = c.category_id
+        WHERE p.board_id = #{boardId}
+        <if test="categoryId != null">
+            AND p.category_id = #{categoryId}
+        </if>
+        <if test="keyword != null and keyword != ''">
+            AND (p.title LIKE CONCAT('%', #{keyword}, '%') OR p.content LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        ORDER BY p.is_pinned DESC,
+        <choose>
+            <when test="sort == 'viewCount'">p.view_count DESC</when>
+            <otherwise>p.created_at DESC</otherwise>
+        </choose>
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <!-- 게시글 총 개수 조회 -->
+    <select id="countPosts" resultType="int">
+        SELECT COUNT(*)
+        FROM posts
+        WHERE board_id = #{boardId}
+        <if test="categoryId != null">
+            AND category_id = #{categoryId}
+        </if>
+        <if test="keyword != null and keyword != ''">
+            AND (title LIKE CONCAT('%', #{keyword}, '%') OR content LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </select>
+
+    <!-- 조회수 증가 -->
+    <update id="updateViewCount">
+        UPDATE posts
+        SET view_count = view_count + 1
+        WHERE post_id = #{postId}
+    </update>
+
+    <!-- 게시글 단일 상세 조회 (이전글/다음글 포함) -->
+    <select id="findPostDetailById" resultType="com.back.board.dto.BoardDetailResponse">
+        SELECT
+        p.post_id AS postId,
+        p.title,
+        p.content,
+        p.user_id AS userId,
+        u.name AS authorName,
+        p.view_count AS viewCount,
+        p.updated_at AS updated,
+        p.is_anonymous AS isAnonymous,
+        p.is_pinned AS isPinned,
+        ct.name AS categoryName,
+        <choose>
+            <when test="sort == 'viewCount'">
+                (SELECT post_id FROM posts
+                WHERE board_id = #{boardId} AND post_id != p.post_id
+                AND (view_count &gt; p.view_count OR (view_count = p.view_count AND post_id &gt; p.post_id))
+                ORDER BY view_count ASC, post_id ASC LIMIT 1) AS prevPostApi,
+                (SELECT post_id FROM posts
+                WHERE board_id = #{boardId} AND post_id != p.post_id
+                AND (view_count &lt; p.view_count OR (view_count = p.view_count AND post_id &lt; p.post_id))
+                ORDER BY view_count DESC, post_id DESC LIMIT 1) AS nextPostApi
+            </when>
+            <otherwise>
+                (SELECT MAX(post_id) FROM posts WHERE board_id = #{boardId} AND post_id &lt; #{postId}) AS prevPostApi,
+                (SELECT MIN(post_id) FROM posts WHERE board_id = #{boardId} AND post_id &gt; #{postId}) AS nextPostApi
+            </otherwise>
+        </choose>
+        FROM posts p
+        JOIN users u ON p.user_id = u.user_id
+        LEFT JOIN categories ct ON p.category_id = ct.category_id
+        WHERE p.post_id = #{postId}
+        AND p.board_id = #{boardId}
+    </select>
+
+    <!-- 첨부파일 목록 조회 -->
+    <select id="findAttachmentsByPostId" resultType="com.back.board.dto.AttachmentFileResponse">
+        SELECT attachment_id AS attachmentId,
+               file_name     AS originName,
+               file_size     AS fileSize,
+               file_url      AS fileUrl
+        FROM attachments
+        WHERE post_id = #{postId}
+    </select>
+
+    <!-- 댓글 목록 조회 (자유=익명, 정보=비밀댓글) -->
+    <select id="findCommentsByPostId" resultType="com.back.board.dto.CommentDetailResponse">
+        SELECT
+            c.comment_id AS commentId,
+            c.content,
+            u.name AS authorName,
+            c.is_anonymous AS isAnonymous,
+            c.is_private AS isPrivate,
+            c.updated_at AS updated,
+            c.user_id AS userId
+        FROM comments c
+                 JOIN users u ON c.user_id = u.user_id
+        WHERE c.post_id = #{postId}
+        ORDER BY c.created_at ASC
+    </select>
+
+    <!-- 좋아요 총 개수 -->
+    <select id="countLikesByPostId" resultType="int">
+        SELECT COUNT(*)
+        FROM post_likes
+        WHERE post_id = #{postId}
+    </select>
+
+    <!-- 좋아요 여부 -->
+    <select id="existsLikeByPostIdAndUserId" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1
+            FROM post_likes
+            WHERE post_id = #{postId} AND user_id = #{userId}
+        )
+    </select>
+
+    <insert id="insertLike">
+        INSERT INTO post_likes (post_id, user_id)
+        VALUES (#{postId}, #{userId})
+    </insert>
+
+    <delete id="deleteLike">
+        DELETE
+        FROM post_likes
+        WHERE post_id = #{postId}
+          AND user_id = #{userId}
+    </delete>
+
+    <!-- 게시글 등록 (모든 게시판 공통: 사용하지 않는 컬럼은 기본값이 들어감) -->
+    <insert id="insertPost" useGeneratedKeys="true" keyProperty="request.postId">
+        INSERT INTO posts (title, content, user_id, board_id, category_id, is_anonymous, is_pinned, created_at)
+        VALUES (#{request.title}, #{request.content}, #{userId}, #{boardId},
+                #{request.categoryId}, #{request.isAnonymous}, #{request.isPinned}, NOW())
+    </insert>
+
+    <insert id="insertAttachment">
+        INSERT INTO attachments (post_id, file_name, file_url, file_size, file_type, created_at)
+        VALUES (#{postId}, #{originName}, #{fileUrl}, #{fileSize}, #{fileType}, NOW())
+    </insert>
+
+    <!-- 작성자 ID 조회 (수정/삭제 권한 확인용) -->
+    <select id="findAuthorIdByPostId" resultType="long">
+        SELECT user_id FROM posts WHERE post_id = #{postId}
+    </select>
+
+    <!-- 게시글 수정 -->
+    <update id="updatePost">
+        UPDATE posts
+        <set>
+            <if test="request.title != null">title = #{request.title},</if>
+            <if test="request.content != null">content = #{request.content},</if>
+            <if test="request.categoryId != null">category_id = #{request.categoryId},</if>
+            is_anonymous = #{request.isAnonymous},
+            is_pinned = #{request.isPinned},
+            updated_at = NOW()
+        </set>
+        WHERE post_id = #{postId}
+    </update>
+
+    <delete id="deletePost">
+        DELETE
+        FROM posts
+        WHERE post_id = #{postId}
+    </delete>
+
+    <!-- 댓글 등록 (자유=익명, 정보=비밀댓글) -->
+    <insert id="insertComment">
+        INSERT INTO comments (post_id, user_id, content, is_anonymous, is_private, created_at)
+        VALUES (#{postId}, #{userId}, #{request.content}, #{request.isAnonymous}, #{request.isPrivate}, NOW())
+    </insert>
+
+    <select id="findCommentAuthorId" resultType="long">
+        SELECT user_id FROM comments WHERE comment_id = #{commentId}
+    </select>
+
+    <update id="updateComment">
+        UPDATE comments
+        SET content = #{request.content},
+            is_anonymous = #{request.isAnonymous},
+            is_private = #{request.isPrivate},
+            updated_at = NOW()
+        WHERE comment_id = #{commentId}
+    </update>
+
+    <delete id="deleteComment">
+        DELETE FROM comments WHERE comment_id = #{commentId}
+    </delete>
+
+</mapper>
