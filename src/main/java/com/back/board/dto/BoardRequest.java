@@ -34,7 +34,8 @@ public class BoardRequest {
             requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
     private Long categoryId;
 
-    @Schema(description = "첨부파일 목록 (선택)")
+    @Schema(description = "첨부파일 목록 (선택). 미첨부 시 그대로 등록됨",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
     private List<MultipartFile> files;
 
     @Schema(description = "[서버 내부용] DB 저장 후 생성된 게시글 ID. 요청 시 입력 불필요", hidden = true)
