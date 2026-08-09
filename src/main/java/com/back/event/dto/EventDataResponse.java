@@ -9,6 +9,8 @@ import lombok.Setter;
 public class EventDataResponse {
     private Long eventId;
     private String title;
+    private String category;
+    private String description;
     private String startDate;
     private String endDate;
 }
