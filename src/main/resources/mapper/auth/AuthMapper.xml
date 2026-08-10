@@ -11,7 +11,8 @@
                password_hash AS passwordHash,
                name,
                email,
-               role,
+               member_type   AS memberType,
+               admin_level   AS adminLevel,
                is_deleted    AS isDeleted
         FROM users
         WHERE login_id = #{loginId}
@@ -29,8 +30,8 @@
 
     <!-- 회원가입 -->
     <insert id="insertUser" useGeneratedKeys="true" keyProperty="userId">
-        INSERT INTO users (name, phone, major, student_no, email, login_id, password_hash, role, is_deleted)
-        VALUES (#{name},#{phone}, #{major}, #{studentNo}, #{email}, #{loginId}, #{passwordHash}, #{role}, #{isDeleted})
+        INSERT INTO users (name, phone, major, student_no, email, login_id, password_hash, member_type, admin_level, is_deleted)
+        VALUES (#{name},#{phone}, #{major}, #{studentNo}, #{email}, #{loginId}, #{passwordHash}, #{memberType}, #{adminLevel}, #{isDeleted})
     </insert>
 
     <!-- 회원가입 - 아이디 & 이메일 중복 확인 -->

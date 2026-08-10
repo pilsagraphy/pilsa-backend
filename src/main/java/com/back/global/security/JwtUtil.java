@@ -26,7 +26,8 @@ public class JwtUtil {
                 // 토큰에 추가하고 싶은 정보
                 .setSubject(user.getLoginId())
                 .claim("id", user.getUserId())
-                .claim("role", user.getRole())
+                .claim("memberType", user.getMemberType())
+                .claim("adminLevel", user.getAdminLevel())
                 .claim("name", user.getName())
                 // 토큰 기본 정보
                 .setIssuedAt(new Date())
@@ -45,7 +46,8 @@ public class JwtUtil {
                 // 토큰에 추가하고 싶은 정보
                 .setSubject(user.getLoginId())
                 .claim("id", user.getUserId())
-                .claim("role", user.getRole())
+                .claim("memberType", user.getMemberType())
+                .claim("adminLevel", user.getAdminLevel())
                 .claim("name", user.getName())
                 // 토큰 기본 정보
                 .setIssuedAt(new Date())

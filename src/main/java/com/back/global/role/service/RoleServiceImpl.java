@@ -35,11 +35,11 @@ public class RoleServiceImpl implements RoleService {
   public RoleResponse getCurrentUserRole() {
     Long userId = getCurrentUserId();
     
-    String role = roleMapper.findRoleByUserId(userId);
-    if (role == null) {
+    RoleResponse info = roleMapper.findMemberInfoByUserId(userId);
+    if (info == null) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자 정보를 찾을 수 없습니다.");
     }
-    
-    return new RoleResponse(role);
+
+    return info;
   }
 }

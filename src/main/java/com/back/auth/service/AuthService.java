@@ -33,6 +33,6 @@ public interface AuthService {
     boolean checkRefreshToken(HttpServletRequest request);
     // 리프레시토큰 연장(재발급) -> 로그인 시 수동 연장
     AuthResponse extend(String refreshToken, HttpServletResponse response);
-    // 엑세스 토큰 발급/재발급
-    AuthResponse refresh(String refreshToken);
+    // 엑세스 토큰 발급/재발급 (+ 리프레시 토큰 회전)
+    AuthResponse refresh(String refreshToken, HttpServletResponse response);
 }
