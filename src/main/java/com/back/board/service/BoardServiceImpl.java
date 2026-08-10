@@ -184,12 +184,19 @@ public class BoardServiceImpl implements BoardService {
     @Override
     @Transactional
     public BoardResponse updatePost(Long boardId, Long postId, BoardUpdateRequest request) {
-        BoardType.of(boardId);
+        BoardType boardType = BoardType.of(boardId);
         Long currentUserId = getCurrentUserId();
         Long authorId = boardMapper.findAuthorIdByPostId(postId);
 
         if (!isAdmin() && !currentUserId.equals(authorId)) {
             throw new BoardException("수정 권한이 없습니다.", HttpStatus.FORBIDDEN);
+        }
+
+        // 카테고리 정리: 값을 보냈는데 이 게시판에 없는 값이면 게시판별 기본값으로 대체.
+        // (createPost와 동일한 방어. categoryId가 null이면 미변경이므로 그대로 둔다)
+        Long categoryId = request.getCategoryId();
+        if (categoryId != null && !boardMapper.existsCategory(categoryId, boardId)) {
+            request.setCategoryId(boardType.getDefaultCategoryId()); // 카테고리 미사용 게시판(공지)은 null
         }
 
         int updated = boardMapper.updatePost(postId, request);

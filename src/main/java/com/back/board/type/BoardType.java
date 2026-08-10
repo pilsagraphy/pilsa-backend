@@ -1,6 +1,7 @@
 package com.back.board.type;
 
 import com.back.board.exception.BoardException;
+import lombok.Getter;
 import org.springframework.http.HttpStatus;
 
 /**
@@ -11,6 +12,7 @@ import org.springframework.http.HttpStatus;
  *  - FREE(2)   : 자유게시판 - 로그인 유저 작성, 익명(is_anonymous) 사용, 카테고리 기본값 1
  *  - INFO(3)   : 정보게시판 - 로그인 유저 작성, 비밀댓글(is_private) 사용, 카테고리 기본값 2
  */
+@Getter
 public enum BoardType {
 
     NOTICE(1L, true, null, "uploads/notices"),
@@ -27,22 +29,6 @@ public enum BoardType {
         this.adminWrite = adminWrite;
         this.defaultCategoryId = defaultCategoryId;
         this.uploadDir = uploadDir;
-    }
-
-    public Long getBoardId() {
-        return boardId;
-    }
-
-    public boolean isAdminWrite() {
-        return adminWrite;
-    }
-
-    public Long getDefaultCategoryId() {
-        return defaultCategoryId;
-    }
-
-    public String getUploadDir() {
-        return uploadDir;
     }
 
     // boardId로 게시판 종류를 찾는다. 정의되지 않은 값이면 예외 발생(존재하지 않는 게시판)
