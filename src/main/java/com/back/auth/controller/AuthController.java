@@ -119,14 +119,14 @@ public class AuthController {
         return ResponseEntity.ok(authService.extend(refreshToken, response));
     }
 
-    // 엑세스 토큰 발급/재발급
+    // 엑세스 토큰 발급/재발급 (+ 리프레시 토큰 회전)
     @PostMapping("/token/access/refresh")
-    public ResponseEntity<AuthResponse> refresh(HttpServletRequest request) {
+    public ResponseEntity<AuthResponse> refresh(HttpServletRequest request, HttpServletResponse response) {
         String refreshToken = extractRefreshToken(request);
         if (refreshToken == null) {
             return ResponseEntity.status(401).build();
         }
-        return ResponseEntity.ok(authService.refresh(refreshToken));
+        return ResponseEntity.ok(authService.refresh(refreshToken, response));
     }
 
     // 아이디 찾기 전용 - 이메일+인증번호 검증

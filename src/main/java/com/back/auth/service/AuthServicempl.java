@@ -317,8 +317,8 @@ public class AuthServicempl implements AuthService {
         }
     }
 
-    // 엑세스 토큰 발급/재발급
-    public AuthResponse refresh(String refreshToken) {
+    // 엑세스 토큰 발급/재발급 (+ 리프레시 토큰 회전)
+    public AuthResponse refresh(String refreshToken, HttpServletResponse response) {
         try {
             var claims = jwtUtil.validateRefreshToken(refreshToken);
             String loginId = claims.getSubject();
@@ -332,9 +332,13 @@ public class AuthServicempl implements AuthService {
                 throw new AuthException("탈퇴했거나 승인되지 않은 계정입니다.", HttpStatus.UNAUTHORIZED);
             }
 
-            // 기존 refreshToken 그대로 쓰므로 exp도 동일
-            long refreshExp = claims.getExpiration().getTime();
+            // 액세스 재발급 + 리프레시 토큰 회전(sliding):
+            // 활동으로 access를 재발급받을 때마다 refresh도 새로 발급해 쿠키를 교체 → 리프레시 토큰이 계속 갱신됨
             String newAccessToken = jwtUtil.generateAccessToken(user);
+            String newRefreshToken = jwtUtil.generateRefreshToken(user);
+            addRefreshTokenCookie(response, newRefreshToken);
+
+            long refreshExp = jwtUtil.validateRefreshToken(newRefreshToken).getExpiration().getTime();
 
             return new AuthResponse(newAccessToken, user.getUserId(), user.getRole(), refreshExp);
 
