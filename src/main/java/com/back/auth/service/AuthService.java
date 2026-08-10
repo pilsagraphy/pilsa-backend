@@ -29,6 +29,9 @@ public interface AuthService {
     // 비밀번호 초기화
     void resetPassword(PasswordResetRequest request);
 
+    // 이메일 찾기 - 학번/이름 일치 시 마스킹된 이메일 반환
+    String findMaskedEmail(String studentNo, String name);
+
     // 리프레시 토큰을 가지고 있는 쿠키의 존재 여부 확인
     boolean checkRefreshToken(HttpServletRequest request);
     // 리프레시토큰 연장(재발급) -> 로그인 시 수동 연장

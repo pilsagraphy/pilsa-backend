@@ -25,6 +25,9 @@ public interface AuthMapper {
     boolean existsByLoginIdAndEmail(@Param("loginId") String loginId, @Param("email") String email);
     // 비밀번호 초기화
     void updatePassword(@Param("loginId") String loginId, @Param("password") String encodedNewPassword);
+
+    // 이메일 찾기 - 학번+이름이 모두 일치하는 사용자의 이메일 조회
+    String findEmailByStudentNoAndName(@Param("studentNo") String studentNo, @Param("name") String name);
 }
 
 //@Mapper

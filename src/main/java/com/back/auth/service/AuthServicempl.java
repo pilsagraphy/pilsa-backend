@@ -250,6 +250,35 @@ public class AuthServicempl implements AuthService {
         authMapper.updatePassword(user.getLoginId(), encodedNewPassword);
     }
 
+    // 이메일 찾기 - 학번+이름 일치 시 마스킹된 이메일 반환
+    @Override
+    public String findMaskedEmail(String studentNo, String name) {
+        if (studentNo == null || studentNo.isBlank() || name == null || name.isBlank()) {
+            throw new AuthException("학번과 이름을 모두 입력해주세요.", HttpStatus.BAD_REQUEST);
+        }
+
+        // 학번+이름이 '같은 사용자'를 가리킬 때만 조회됨 (하나라도 불일치하면 null)
+        String email = authMapper.findEmailByStudentNoAndName(studentNo.trim(), name.trim());
+        if (email == null || email.isBlank()) {
+            throw new AuthException("입력하신 학번과 이름에 일치하는 회원 정보가 없습니다.", HttpStatus.NOT_FOUND);
+        }
+
+        return maskEmail(email);
+    }
+
+    // 이메일 마스킹: 로컬파트(@앞) 앞 2글자만 노출 + "***", @도메인은 그대로
+    // 예) abcdefg@gmail.com -> ab***@gmail.com
+    private String maskEmail(String email) {
+        int at = email.indexOf('@');
+        if (at <= 0) {
+            return "***"; // 형식이 이상하면 방어적으로 전부 가림
+        }
+        String local = email.substring(0, at);
+        String domain = email.substring(at); // '@' 포함
+        String prefix = local.substring(0, Math.min(2, local.length()));
+        return prefix + "***" + domain;
+    }
+
     // 리프레시 토큰을 가지고 있는 쿠키의 존재 여부 확인
     public boolean checkRefreshToken(HttpServletRequest request) {
         if (request.getCookies() != null) {
