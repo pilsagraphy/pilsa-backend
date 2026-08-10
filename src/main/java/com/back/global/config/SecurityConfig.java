@@ -45,9 +45,14 @@ public class SecurityConfig {
                 ).permitAll()
                 
                 // 역할별 접근
-                .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                .requestMatchers("/api/stu/**").hasAnyRole("STUDENTS", "ADMIN", "ALUMNI") // ALUMNI는 임시!
-                .requestMatchers("/api/alu/**").hasAnyRole("ALUMNI", "ADMIN")
+                // ⚠️ [PM 지시] role 2축 분리 준비 — 역할별 접근에서 ADMIN 전면 제거.
+                //   /api/admin 은 URL 레벨 ADMIN 가드 제거(= 로그인 사용자면 통과).
+                //   현재 quotes/schedules/notices 는 서비스 내부에서 ROLE_ADMIN 재검사하므로 실질 노출 없음.
+                //   ※ 앞으로 추가되는 /api/admin 엔드포인트는 반드시 서비스 내부에서 관리자 검사를 넣을 것
+                //     (관리자 구분 컬럼 도입 후 URL 가드 재설계 예정).
+                .requestMatchers("/api/admin/**").authenticated()
+                .requestMatchers("/api/stu/**").hasAnyRole("STUDENTS", "ALUMNI") // ADMIN 제거(역할 2축 분리 준비). ALUMNI는 임시
+                .requestMatchers("/api/alu/**").hasAnyRole("ALUMNI") // ADMIN 제거
                 
                 // 그 외는 로그인 필요
                 .anyRequest().authenticated()
