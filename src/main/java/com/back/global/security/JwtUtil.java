@@ -45,7 +45,7 @@ public class JwtUtil {
                 // 토큰에 추가하고 싶은 정보
                 .setSubject(user.getLoginId())
                 .claim("id", user.getUserId())
-                .claim("role", user.getRole())
+                // role claim 제거: 리프레시(갱신권)는 role을 읽지 않음(재발급 시 DB에서 재조회) — 죽은 도장 정리
                 .claim("name", user.getName())
                 // 토큰 기본 정보
                 .setIssuedAt(new Date())
