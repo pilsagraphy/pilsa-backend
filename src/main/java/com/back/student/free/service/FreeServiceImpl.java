@@ -1,5 +1,6 @@
 package com.back.student.free.service;
 
+import com.back.sanction.service.PenaltyService;
 import com.back.student.common.FileStorageUtil;
 import com.back.student.free.dto.*; // Free 패키지의 DTO들 임포트
 import com.back.student.free.exception.FreeException;
@@ -23,6 +24,7 @@ public class FreeServiceImpl implements FreeService {
 
     private final FreeMapper freeMapper;
     private final FileStorageUtil fileStorageUtil;
+    private final PenaltyService penaltyService;
     private final Long FREE_BOARD_ID = 2L; // 자유게시판 고유 ID 2번 고정
 
     // 현재 로그인한 사용자의 고유 ID(PK) 추출 (토큰이 없거나 유효하지 않으면 여기서 차단)
@@ -199,6 +201,25 @@ public class FreeServiceImpl implements FreeService {
         return new FreeResponse("자게가 성공적으로 삭제되었습니다.");
     }
 
+    // 관리자 강제 삭제: 소프트 삭제 처리 후 작성자에게 주의 포인트 부여
+    @Override
+    @Transactional
+    public FreeResponse deletePostByAdmin(Long postId, Long reasonId, String detail) {
+        Long adminUserId = getCurrentUserId();
+        if (!isAdmin()) {
+            throw new FreeException("관리자만 삭제할 수 있습니다.", HttpStatus.FORBIDDEN);
+        }
+
+        Long authorId = freeMapper.findAuthorIdByPostId(postId);
+        if (authorId == null) {
+            throw new FreeException("존재하지 않는 게시글입니다.", HttpStatus.NOT_FOUND);
+        }
+
+        freeMapper.softDeletePost(postId);
+        penaltyService.applyDeletionPenalty(authorId, "post", postId, reasonId, detail, adminUserId);
+        return new FreeResponse("게시글이 관리자에 의해 삭제되었습니다.");
+    }
+
     // 게시글에 대한 댓글 신규 등록
     @Override
     @Transactional
@@ -236,5 +257,24 @@ public class FreeServiceImpl implements FreeService {
 
         freeMapper.deleteComment(commentId);
         return new FreeResponse("댓글이 성공적으로 삭제되었습니다.");
+    }
+
+    // 관리자 강제 삭제: 소프트 삭제 처리 후 작성자에게 주의 포인트 부여
+    @Override
+    @Transactional
+    public FreeResponse deleteCommentByAdmin(Long commentId, Long reasonId, String detail) {
+        Long adminUserId = getCurrentUserId();
+        if (!isAdmin()) {
+            throw new FreeException("관리자만 삭제할 수 있습니다.", HttpStatus.FORBIDDEN);
+        }
+
+        Long authorId = freeMapper.findCommentAuthorId(commentId);
+        if (authorId == null) {
+            throw new FreeException("존재하지 않는 댓글입니다.", HttpStatus.NOT_FOUND);
+        }
+
+        freeMapper.softDeleteComment(commentId);
+        penaltyService.applyDeletionPenalty(authorId, "comment", commentId, reasonId, detail, adminUserId);
+        return new FreeResponse("댓글이 관리자에 의해 삭제되었습니다.");
     }
 }

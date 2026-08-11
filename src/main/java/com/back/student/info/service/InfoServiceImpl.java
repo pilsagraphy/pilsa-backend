@@ -1,5 +1,6 @@
 package com.back.student.info.service;
 
+import com.back.sanction.service.PenaltyService;
 import com.back.student.common.FileStorageUtil;
 import com.back.student.info.dto.*;
 import com.back.student.info.exception.InfoException;
@@ -23,6 +24,7 @@ public class InfoServiceImpl implements InfoService {
 
     private final InfoMapper infoMapper;
     private final FileStorageUtil fileStorageUtil;
+    private final PenaltyService penaltyService;
     private final Long INFO_BOARD_ID = 3L; // 정보게시판 고유 ID
 
     // 현재 로그인한 사용자의 고유 ID(PK) 추출
@@ -195,6 +197,25 @@ public class InfoServiceImpl implements InfoService {
         return new InfoResponse("정보게시글이 성공적으로 삭제되었습니다.");
     }
 
+    // 관리자 강제 삭제: 소프트 삭제 처리 후 작성자에게 주의 포인트 부여
+    @Override
+    @Transactional
+    public InfoResponse deletePostByAdmin(Long postId, Long reasonId, String detail) {
+        Long adminUserId = getCurrentUserId();
+        if (!isAdmin()) {
+            throw new InfoException("관리자만 삭제할 수 있습니다.", HttpStatus.FORBIDDEN);
+        }
+
+        Long authorId = infoMapper.findAuthorIdByPostId(postId);
+        if (authorId == null) {
+            throw new InfoException("존재하지 않는 게시글입니다.", HttpStatus.NOT_FOUND);
+        }
+
+        infoMapper.softDeletePost(postId);
+        penaltyService.applyDeletionPenalty(authorId, "post", postId, reasonId, detail, adminUserId);
+        return new InfoResponse("게시글이 관리자에 의해 삭제되었습니다.");
+    }
+
     // 정보게시판 댓글 신규 등록 (비밀댓글 기능 포함)
     @Override
     @Transactional
@@ -233,5 +254,24 @@ public class InfoServiceImpl implements InfoService {
 
         infoMapper.deleteComment(commentId);
         return new InfoResponse("댓글이 성공적으로 삭제되었습니다.");
+    }
+
+    // 관리자 강제 삭제: 소프트 삭제 처리 후 작성자에게 주의 포인트 부여
+    @Override
+    @Transactional
+    public InfoResponse deleteCommentByAdmin(Long commentId, Long reasonId, String detail) {
+        Long adminUserId = getCurrentUserId();
+        if (!isAdmin()) {
+            throw new InfoException("관리자만 삭제할 수 있습니다.", HttpStatus.FORBIDDEN);
+        }
+
+        Long authorId = infoMapper.findCommentAuthorId(commentId);
+        if (authorId == null) {
+            throw new InfoException("존재하지 않는 댓글입니다.", HttpStatus.NOT_FOUND);
+        }
+
+        infoMapper.softDeleteComment(commentId);
+        penaltyService.applyDeletionPenalty(authorId, "comment", commentId, reasonId, detail, adminUserId);
+        return new InfoResponse("댓글이 관리자에 의해 삭제되었습니다.");
     }
 }

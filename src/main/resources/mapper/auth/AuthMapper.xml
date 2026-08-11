@@ -12,7 +12,9 @@
                name,
                email,
                role,
-               is_deleted    AS isDeleted
+               is_deleted    AS isDeleted,
+               ban_status    AS banStatus,
+               banned_until  AS bannedUntil
         FROM users
         WHERE login_id = #{loginId}
     </select>

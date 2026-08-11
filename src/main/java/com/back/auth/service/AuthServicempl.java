@@ -21,6 +21,7 @@ import com.back.auth.dto.FindIdVerifyRequest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 
+import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -50,6 +51,18 @@ public class AuthServicempl implements AuthService {
         response.addCookie(cookie);
     }
 
+    // 정지/영구차단 계정 로그인 차단 (만료된 임시정지는 통과 - 스케줄러가 캐시를 정리하기 전이라도 로그인 허용)
+    private void checkNotBanned(UserDto user) {
+        if ("permanent".equals(user.getBanStatus())) {
+            throw new AuthException("영구적으로 차단된 계정입니다.", HttpStatus.FORBIDDEN);
+        }
+        if ("temporary".equals(user.getBanStatus())
+                && user.getBannedUntil() != null
+                && user.getBannedUntil().isAfter(LocalDateTime.now())) {
+            throw new AuthException("정지된 계정입니다. (해제 예정일: " + user.getBannedUntil() + ")", HttpStatus.FORBIDDEN);
+        }
+    }
+
     // 로그인(소셜로그인은 후순위)
     public AuthResponse login(LoginRequest request,
                               HttpServletRequest httpRequest,
@@ -66,6 +79,9 @@ public class AuthServicempl implements AuthService {
         if (user.getIsDeleted() == true) {
             throw new AuthException("승인되지 않은 계정입니다.", HttpStatus.UNAUTHORIZED);
         }
+
+        // 정지/영구차단 계정 로그인 차단
+        checkNotBanned(user);
 
         String accessToken = jwtUtil.generateAccessToken(user);
         String refreshToken = jwtUtil.generateRefreshToken(user);
@@ -279,6 +295,7 @@ public class AuthServicempl implements AuthService {
             if (Boolean.TRUE.equals(user.getIsDeleted())) {
                 throw new AuthException("탈퇴했거나 승인되지 않은 계정입니다.", HttpStatus.UNAUTHORIZED);
             }
+            checkNotBanned(user);
 
             // 3) 새 토큰 발급
             String newAccessToken = jwtUtil.generateAccessToken(user);
@@ -331,6 +348,7 @@ public class AuthServicempl implements AuthService {
             if (Boolean.TRUE.equals(user.getIsDeleted())) {
                 throw new AuthException("탈퇴했거나 승인되지 않은 계정입니다.", HttpStatus.UNAUTHORIZED);
             }
+            checkNotBanned(user);
 
             // 기존 refreshToken 그대로 쓰므로 exp도 동일
             long refreshExp = claims.getExpiration().getTime();

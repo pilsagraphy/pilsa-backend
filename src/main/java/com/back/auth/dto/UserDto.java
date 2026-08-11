@@ -2,6 +2,8 @@ package com.back.auth.dto;
 
 import lombok.Data;
 
+import java.time.LocalDateTime;
+
 @Data
 public class UserDto {
     private Long userId;
@@ -12,4 +14,6 @@ public class UserDto {
     private String email;
     private String role;
     private Boolean isDeleted;
+    private String banStatus;
+    private LocalDateTime bannedUntil;
 }

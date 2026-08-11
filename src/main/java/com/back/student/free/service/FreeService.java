@@ -24,8 +24,14 @@ public interface FreeService {
     FreeResponse updatePost(Long postId, FreeUpdateRequest request);
     FreeResponse deletePost(Long postId);
 
+    // 관리자 강제 삭제 (소프트 삭제 + 작성자 주의 포인트 부여)
+    FreeResponse deletePostByAdmin(Long postId, Long reasonId, String detail);
+
     // 댓글 등록, 수정, 삭제
     CommentResponse createComment(Long postId, CommentRequest request);
     CommentResponse updateComment(Long commentId, CommentRequest request);
     FreeResponse deleteComment(Long commentId);
+
+    // 관리자 강제 삭제 (소프트 삭제 + 작성자 주의 포인트 부여)
+    FreeResponse deleteCommentByAdmin(Long commentId, Long reasonId, String detail);
 }

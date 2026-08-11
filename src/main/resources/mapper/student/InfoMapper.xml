@@ -15,6 +15,7 @@
                title
         FROM posts
         WHERE board_id = #{boardId}
+          AND state != 'deleted'
         ORDER BY created_at DESC
             LIMIT 5
     </select>
@@ -34,6 +35,7 @@
         INNER JOIN users u ON p.user_id = u.user_id
         LEFT JOIN categories c ON p.category_id = c.category_id
         WHERE p.board_id = #{boardId}
+          AND p.state != 'deleted'
         <if test="categoryId != null">
             AND p.category_id = #{categoryId}
         </if>
@@ -52,6 +54,7 @@
         SELECT COUNT(*)
         FROM posts
         WHERE board_id = #{boardId}
+          AND state != 'deleted'
         <if test="categoryId != null">
             AND category_id = #{categoryId}
         </if>
@@ -79,17 +82,17 @@
         <choose>
             <when test="sort == 'viewCount'">
                 (SELECT post_id FROM posts
-                WHERE board_id = #{boardId} AND post_id != p.post_id
+                WHERE board_id = #{boardId} AND post_id != p.post_id AND state != 'deleted'
                 AND (view_count &gt; p.view_count OR (view_count = p.view_count AND post_id &gt; p.post_id))
                 ORDER BY view_count ASC, post_id ASC LIMIT 1) AS prevPostApi,
                 (SELECT post_id FROM posts
-                WHERE board_id = #{boardId} AND post_id != p.post_id
+                WHERE board_id = #{boardId} AND post_id != p.post_id AND state != 'deleted'
                 AND (view_count &lt; p.view_count OR (view_count = p.view_count AND post_id &lt; p.post_id))
                 ORDER BY view_count DESC, post_id DESC LIMIT 1) AS nextPostApi
             </when>
             <otherwise>
-                (SELECT MAX(post_id) FROM posts WHERE board_id = #{boardId} AND post_id &lt; #{postId}) AS prevPostApi,
-                (SELECT MIN(post_id) FROM posts WHERE board_id = #{boardId} AND post_id &gt; #{postId}) AS nextPostApi
+                (SELECT MAX(post_id) FROM posts WHERE board_id = #{boardId} AND post_id &lt; #{postId} AND state != 'deleted') AS prevPostApi,
+                (SELECT MIN(post_id) FROM posts WHERE board_id = #{boardId} AND post_id &gt; #{postId} AND state != 'deleted') AS nextPostApi
             </otherwise>
         </choose>
         FROM posts p
@@ -97,6 +100,7 @@
         LEFT JOIN categories ct ON p.category_id = ct.category_id
         WHERE p.post_id = #{postId}
         AND p.board_id = #{boardId}
+        AND p.state != 'deleted'
     </select>
 
     <select id="findAttachmentsByPostId" resultType="com.back.student.info.dto.AttachmentFileResponse">
@@ -119,6 +123,7 @@
         FROM comments c
                  JOIN users u ON c.user_id = u.user_id
         WHERE c.post_id = #{postId}
+          AND c.state != 'deleted'
         ORDER BY c.created_at ASC
     </select>
 
@@ -179,6 +184,10 @@
         WHERE post_id = #{postId}
     </delete>
 
+    <update id="softDeletePost">
+        UPDATE posts SET state = 'deleted' WHERE post_id = #{postId}
+    </update>
+
     <insert id="insertComment">
         INSERT INTO comments (post_id, user_id, content, is_private, created_at)
         VALUES (#{postId}, #{userId}, #{request.content}, #{request.isPrivate}, NOW())
@@ -199,5 +208,9 @@
     <delete id="deleteComment">
         DELETE FROM comments WHERE comment_id = #{commentId}
     </delete>
+
+    <update id="softDeleteComment">
+        UPDATE comments SET state = 'deleted' WHERE comment_id = #{commentId}
+    </update>
 
 </mapper>

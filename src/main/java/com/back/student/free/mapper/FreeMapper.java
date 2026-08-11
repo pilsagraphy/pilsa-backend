@@ -68,6 +68,9 @@ public interface FreeMapper {
     // 게시글 삭제
     int deletePost(@Param("postId") Long postId);
 
+    // 관리자 강제 삭제 (소프트 삭제 - state만 'deleted'로 전환)
+    int softDeletePost(@Param("postId") Long postId);
+
     // 첨부파일 정보 DB 등록
     void insertAttachment(
             @Param("postId") Long postId,
@@ -93,4 +96,7 @@ public interface FreeMapper {
 
     // 댓글 삭제
     void deleteComment(@Param("commentId") Long commentId);
+
+    // 관리자 강제 삭제 (소프트 삭제 - state만 'deleted'로 전환)
+    int softDeleteComment(@Param("commentId") Long commentId);
 }

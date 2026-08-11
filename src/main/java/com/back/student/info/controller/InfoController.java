@@ -111,4 +111,24 @@ public class InfoController {
         log.info("정게 댓글 삭제 요청 - 댓글 ID: {}", commentId);
         return ResponseEntity.ok(infoService.deleteComment(commentId));
     }
+
+    // 관리자 강제 게시글 삭제 (작성자에게 주의 포인트 자동 부여)
+    @DeleteMapping("/api/admin/info/posts/{postId}")
+    public ResponseEntity<InfoResponse> deletePostByAdmin(
+            @PathVariable Long postId,
+            @RequestParam(required = false) Long reasonId,
+            @RequestParam(required = false) String detail) {
+        log.info("관리자 정보게시글 강제 삭제 요청 - ID: {}", postId);
+        return ResponseEntity.ok(infoService.deletePostByAdmin(postId, reasonId, detail));
+    }
+
+    // 관리자 강제 댓글 삭제 (작성자에게 주의 포인트 자동 부여)
+    @DeleteMapping("/api/admin/info/posts/{postId}/comments/{commentId}")
+    public ResponseEntity<InfoResponse> deleteCommentByAdmin(
+            @PathVariable Long commentId,
+            @RequestParam(required = false) Long reasonId,
+            @RequestParam(required = false) String detail) {
+        log.info("관리자 정게 댓글 강제 삭제 요청 - 댓글 ID: {}", commentId);
+        return ResponseEntity.ok(infoService.deleteCommentByAdmin(commentId, reasonId, detail));
+    }
 }

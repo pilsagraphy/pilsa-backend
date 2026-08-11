@@ -19,6 +19,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.Collections;
 
 // JWT Access Token 검증 필터
@@ -47,7 +48,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         // 프런트에서 읽을 커스텀 헤더 노출 (CORS)
-        response.addHeader("Access-Control-Expose-Headers", "WWW-Authenticate, X-Token-Expired, X-Blocked");
+        response.addHeader("Access-Control-Expose-Headers", "WWW-Authenticate, X-Token-Expired, X-Blocked, X-Ban-Type");
 
         // Authorization 헤더 추출
         String header = request.getHeader("Authorization");
@@ -75,6 +76,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     log.warn("차단된 계정(is_deleted=true) 접근: {}", loginId);
                     response.setHeader("X-Blocked", "true"); // 프론트에서 탈퇴여부를 판단할 사용자 정의 헤더
                     response.sendError(HttpServletResponse.SC_GONE, "탈퇴되었거나 승인되지 않은 계정입니다.");
+                    response.flushBuffer();
+                    return;
+                }
+
+                // 정지/영구차단 계정 접근 차단 (세션 도중 제재된 경우 대비)
+                boolean isPermanentBan = "permanent".equals(user.getBanStatus());
+                boolean isTemporaryBan = "temporary".equals(user.getBanStatus())
+                        && user.getBannedUntil() != null
+                        && user.getBannedUntil().isAfter(LocalDateTime.now());
+                if (isPermanentBan || isTemporaryBan) {
+                    log.warn("제재된 계정 접근: {} (banStatus={})", loginId, user.getBanStatus());
+                    response.setHeader("X-Ban-Type", user.getBanStatus());
+                    response.sendError(HttpServletResponse.SC_FORBIDDEN, isPermanentBan
+                            ? "영구적으로 차단된 계정입니다."
+                            : "정지된 계정입니다. (해제 예정일: " + user.getBannedUntil() + ")");
                     response.flushBuffer();
                     return;
                 }
