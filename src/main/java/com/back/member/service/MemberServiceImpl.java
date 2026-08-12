@@ -32,8 +32,6 @@ public class MemberServiceImpl implements MemberService {
     // ===== 회원 정보 수정 검증 규칙 =====
     // 이름: 한글/영문 문자만 (숫자·특수문자 불가), 공백 허용
     private static final Pattern NAME_PATTERN = Pattern.compile("^[가-힣a-zA-Z\\s]+$");
-    // 전화번호: 숫자 8자리 (하이픈 제거 후 검증)
-    private static final Pattern PHONE_DIGITS_PATTERN = Pattern.compile("^\\d{8}$");
     // 학번: 숫자 10자리
     private static final Pattern STUDENT_NO_PATTERN = Pattern.compile("^\\d{10}$");
     // 이메일 형식
@@ -113,17 +111,17 @@ public class MemberServiceImpl implements MemberService {
             request.setName(name);
         }
 
-        // 전화번호: 8자리(4-4) 숫자만 → "0000-0000" 형식으로 저장
+        // 전화번호: 회원가입(signup)과 동일하게 형식 제한 없이 원본 그대로 저장.
+        // signup은 phone에 검증/정규화가 전혀 없어 010-1234-5678 같은 실제 번호가 이미 저장돼 있으므로,
+        // 여기서 자릿수/형식을 강제하면 그런 회원의 phone을 admin이 재저장할 수 없게 됨.
+        // 단, 중복은 저장 형식 차이(하이픈 유무)와 무관하게 숫자 기준으로 미리 잡아 DB unique 충돌(500) 방지.
         if (request.getPhone() != null) {
-            String digits = request.getPhone().replaceAll("[^0-9]", "");
-            if (!PHONE_DIGITS_PATTERN.matcher(digits).matches()) {
-                throw new MemberException("전화번호는 숫자 8자리여야 합니다.", HttpStatus.BAD_REQUEST);
-            }
-            String formatted = digits.substring(0, 4) + "-" + digits.substring(4);
-            if (memberMapper.existsPhoneExcludingUser(formatted, userId)) {
+            String phone = request.getPhone().trim();
+            String digits = phone.replaceAll("[^0-9]", "");
+            if (!digits.isEmpty() && memberMapper.existsPhoneDigitsExcludingUser(digits, userId)) {
                 throw new MemberException("이미 사용 중인 전화번호입니다.", HttpStatus.CONFLICT);
             }
-            request.setPhone(formatted);
+            request.setPhone(phone);
         }
 
         // 학번: 10자리 숫자만
@@ -173,6 +171,10 @@ public class MemberServiceImpl implements MemberService {
         if (!memberMapper.existsActiveMember(userId)) {
             throw new MemberException("해당 회원을 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
         }
+        // 이미 영구차단된 회원을 임시정지로 덮어쓰면 만료 시 영구차단이 사라지므로 차단
+        if (BAN_TYPE_PERMANENT.equals(memberMapper.findBanStatus(userId))) {
+            throw new MemberException("이미 영구차단된 회원입니다. 정지로 변경할 수 없습니다.", HttpStatus.CONFLICT);
+        }
         if (request.getEndDate() == null) {
             throw new MemberException("정지 종료일은 필수입니다.", HttpStatus.BAD_REQUEST);
         }
@@ -209,20 +211,17 @@ public class MemberServiceImpl implements MemberService {
             throw new MemberException("차단할 회원을 선택해야 합니다.", HttpStatus.BAD_REQUEST);
         }
 
-        // 존재하지 않는 회원이 섞여 있으면 전체 실패 (트랜잭션 all-or-nothing)
-        List<Long> missing = targetIds.stream()
-                .filter(id -> !memberMapper.existsActiveMember(id))
-                .toList();
-        if (!missing.isEmpty()) {
+        // 존재 확인 1회 (WHERE user_id IN ...). 없는 회원이 섞이면 전체 실패
+        List<Long> found = memberMapper.findActiveMemberIds(targetIds);
+        if (found.size() != targetIds.size()) {
+            List<Long> missing = targetIds.stream().filter(id -> !found.contains(id)).toList();
             throw new MemberException("존재하지 않는 회원이 포함되어 있습니다: " + missing, HttpStatus.NOT_FOUND);
         }
 
+        // 영구차단: ends_at/banned_until = null. INSERT 1회(batch) + UPDATE 1회로 처리
         LocalDateTime startsAt = LocalDateTime.now();
-        for (Long id : targetIds) {
-            // 영구차단: ends_at/banned_until = null
-            memberMapper.insertBanLog(id, WARNING_NO_PERMANENT, BAN_TYPE_PERMANENT, startsAt, null);
-            memberMapper.updateUserBanStatus(id, BAN_TYPE_PERMANENT, null);
-        }
+        memberMapper.insertBanLogBatch(targetIds, WARNING_NO_PERMANENT, BAN_TYPE_PERMANENT, startsAt, null);
+        memberMapper.updateUserBanStatusByIds(targetIds, BAN_TYPE_PERMANENT, null);
 
         log.info("회원 영구차단 완료 - {}명, ids: {}", targetIds.size(), targetIds);
         return new MemberResponse(targetIds.size() + "명을 영구차단했습니다.", null);

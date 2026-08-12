@@ -23,7 +23,13 @@
             u.email        AS email,
             u.status       AS status,
             u.role         AS role,
-            u.ban_status   AS banStatus,
+            -- banStatus는 캐시 컬럼(u.ban_status) 대신 조인된 현재 유효 차단에서 파생
+            -- → 임시정지 만료 시 자동으로 'none'이 되어 banStartAt/banEndAt과 항상 일치
+            CASE
+                WHEN b.starts_at IS NULL THEN 'none'
+                WHEN b.ends_at IS NULL   THEN 'permanent'
+                ELSE 'temporary'
+            END AS banStatus,
             (SELECT COUNT(*) FROM posts p    WHERE p.user_id = u.user_id) AS postCount,
             (SELECT COUNT(*) FROM comments c WHERE c.user_id = u.user_id) AS commentCount,
             b.starts_at    AS banStartAt,
@@ -74,10 +80,12 @@
         )
     </select>
 
-    <select id="existsPhoneExcludingUser" resultType="boolean">
+    <!-- 저장 형식(하이픈 유무)이 달라도 중복을 잡도록, 저장된 phone의 하이픈/공백을 제거한 숫자끼리 비교 -->
+    <select id="existsPhoneDigitsExcludingUser" resultType="boolean">
         SELECT EXISTS (
             SELECT 1 FROM users
-            WHERE phone = #{phone} AND user_id != #{userId}
+            WHERE REPLACE(REPLACE(phone, '-', ''), ' ', '') = #{phoneDigits}
+              AND user_id != #{userId}
         )
     </select>
 
@@ -104,19 +112,53 @@
 
     <!-- ===== 회원 정지 / 영구차단 ===== -->
 
-    <!-- 차단 이력 기록 (ends_at = null 이면 영구) -->
+    <!-- 현재 차단 상태 캐시 조회 (정지 전 영구차단 여부 확인용) -->
+    <select id="findBanStatus" resultType="string">
+        SELECT ban_status FROM users WHERE user_id = #{userId}
+    </select>
+
+    <!-- 차단 이력 기록 (단일 - 정지용, ends_at = null 이면 영구) -->
     <insert id="insertBanLog">
         INSERT INTO ban_log (user_id, warning_no, ban_type, starts_at, ends_at, created_at)
         VALUES (#{userId}, #{warningNo}, #{banType}, #{startsAt}, #{endsAt}, NOW())
     </insert>
 
-    <!-- users 차단 상태 캐시 갱신 (banned_until = null 이면 영구) -->
+    <!-- users 차단 상태 캐시 갱신 (단일 - 정지용, banned_until = null 이면 영구) -->
     <update id="updateUserBanStatus">
         UPDATE users
         SET ban_status   = #{banStatus},
             banned_until = #{bannedUntil},
             updated_at   = NOW()
         WHERE user_id = #{userId} AND is_deleted = 0
+    </update>
+
+    <!-- 주어진 id 중 실제 존재하는(미탈퇴) 회원 id만 반환 - 영구차단 일괄 검증용 -->
+    <select id="findActiveMemberIds" resultType="long">
+        SELECT user_id
+        FROM users
+        WHERE is_deleted = 0
+          AND user_id IN
+          <foreach collection="ids" item="id" open="(" close=")" separator=",">#{id}</foreach>
+    </select>
+
+    <!-- 차단 이력 일괄 기록 (영구차단용 - 공통 값 + 회원별 1행) -->
+    <insert id="insertBanLogBatch">
+        INSERT INTO ban_log (user_id, warning_no, ban_type, starts_at, ends_at, created_at)
+        VALUES
+        <foreach collection="userIds" item="id" separator=",">
+            (#{id}, #{warningNo}, #{banType}, #{startsAt}, #{endsAt}, NOW())
+        </foreach>
+    </insert>
+
+    <!-- users 차단 상태 캐시 일괄 갱신 (영구차단용) -->
+    <update id="updateUserBanStatusByIds">
+        UPDATE users
+        SET ban_status   = #{banStatus},
+            banned_until = #{bannedUntil},
+            updated_at   = NOW()
+        WHERE is_deleted = 0
+          AND user_id IN
+          <foreach collection="userIds" item="id" open="(" close=")" separator=",">#{id}</foreach>
     </update>
 
 </mapper>
