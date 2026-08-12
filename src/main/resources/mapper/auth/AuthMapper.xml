@@ -62,6 +62,16 @@
         UPDATE users SET password_hash = #{password}
         WHERE login_id = #{loginId}
     </update>
+
+    <!-- 이메일 찾기 - 학번+이름 모두 일치 시 이메일 반환 (하나라도 다르면 결과 없음) -->
+    <select id="findEmailByStudentNoAndName" resultType="string">
+        SELECT email
+        FROM users
+        WHERE student_no = #{studentNo}
+          AND name = #{name}
+          AND is_deleted = false
+        LIMIT 1
+    </select>
 </mapper>
 
         <!--<mapper namespace="com.back.auth.mapper.AuthMapper">-->

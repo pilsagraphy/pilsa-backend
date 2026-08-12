@@ -156,6 +156,21 @@ public class AuthController {
         }
     }
 
+    // 이메일 찾기 - 학번+이름 일치 시 마스킹된 이메일 반환
+    // (아이디/이메일/비번 다 잊어서 아이디 찾기용 이메일조차 모를 때 사용)
+    @PostMapping("/email/find")
+    public ResponseEntity<?> findEmail(@RequestBody FindEmailRequest request) {
+        try {
+            String maskedEmail = authService.findMaskedEmail(request.getStudentNo(), request.getName());
+            return ResponseEntity.ok(Map.of(
+                    "message", "이메일 조회 성공",
+                    "email", maskedEmail
+            ));
+        } catch (AuthException e) {
+            return ResponseEntity.status(e.getStatus()).body(e.getMessage());
+        }
+    }
+
     // 비밀번호 초기화 전 단계 - 아이디 이메일 유효성 확인
     @GetMapping("/verification")
     public ResponseEntity<?> verification(
