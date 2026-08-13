@@ -15,8 +15,8 @@
 | #68 | 제재 시스템 (주의→경고→정지/차단) + 신고 접수 | hams9494 | ⚠️ 병합 (4순위, PM 피드백 반영해 재구성) | 아래 §3-D 참조 |
 | #60 | 회원 목록 조회/수정/정지/차단 | skarkgus | ⚠️ 병합 (5순위, 스키마 각색 필수) | `users.role`·`status` 참조 → 현재 DB에 없는 컬럼. member_type/admin_level로 변환 |
 | #69 | 일정(event) category/description 반영, location 제거 | ahnyeji0209 | ✅ 병합 (6순위) | DDL 미적용 → DB 반영 필요 (§4) |
-| #61 | boards 권한 컬럼 SQL (read_scope/write_level) | younghwan0419 | 🗄️ DB만 반영 | PM 코멘트 "열람권한·작성권한 부분만" → §4의 1)만 적용. 레포에 sql 파일 미포함(팀 컨벤션) |
-| #70 | boards 미사용 컬럼 제거 SQL | ahnyeji0209 | 🗄️ DB만 반영 | 코드 무참조 확인 완료. 레포에 sql 파일 미포함 |
+| #61 | boards 권한 컬럼 SQL (read_scope/write_level) | younghwan0419 | 🗄️ DB만 반영 (완료) | PM 코멘트 "열람권한·작성권한 부분만" → §4의 1)만 적용. 레포에 sql 파일 미포함(팀 컨벤션) |
+| #70 | boards 미사용 컬럼 제거 SQL | ahnyeji0209 | ❌ 반려 (PM 결정) | 일시 적용했다가 PM 지시로 **원상 복원 완료**(값 백업분 그대로). 컬럼은 추후 사용 가능성 있어 유지 |
 
 **병합 순서 근거**: #66(인증 기반) → #62(구조 개편) → #57(admin, student분 포팅) → #68(제재, #57 moderation에 연결) → #60(#66 체계로 각색) → #69(독립 도메인).
 
@@ -102,16 +102,11 @@ SET `read_scope` = 'MEMBER',
 WHERE `board_id` IN (1,2,3);
 -- (원본 SQL의 'STUDENTS' 표기는 users.member_type('STUDENT')과 맞추기 위해 'STUDENT'로 통일해 주석 반영)
 
--- [#70] boards 미사용 컬럼 제거
-ALTER TABLE `boards`
-  DROP COLUMN `allow_comment`,
-  DROP COLUMN `allow_attachment`,
-  DROP COLUMN `category_mode`;
 ```
-- [ ] events DDL 적용
-- [ ] boards 권한 컬럼 DDL 적용 (#61 §1)
-- [ ] boards 컬럼 제거 DDL 적용 (#70)
-- [ ] 적용 후 스키마 재추출로 검증
+- [x] events DDL 적용 (2026-08-14, location 값 전부 NULL 확인 후 제거)
+- [x] boards 권한 컬럼 DDL 적용 (#61 §1)
+- [x] ~~boards 컬럼 제거 (#70)~~ → 적용 후 **PM 지시로 원복 완료** (allow_comment/allow_attachment/category_mode 원값 유지)
+- [x] 적용 후 스키마 재검증 (DESCRIBE 확인)
 
 ### 보류/참고
 - `read_scope`/`write_level`은 아직 **코드에서 미사용** (게시판관리 화면 후속 작업용 선반영).
