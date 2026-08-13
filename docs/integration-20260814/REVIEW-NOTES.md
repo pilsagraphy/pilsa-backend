@@ -63,6 +63,39 @@
 | 매퍼 XML 위치/네임스페이스 | 패키지-테이블명 일치화 후 mapper/{도메인}/ 구조 일관 ✅ |
 | 스케줄러 | @EnableScheduling + 일 1회 캐시 정리. 서버 다중화 시 중복 실행 주의(현재 단일 인스턴스 전제) 🟡 |
 
+## 6. PM 결정 및 2차 반영 (2026-08-14 오후) — 아래 1~5절의 미결 항목 대부분이 여기서 확정됨
+
+| 항목 | 결정 | 구현 |
+|------|------|------|
+| 경고 단계 | **ban_policy 3단계 유지** (시안 `N/5`는 오표기 → 프론트가 `/3`으로 수정) | 코드 변경 없음. **프론트 전달 필요** |
+| 게시판 | **기획대로 "새 게시판 생성" 채택** | BoardType enum 제거 → boards 테이블 정책(BoardPolicy) + `/api/admin/boards` CRUD. 새 게시판이 코드 수정 없이 동작함을 실측 |
+| 권한 축 | **엔드포인트가 아니라 게시판 열람·작성 권한으로 판정** | SecurityConfig에서 신분별 URL 분기 제거, `BoardPolicy.canRead/canWrite` + `AuthUtils`로 이관 |
+| ~~/api/stu ALUMNI 논점(1절)~~ | **소멸** — 신분이 URL을 가르지 않으므로 논점 자체가 없음 | 항목 폐기 |
+| isPinned | **모든 게시판에서 관리자(레벨 1~3)만** | `resolvePinned()` — 일반 회원 요청 무시. 실측 검증 |
+| ban_log 혼재(4절) | 수동/자동 구분 | `source`(auto/manual) + `warning_no` nullable. 수동 조치가 경고로 집계되던 왜곡 제거 |
+| 신고 패키지 이원화 | **하나로 통합** — 신고는 관리자·일반회원 동일 처리 | `admin.report` → `report` 통합. 접수는 `POST /api/reports`(신분·관리자 무관). 관리자 특권은 "신고 없이 즉시 조치"이며 `admin.moderation` 담당 |
+| member 패키지 | **admin 아래 + user로** | `com.back.admin.user` |
+| student 패키지 | 제거 | FileStorageUtil → `global.util` |
+| aboutPilsa 패키지 | 제거 | `donation`(donations 테이블 기준). API 경로 `/api/public/honor`는 유지 |
+| events/quotes 물리삭제(3절) | **소프트삭제로 전환** — 물리 삭제는 없다 | `state` 컬럼 추가, DELETE문 제거. 잔존 물리삭제는 post_likes 토글뿐 |
+| 인증 코드 중복(4절) | 공통 유틸로 수렴 | `global.security.AuthUtils` — 도메인 6곳 정리 |
+| G-1 정지 응답 | 구조화 | `{message, banType, bannedUntil}` + 전역 에러 JSON 통일 |
+| G-2 댓글 신고 | 원글 링크 | `ReportedItemResponse.postId` 추가 |
+| G-4 삭제 대상 신고 | 거부 | 이미 삭제된 대상 409, 본인 글 400 |
+| H-1 알림 | 구현 | `notification` 도메인 + notifications 테이블, 댓글/답글 이벤트 발행 |
+| boards.code → name | **한글명 전환**(보류 해제) | 응답 필드 `boardCode` → `boardName` |
+| extend()/refresh() 중복(1절) | **보류**(지시) | 프론트 사이드이펙트 확인 후 결정 |
+
+### 2차에서 발견·수정한 실제 결함
+- **`boolean isXxx` 프로퍼티명 버그**: 자바 빈 규약상 `boolean isPinned`의 프로퍼티명은 `pinned`가 되어
+  ① 폼 키 `isPinned`가 바인딩되지 않고(관리자가 상단 고정을 눌러도 저장 안 됨) ② 응답 JSON도 `pinned`로 나갔다.
+  전 DTO를 `Boolean` 래퍼로 전환해 계약(`isPinned`/`isAnonymous`/`isPrivate`/`isLiked`)을 정상화.
+- 전역 예외 처리기가 문서와 달리 **평문**을 반환하고 있어 JSON으로 통일 (FE 마이그레이션 필요 항목).
+
+### 2차 DDL (qa_pilsa 적용 완료)
+boards(code→name 한글, display_order·default_category_id·allow_anonymous·allow_private_comment·state 추가),
+events/quotes(state 추가), ban_log(warning_no nullable + source), notifications 신규 테이블.
+
 ## 5. pilsa-frontend 대조 결과 (기획 반영 전 코드 기준)
 
 | FE 현황 | 백엔드 판단 |
