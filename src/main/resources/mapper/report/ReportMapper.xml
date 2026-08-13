@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.report.mapper.ReportMapper">
+
+    <insert id="insertReport">
+        INSERT INTO reports_log (reporter_id, target_type, target_id, reason_id, detail, status, created_at)
+        VALUES (#{reporterId}, #{targetType}, #{targetId}, #{reasonId}, #{detail}, 'pending', NOW())
+    </insert>
+
+    <select id="findReportById" resultType="com.back.report.dto.ReportDto">
+        SELECT report_id   AS reportId,
+               reporter_id AS reporterId,
+               target_type AS targetType,
+               target_id   AS targetId,
+               reason_id   AS reasonId,
+               detail,
+               status,
+               created_at  AS createdAt
+        FROM reports_log
+        WHERE report_id = #{reportId}
+    </select>
+
+    <!-- 신고 대상은 게시판 도메인(free/info)에 상관없이 posts/comments 테이블을 공용으로 사용하므로 직접 조회 -->
+    <select id="findPostAuthorId" resultType="long">
+        SELECT user_id FROM posts WHERE post_id = #{postId}
+    </select>
+
+    <select id="findCommentAuthorId" resultType="long">
+        SELECT user_id FROM comments WHERE comment_id = #{commentId}
+    </select>
+
+    <update id="softDeletePost">
+        UPDATE posts SET state = 'deleted' WHERE post_id = #{postId}
+    </update>
+
+    <update id="softDeleteComment">
+        UPDATE comments SET state = 'deleted' WHERE comment_id = #{commentId}
+    </update>
+
+    <update id="resolveReport">
+        UPDATE reports_log
+        SET status                = 'resolved',
+            resolved_at           = NOW(),
+            resolution_action_id  = #{resolutionActionId}
+        WHERE report_id = #{reportId}
+    </update>
+
+    <update id="rejectReport">
+        UPDATE reports_log
+        SET status      = 'rejected',
+            resolved_at = NOW()
+        WHERE report_id = #{reportId}
+    </update>
+
+    <select id="findReportsByTargetAuthor" resultType="com.back.report.dto.ReportedContentResponse">
+        SELECT
+            r.report_id                                            AS reportId,
+            r.target_type                                          AS targetType,
+            r.target_id                                            AS targetId,
+            CASE WHEN r.target_type = 'post' THEN pb.post_id ELSE c.post_id END AS postId,
+            bd.board_id                                            AS boardId,
+            bd.code                                                AS boardCode,
+            r.reason_id                                            AS reasonId,
+            rs.label                                                AS reasonLabel,
+            r.detail,
+            r.status,
+            r.active_flag                                          AS activeFlag,
+            r.created_at                                           AS createdAt,
+            r.resolved_at                                          AS resolvedAt
+        FROM reports_log r
+        LEFT JOIN posts pb ON r.target_type = 'post' AND r.target_id = pb.post_id
+        LEFT JOIN comments c ON r.target_type = 'comment' AND r.target_id = c.comment_id
+        LEFT JOIN posts cp ON r.target_type = 'comment' AND c.post_id = cp.post_id
+        LEFT JOIN boards bd ON bd.board_id = COALESCE(pb.board_id, cp.board_id)
+        LEFT JOIN reasons rs ON r.reason_id = rs.reason_id
+        WHERE COALESCE(pb.user_id, c.user_id) = #{userId}
+        ORDER BY r.created_at DESC
+    </select>
+
+    <select id="countResolvedDeletionsByUser" resultType="int">
+        SELECT COUNT(*)
+        FROM reports_log r
+        LEFT JOIN posts pb ON r.target_type = 'post' AND r.target_id = pb.post_id
+        LEFT JOIN comments c ON r.target_type = 'comment' AND r.target_id = c.comment_id
+        WHERE COALESCE(pb.user_id, c.user_id) = #{userId}
+          AND r.resolution_action_id IS NOT NULL
+    </select>
+
+</mapper>

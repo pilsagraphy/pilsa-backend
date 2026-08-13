@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.sanction.mapper.SanctionMapper">
+
+    <insert id="insertModerationLog" useGeneratedKeys="true" keyProperty="actionId">
+        INSERT INTO moderation_log (target_type, target_id, applied_state, reason_id, detail, acted_by, created_at)
+        VALUES (#{targetType}, #{targetId}, #{appliedState}, #{reasonId}, #{detail}, #{actedBy}, NOW())
+    </insert>
+
+    <insert id="insertPenaltyLog">
+        INSERT INTO penalty_log (user_id, points, target_type, target_id, source_action_id, created_at, expires_at)
+        VALUES (#{userId}, #{points}, #{targetType}, #{targetId}, #{sourceActionId}, NOW(), #{expiresAt})
+    </insert>
+
+    <select id="sumValidCautionPoints" resultType="int">
+        SELECT COALESCE(SUM(points), 0)
+        FROM penalty_log
+        WHERE user_id = #{userId}
+          AND voided_at IS NULL
+          AND expires_at > NOW()
+    </select>
+
+    <insert id="insertWarningLog">
+        INSERT INTO warning_log (user_id, created_at, expires_at)
+        VALUES (#{userId}, NOW(), #{expiresAt})
+    </insert>
+
+    <select id="countValidWarnings" resultType="int">
+        SELECT COUNT(*)
+        FROM warning_log
+        WHERE user_id = #{userId}
+          AND expires_at > NOW()
+    </select>
+
+    <select id="findBanPolicyByWarningNo" resultType="com.back.sanction.dto.BanPolicyDto">
+        SELECT ban_policy_id AS banPolicyId,
+               code,
+               warning_no    AS warningNo,
+               ban_type      AS banType,
+               ban_days      AS banDays,
+               description
+        FROM ban_policy
+        WHERE warning_no = #{warningNo}
+    </select>
+
+    <insert id="insertBanLog">
+        INSERT INTO ban_log (user_id, warning_no, ban_type, starts_at, ends_at, created_at)
+        VALUES (#{userId}, #{warningNo}, #{banType}, #{startsAt}, #{endsAt}, NOW())
+    </insert>
+
+    <update id="updateUserBanStatus">
+        UPDATE users
+        SET ban_status   = #{banStatus},
+            banned_until = #{bannedUntil}
+        WHERE user_id = #{userId}
+    </update>
+
+    <select id="findPolicySetting" resultType="string">
+        SELECT setting_value
+        FROM policy_settings
+        WHERE code = #{code}
+    </select>
+
+    <!-- 회원 태그: 차단 > 정지 > 주의(주의 포인트만 있고 정지/차단이 아님) 우선순위로 판정 -->
+    <select id="findSanctionedUsers" resultType="com.back.sanction.dto.SanctionedUserResponse">
+        SELECT u.user_id      AS userId,
+               u.login_id     AS loginId,
+               u.name,
+               u.email,
+               u.ban_status   AS banStatus,
+               u.banned_until AS bannedUntil,
+               (SELECT bl.starts_at FROM ban_log bl
+                 WHERE bl.user_id = u.user_id AND bl.lifted_at IS NULL
+                 ORDER BY bl.created_at DESC LIMIT 1) AS banStartedAt,
+               CASE
+                   WHEN u.ban_status = 'permanent' THEN 'permanent'
+                   WHEN u.ban_status = 'temporary' THEN 'temporary'
+                   ELSE 'caution'
+               END AS tag
+        FROM users u
+        WHERE u.ban_status != 'none'
+           OR EXISTS (
+                SELECT 1 FROM penalty_log pl
+                WHERE pl.user_id = u.user_id
+                  AND pl.voided_at IS NULL
+                  AND pl.expires_at > NOW()
+              )
+        ORDER BY u.user_id DESC
+    </select>
+
+    <select id="findSanctionedUserById" resultType="com.back.sanction.dto.SanctionedUserResponse">
+        SELECT u.user_id      AS userId,
+               u.login_id     AS loginId,
+               u.name,
+               u.email,
+               u.ban_status   AS banStatus,
+               u.banned_until AS bannedUntil,
+               (SELECT bl.starts_at FROM ban_log bl
+                 WHERE bl.user_id = u.user_id AND bl.lifted_at IS NULL
+                 ORDER BY bl.created_at DESC LIMIT 1) AS banStartedAt,
+               CASE
+                   WHEN u.ban_status = 'permanent' THEN 'permanent'
+                   WHEN u.ban_status = 'temporary' THEN 'temporary'
+                   WHEN EXISTS (
+                        SELECT 1 FROM penalty_log pl
+                        WHERE pl.user_id = u.user_id AND pl.voided_at IS NULL AND pl.expires_at > NOW()
+                   ) THEN 'caution'
+                   ELSE 'none'
+               END AS tag
+        FROM users u
+        WHERE u.user_id = #{userId}
+    </select>
+
+    <!-- MySQL은 UPDATE 대상 테이블을 서브쿼리 FROM에서 직접 참조할 수 없어 파생 테이블로 한 번 감쌈 -->
+    <update id="closeActiveBanLog">
+        UPDATE ban_log
+        SET lifted_at = NOW(),
+            lifted_by = #{liftedBy}
+        WHERE ban_id = (
+            SELECT ban_id FROM (
+                SELECT ban_id FROM ban_log
+                WHERE user_id = #{userId} AND lifted_at IS NULL
+                ORDER BY created_at DESC LIMIT 1
+            ) AS latest_active_ban
+        )
+    </update>
+
+    <select id="findExpiredTemporaryBanUserIds" resultType="long">
+        SELECT user_id
+        FROM users
+        WHERE ban_status = 'temporary'
+          AND banned_until &lt;= NOW()
+    </select>
+
+</mapper>
