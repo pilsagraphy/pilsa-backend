@@ -4,7 +4,7 @@ import com.back.board.dto.*;
 import com.back.board.exception.BoardException;
 import com.back.board.mapper.BoardMapper;
 import com.back.board.type.BoardType;
-import com.back.student.common.FileStorageUtil;
+import com.back.global.util.FileStorageUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
