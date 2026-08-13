@@ -21,7 +21,7 @@
             u.phone        AS phone,
             u.student_no   AS studentNo,
             u.email        AS email,
-            u.User_type  AS UserType,
+            u.member_type  AS memberType,
             u.admin_level  AS adminLevel,
             -- banStatus는 캐시 컬럼(u.ban_status) 대신 조인된 현재 유효 차단에서 파생
             -- → 임시정지 만료 시 자동으로 'none'이 되어 banStartAt/banEndAt과 항상 일치
@@ -103,7 +103,7 @@
             <if test="req.phone != null">phone = #{req.phone},</if>
             <if test="req.studentNo != null">student_no = #{req.studentNo},</if>
             <if test="req.email != null">email = #{req.email},</if>
-            <if test="req.UserType != null">User_type = #{req.UserType},</if>
+            <if test="req.memberType != null">member_type = #{req.memberType},</if>
             <if test="req.adminLevel != null">admin_level = #{req.adminLevel},</if>
             updated_at = NOW()
         </set>

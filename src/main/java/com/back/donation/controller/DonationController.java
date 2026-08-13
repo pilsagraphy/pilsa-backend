@@ -15,7 +15,7 @@ import java.util.List;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/public/Donation")
+@RequestMapping("/api/public/honor")
 @RequiredArgsConstructor
 public class DonationController {
 

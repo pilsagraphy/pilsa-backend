@@ -54,9 +54,22 @@ public class SecurityConfig {
                 // 그 외는 로그인 필요
                 .anyRequest().authenticated()
             )
+            // 미인증(토큰 누락/무효)과 권한 부족을 구분해서 응답
+            //  - 기본 EntryPoint는 미인증도 403으로 떨어져서 "로그인했는데 왜 403?" 혼선을 유발
+            //    (특히 multipart 게시글 등록에서 Authorization 헤더가 빠질 때) → 401로 명확히 구분
+            .exceptionHandling(ex -> ex
+                .authenticationEntryPoint((request, response, authException) -> {
+                    response.setHeader("WWW-Authenticate", "Bearer");
+                    response.sendError(jakarta.servlet.http.HttpServletResponse.SC_UNAUTHORIZED,
+                            "인증이 필요합니다. (Authorization 헤더 누락 또는 유효하지 않은 토큰)");
+                })
+                .accessDeniedHandler((request, response, accessDeniedException) ->
+                    response.sendError(jakarta.servlet.http.HttpServletResponse.SC_FORBIDDEN,
+                            "접근 권한이 없습니다."))
+            )
             // 필터 입히기
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
-        
+
         return http.build();
     }
     

@@ -27,7 +27,7 @@ import java.util.regex.Pattern;
 @Transactional(readOnly = true)
 public class UserServiceImpl implements UserService {
 
-    private final UserMapper UserMapper;
+    private final UserMapper userMapper;
 
     // ===== 회원 정보 수정 검증 규칙 =====
     // 이름: 한글/영문 문자만 (숫자·특수문자 불가), 공백 허용
@@ -36,8 +36,8 @@ public class UserServiceImpl implements UserService {
     private static final Pattern STUDENT_NO_PATTERN = Pattern.compile("^\\d{10}$");
     // 이메일 형식
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
-    // 회원 구분: PR #66 권한 개편 이후 users.User_type 실제 값
-    private static final Set<String> ALLOWED_User_TYPES = Set.of("STUDENT", "ALUMNI");
+    // 회원 구분: PR #66 권한 개편 이후 users.member_type 실제 값
+    private static final Set<String> ALLOWED_MEMBER_TYPES = Set.of("STUDENT", "ALUMNI");
     // 관리 권한 레벨: 0(일반) / 1~3(관리자). 화면의 "관리 Lv.1~3" 라벨과 대응
     private static final int MIN_ADMIN_LEVEL = 0;
     private static final int MAX_ADMIN_LEVEL = 3;
@@ -70,18 +70,18 @@ public class UserServiceImpl implements UserService {
             throw new UserException("페이지 크기는 1 이상이어야 합니다.", HttpStatus.BAD_REQUEST);
         }
 
-        long totalCount = UserMapper.countUsers(keyword);
+        long totalCount = userMapper.countUsers(keyword);
         int totalPages = (int) Math.ceil((double) totalCount / size);
 
         // 검색 결과가 없으면(회원 0명) 빈 목록을 그대로 반환 - 관리자 화면이므로 에러로 막지 않음
-        List<UserListResponse> Users = totalCount == 0
+        List<UserListResponse> users = totalCount == 0
                 ? List.of()
-                : UserMapper.findUsers(keyword, sort, (page - 1) * size, size);
+                : userMapper.findUsers(keyword, sort, (page - 1) * size, size);
 
         UserPageResponse response = new UserPageResponse();
         response.setTotalPages(totalPages);
         response.setTotalCount(totalCount);
-        response.setUsers(Users);
+        response.setMembers(users);
         return response;
     }
 
@@ -91,14 +91,14 @@ public class UserServiceImpl implements UserService {
         checkAdminRole();
 
         // 수정 대상(활성 회원) 존재 확인
-        if (!UserMapper.existsActiveUser(userId)) {
+        if (!userMapper.existsActiveUser(userId)) {
             throw new UserException("해당 회원을 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
         }
 
         // 전달된 필드만 검증 (부분 수정). 아무 필드도 없으면 잘못된 요청
         boolean hasAny = request.getName() != null || request.getPhone() != null
                 || request.getStudentNo() != null || request.getEmail() != null
-                || request.getUserType() != null || request.getAdminLevel() != null;
+                || request.getMemberType() != null || request.getAdminLevel() != null;
         if (!hasAny) {
             throw new UserException("수정할 항목이 없습니다.", HttpStatus.BAD_REQUEST);
         }
@@ -119,7 +119,7 @@ public class UserServiceImpl implements UserService {
         if (request.getPhone() != null) {
             String phone = request.getPhone().trim();
             String digits = phone.replaceAll("[^0-9]", "");
-            if (!digits.isEmpty() && UserMapper.existsPhoneDigitsExcludingUser(digits, userId)) {
+            if (!digits.isEmpty() && userMapper.existsPhoneDigitsExcludingUser(digits, userId)) {
                 throw new UserException("이미 사용 중인 전화번호입니다.", HttpStatus.CONFLICT);
             }
             request.setPhone(phone);
@@ -131,7 +131,7 @@ public class UserServiceImpl implements UserService {
             if (!STUDENT_NO_PATTERN.matcher(studentNo).matches()) {
                 throw new UserException("학번은 숫자 10자리여야 합니다.", HttpStatus.BAD_REQUEST);
             }
-            if (UserMapper.existsStudentNoExcludingUser(studentNo, userId)) {
+            if (userMapper.existsStudentNoExcludingUser(studentNo, userId)) {
                 throw new UserException("이미 사용 중인 학번입니다.", HttpStatus.CONFLICT);
             }
             request.setStudentNo(studentNo);
@@ -143,14 +143,14 @@ public class UserServiceImpl implements UserService {
             if (!EMAIL_PATTERN.matcher(email).matches()) {
                 throw new UserException("올바른 이메일 형식이 아닙니다.", HttpStatus.BAD_REQUEST);
             }
-            if (UserMapper.existsEmailExcludingUser(email, userId)) {
+            if (userMapper.existsEmailExcludingUser(email, userId)) {
                 throw new UserException("이미 사용 중인 이메일입니다.", HttpStatus.CONFLICT);
             }
             request.setEmail(email);
         }
 
         // 회원 구분: STUDENT / ALUMNI
-        if (request.getUserType() != null && !ALLOWED_User_TYPES.contains(request.getUserType())) {
+        if (request.getMemberType() != null && !ALLOWED_MEMBER_TYPES.contains(request.getMemberType())) {
             throw new UserException("유효하지 않은 회원 구분 값입니다. (STUDENT/ALUMNI)", HttpStatus.BAD_REQUEST);
         }
 
@@ -160,7 +160,7 @@ public class UserServiceImpl implements UserService {
             throw new UserException("유효하지 않은 관리 권한 레벨입니다. (0~3)", HttpStatus.BAD_REQUEST);
         }
 
-        UserMapper.updateUser(userId, request);
+        userMapper.updateUser(userId, request);
         log.info("회원 정보 수정 완료 - userId: {}, 요청: {}", userId, request);
         return new UserResponse("회원 정보가 수정되었습니다.", userId);
     }
@@ -170,11 +170,11 @@ public class UserServiceImpl implements UserService {
     public UserResponse suspendUser(Long userId, UserSuspendRequest request) {
         checkAdminRole();
 
-        if (!UserMapper.existsActiveUser(userId)) {
+        if (!userMapper.existsActiveUser(userId)) {
             throw new UserException("해당 회원을 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
         }
         // 이미 영구차단된 회원을 임시정지로 덮어쓰면 만료 시 영구차단이 사라지므로 차단
-        if (BAN_TYPE_PERMANENT.equals(UserMapper.findBanStatus(userId))) {
+        if (BAN_TYPE_PERMANENT.equals(userMapper.findBanStatus(userId))) {
             throw new UserException("이미 영구차단된 회원입니다. 정지로 변경할 수 없습니다.", HttpStatus.CONFLICT);
         }
         if (request.getEndDate() == null) {
@@ -188,8 +188,8 @@ public class UserServiceImpl implements UserService {
             throw new UserException("정지 종료일은 현재 시점보다 미래여야 합니다.", HttpStatus.BAD_REQUEST);
         }
 
-        UserMapper.insertBanLog(userId, WARNING_NO_TEMPORARY, BAN_TYPE_TEMPORARY, startsAt, endsAt);
-        UserMapper.updateUserBanStatus(userId, BAN_TYPE_TEMPORARY, endsAt);
+        userMapper.insertBanLog(userId, WARNING_NO_TEMPORARY, BAN_TYPE_TEMPORARY, startsAt, endsAt);
+        userMapper.updateUserBanStatus(userId, BAN_TYPE_TEMPORARY, endsAt);
 
         log.info("회원 정지 완료 - userId: {}, 종료일: {}", userId, request.getEndDate());
         return new UserResponse("회원이 정지되었습니다. (종료일: " + request.getEndDate() + ")", userId);
@@ -214,7 +214,7 @@ public class UserServiceImpl implements UserService {
         }
 
         // 존재 확인 1회 (WHERE user_id IN ...). 없는 회원이 섞이면 전체 실패
-        List<Long> found = UserMapper.findActiveUserIds(targetIds);
+        List<Long> found = userMapper.findActiveUserIds(targetIds);
         if (found.size() != targetIds.size()) {
             List<Long> missing = targetIds.stream().filter(id -> !found.contains(id)).toList();
             throw new UserException("존재하지 않는 회원이 포함되어 있습니다: " + missing, HttpStatus.NOT_FOUND);
@@ -222,8 +222,8 @@ public class UserServiceImpl implements UserService {
 
         // 영구차단: ends_at/banned_until = null. INSERT 1회(batch) + UPDATE 1회로 처리
         LocalDateTime startsAt = LocalDateTime.now();
-        UserMapper.insertBanLogBatch(targetIds, WARNING_NO_PERMANENT, BAN_TYPE_PERMANENT, startsAt, null);
-        UserMapper.updateUserBanStatusByIds(targetIds, BAN_TYPE_PERMANENT, null);
+        userMapper.insertBanLogBatch(targetIds, WARNING_NO_PERMANENT, BAN_TYPE_PERMANENT, startsAt, null);
+        userMapper.updateUserBanStatusByIds(targetIds, BAN_TYPE_PERMANENT, null);
 
         log.info("회원 영구차단 완료 - {}명, ids: {}", targetIds.size(), targetIds);
         return new UserResponse(targetIds.size() + "명을 영구차단했습니다.", null);
