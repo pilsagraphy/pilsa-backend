@@ -103,7 +103,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 }
                 if (user.getAdminLevel() != null && user.getAdminLevel() >= 1) {
                     // 관리 레벨 1~3 → ROLE_ADMIN (기존 관리자 체크와 호환)
-                    authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
+                    authorities.add(new SimpleGrantedAuthority(AuthUtils.ROLE_ADMIN));
+                    // 실제 레벨도 권한으로 심는다 → 게시판 작성권한(write_level) 판정에 사용 (AuthUtils.adminLevel())
+                    authorities.add(new SimpleGrantedAuthority(AuthUtils.ADMIN_LEVEL_PREFIX + user.getAdminLevel()));
                 }
 
                 // principal 은 loginId만 사용

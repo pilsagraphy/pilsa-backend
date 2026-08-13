@@ -14,6 +14,29 @@ import java.util.List;
 @Mapper
 public interface BoardMapper {
 
+    // --- 게시판 정책 (boards 테이블) — BoardType enum 대체 ---
+
+    // 게시판 1건의 정책 조회 (삭제된 게시판은 null)
+    BoardPolicy findBoardPolicy(@Param("boardId") Long boardId);
+
+    // 게시판 목록 (관리자 화면 / 사이드바). 삭제된 게시판 제외, display_order 순
+    List<BoardPolicy> findBoardPolicies();
+
+    // 게시판별 게시글 수 (관리자 게시판 관리 화면)
+    int countPostsByBoard(@Param("boardId") Long boardId);
+
+    // 게시판 생성
+    void insertBoard(@Param("board") BoardPolicy board);
+
+    // 게시판 수정 (전달된 필드만)
+    int updateBoard(@Param("boardId") Long boardId, @Param("board") BoardPolicy board);
+
+    // 게시판 소프트삭제
+    int deleteBoard(@Param("boardId") Long boardId);
+
+    // 게시판명 중복 확인 (본인 제외)
+    boolean existsBoardName(@Param("name") String name, @Param("excludeBoardId") Long excludeBoardId);
+
     // 게시판 카테고리 목록 조회 (공지사항은 데이터가 없어 빈 목록 반환)
     List<CategoryResponse> findCategoriesByBoardId(@Param("boardId") Long boardId);
 

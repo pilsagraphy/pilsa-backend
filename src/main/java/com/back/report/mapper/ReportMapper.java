@@ -3,8 +3,7 @@ package com.back.report.mapper;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
-// 신고 "접수" 전용 매퍼.
-// 신고 처리(반려/삭제)는 admin.report, 회원별 신고 내역 조회는 admin.sanction 이 담당한다. (PM 피드백)
+// 신고 "접수" 매퍼. 신고 처리(반려/삭제) 조회는 같은 패키지의 ReportAdminMapper 가 담당한다.
 @Mapper
 public interface ReportMapper {
 
@@ -15,7 +14,11 @@ public interface ReportMapper {
                        @Param("reasonId") Long reasonId,
                        @Param("detail") String detail);
 
-    // 신고 대상 존재 확인용 - 게시판 도메인에 상관없이 posts/comments 테이블을 직접 참조
+    // 신고 대상 존재/작성자 확인 — 게시판 도메인에 상관없이 posts/comments 를 직접 참조
     Long findPostAuthorId(@Param("postId") Long postId);
     Long findCommentAuthorId(@Param("commentId") Long commentId);
+
+    // 신고 대상의 현재 표시 상태 (normal/blind/deleted) — 이미 삭제된 대상 접수 차단용
+    String findPostState(@Param("postId") Long postId);
+    String findCommentState(@Param("commentId") Long commentId);
 }

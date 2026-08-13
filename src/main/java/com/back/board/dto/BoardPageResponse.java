@@ -10,5 +10,6 @@ import java.util.List;
 @Setter
 public class BoardPageResponse {
     private int totalPages;
+    private int totalCount;
     private List<BoardListResponse> posts;
 }

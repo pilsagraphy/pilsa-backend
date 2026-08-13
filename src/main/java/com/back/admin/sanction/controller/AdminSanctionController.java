@@ -8,7 +8,7 @@ import com.back.admin.sanction.service.SanctionAdminService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.context.SecurityContextHolder;
+import com.back.global.security.AuthUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -44,7 +44,7 @@ public class AdminSanctionController {
     // 관리자 수동 제재 해제
     @PostMapping("/api/admin/sanctions/users/{userId}/lift")
     public ResponseEntity<SanctionResponse> liftBan(@PathVariable Long userId) {
-        Long adminUserId = Long.parseLong(SecurityContextHolder.getContext().getAuthentication().getName());
+        Long adminUserId = AuthUtils.currentUserId();
         log.info("제재 해제 요청 - 대상 userId: {}, 처리 관리자: {}", userId, adminUserId);
         sanctionAdminService.liftBan(userId, adminUserId);
         return ResponseEntity.ok(new SanctionResponse("제재가 해제되었습니다."));

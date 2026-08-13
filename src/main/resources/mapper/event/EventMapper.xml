@@ -34,13 +34,14 @@
             <if test="request.endDate != null">end_at = #{request.endDate},</if>
             updated_at = NOW()
         </set>
-        WHERE event_id = #{scheduleId}
+        WHERE event_id = #{scheduleId} AND state = 'normal'
     </update>
 
-    <delete id="deleteEvent">
-        DELETE FROM events
-        WHERE event_id = #{scheduleId}
-    </delete>
+    <!-- 소프트 삭제 (프로젝트 전역 원칙: 물리 삭제 없음) -->
+    <update id="deleteEvent">
+        UPDATE events SET state = 'deleted', updated_at = NOW()
+        WHERE event_id = #{scheduleId} AND state = 'normal'
+    </update>
 
     <select id="findEventsByPeriod" resultType="com.back.event.dto.EventDataResponse">
         SELECT
@@ -51,7 +52,8 @@
             DATE_FORMAT(start_at, '%Y-%m-%d') AS startDate,
             DATE_FORMAT(end_at, '%Y-%m-%d') AS endDate
         FROM events
-        WHERE start_at &lt;= #{to}
+        WHERE state = 'normal'
+          AND start_at &lt;= #{to}
           AND end_at &gt;= #{from}
         ORDER BY start_at ASC
     </select>

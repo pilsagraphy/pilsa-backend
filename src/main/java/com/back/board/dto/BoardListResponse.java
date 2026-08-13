@@ -21,7 +21,7 @@ public class BoardListResponse {
     private int viewCount;
     private int commentCount;
     private String categoryName;
-    private boolean isPinned;
+    private Boolean isPinned;
     private boolean hasAttachment;
     private LocalDateTime created;
 }

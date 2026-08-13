@@ -11,14 +11,14 @@ import lombok.Setter;
 public class AdminPostDetailResponse {
     private Long postId;
     private Long boardId;
-    private String boardCode;
+    private String boardName;
     private String categoryName;   // 카테고리 미사용 게시판이면 null
     private String title;
     private String content;
     private Long authorId;
     private String authorName;     // 익명글도 실제 작성자명
-    private boolean isAnonymous;
-    private boolean isPinned;
+    private Boolean isAnonymous;
+    private Boolean isPinned;
     private int viewCount;
     private int likeCount;
     private int commentCount;      // 전체(모든 state) 기준

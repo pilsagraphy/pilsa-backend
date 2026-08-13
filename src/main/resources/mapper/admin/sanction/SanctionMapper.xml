@@ -34,8 +34,8 @@
     </select>
 
     <insert id="insertBanLog">
-        INSERT INTO ban_log (user_id, warning_no, ban_type, starts_at, ends_at, created_at)
-        VALUES (#{userId}, #{warningNo}, #{banType}, #{startsAt}, #{endsAt}, NOW())
+        INSERT INTO ban_log (user_id, warning_no, source, ban_type, starts_at, ends_at, created_at)
+        VALUES (#{userId}, #{warningNo}, 'auto', #{banType}, #{startsAt}, #{endsAt}, NOW())
     </insert>
 
     <update id="updateUserBanStatus">
@@ -127,7 +127,7 @@
             r.target_id                                            AS targetId,
             CASE WHEN r.target_type = 'post' THEN pb.post_id ELSE c.post_id END AS postId,
             bd.board_id                                            AS boardId,
-            bd.code                                                AS boardCode,
+            bd.name                                                AS boardName,
             r.reason_id                                            AS reasonId,
             rs.label                                               AS reasonLabel,
             r.detail,

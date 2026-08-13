@@ -22,12 +22,12 @@ public class BoardDetailResponse {
     private Long userId;            // 작성자 ID (본인 확인용)
     private String authorName;
     private LocalDateTime updated;
-    private boolean isAnonymous;    // 자유게시판 익명 여부
-    private boolean isPinned;       // 공지사항 중요표시 여부
+    private Boolean isAnonymous;    // 자유게시판 익명 여부
+    private Boolean isPinned;       // 공지사항 중요표시 여부
     private String categoryName;
 
     private int likeCount;
-    private boolean isLiked;
+    private Boolean isLiked;
 
     private String prevPostApi;
     private String nextPostApi;

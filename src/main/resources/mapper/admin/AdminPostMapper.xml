@@ -18,7 +18,7 @@
         SELECT
             p.post_id AS postId,
             p.board_id AS boardId,
-            b.code AS boardCode,
+            b.name AS boardName,
             p.title,
             u.name AS authorName,
             (SELECT COUNT(*) FROM comments cm WHERE cm.post_id = p.post_id) AS commentCount,
@@ -46,7 +46,7 @@
         SELECT
             p.post_id      AS postId,
             p.board_id     AS boardId,
-            b.code         AS boardCode,
+            b.name         AS boardName,
             c.name         AS categoryName,
             p.title,
             p.content,

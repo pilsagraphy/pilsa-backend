@@ -17,8 +17,8 @@ public class CommentDetailResponse {
     private Long parentCommentId;  // 대댓글이면 부모 댓글 ID, 최상위 댓글이면 null
     private String content;
     private String authorName;
-    private boolean isAnonymous;   // 자유게시판 익명 여부
-    private boolean isPrivate;     // 정보게시판 비밀댓글 여부
+    private Boolean isAnonymous;   // 자유게시판 익명 여부
+    private Boolean isPrivate;     // 정보게시판 비밀댓글 여부
     private LocalDateTime updated;
     private Long userId;           // 본인 확인용
 }

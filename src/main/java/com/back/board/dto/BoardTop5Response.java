@@ -9,5 +9,5 @@ import lombok.Setter;
 public class BoardTop5Response {
     private Long postId;
     private String title;
-    private boolean isPinned;
+    private Boolean isPinned;
 }

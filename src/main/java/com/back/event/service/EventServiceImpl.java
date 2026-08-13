@@ -6,7 +6,7 @@ import com.back.event.mapper.EventMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.context.SecurityContextHolder;
+import com.back.global.security.AuthUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,11 +24,9 @@ public class EventServiceImpl implements EventService {
 
     private final EventMapper eventMapper;
 
-    // 관리자 권한 확인만 공통으로 사용
+    // 관리자 권한 확인 (공통 유틸 사용)
     private void checkAdminRole() {
-        boolean isAdmin = SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
-        if (!isAdmin) {
+        if (!AuthUtils.isAdmin()) {
             throw new EventException("관리자 권한이 필요합니다.", HttpStatus.FORBIDDEN);
         }
     }
@@ -42,8 +40,7 @@ public class EventServiceImpl implements EventService {
         validateExecutionDates(request.getStartDate(), request.getEndDate());
 
         // 등록 시에는 ERD 구조상 누가 등록했는지(user_id)가 필요하므로 가져옴
-        String sub = SecurityContextHolder.getContext().getAuthentication().getName();
-        Long userId = Long.parseLong(sub);
+        Long userId = AuthUtils.currentUserId();
 
         eventMapper.insertEvent(request, userId);
 

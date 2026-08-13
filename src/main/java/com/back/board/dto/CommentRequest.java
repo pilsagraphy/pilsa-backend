@@ -21,9 +21,10 @@ public class CommentRequest {
             requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
     private Long parentCommentId;
 
-    @Schema(description = "익명 여부 (자유게시판 전용). 그 외 게시판은 무시됨", example = "false")
-    private boolean isAnonymous;
+    // Boolean 래퍼 사용 이유는 BoardRequest 참고 (프로퍼티명 isXxx 유지)
+    @Schema(description = "익명 여부 (익명 허용 게시판 전용). 그 외 게시판은 무시됨", example = "false")
+    private Boolean isAnonymous = false;
 
-    @Schema(description = "비밀댓글 여부 (정보게시판 전용). 그 외 게시판은 무시됨", example = "false")
-    private boolean isPrivate;
+    @Schema(description = "비밀댓글 여부 (비밀댓글 허용 게시판 전용). 그 외 게시판은 무시됨", example = "false")
+    private Boolean isPrivate = false;
 }

@@ -14,7 +14,7 @@ public class DonationResponse {
     private String major;
     private String message;
     private LocalDateTime donatedAt;
-    private boolean isAnonymous;
+    private Boolean isAnonymous;
 
     private String photoUrl;
 }

@@ -10,7 +10,7 @@ import lombok.Setter;
 public class AdminPostListResponse {
     private Long postId;
     private Long boardId;
-    private String boardCode;    // boards.code (영문 식별자). 한글 표기는 프론트에서 매핑
+    private String boardName;   // boards.name (한글 게시판명)
     private String title;
     private String authorName;   // 관리자 화면에는 익명글도 실제 작성자명 표시
     private int commentCount;

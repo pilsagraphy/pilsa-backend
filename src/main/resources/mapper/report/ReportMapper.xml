@@ -7,13 +7,21 @@
         VALUES (#{reporterId}, #{targetType}, #{targetId}, #{reasonId}, #{detail}, 'pending', NOW())
     </insert>
 
-    <!-- 신고 대상은 게시판 도메인(공지/자유/정보)에 상관없이 posts/comments 테이블을 공용으로 사용하므로 직접 조회 -->
+    <!-- 신고 대상은 게시판 종류에 상관없이 posts/comments 테이블을 공용으로 사용하므로 직접 조회 -->
     <select id="findPostAuthorId" resultType="long">
         SELECT user_id FROM posts WHERE post_id = #{postId}
     </select>
 
     <select id="findCommentAuthorId" resultType="long">
         SELECT user_id FROM comments WHERE comment_id = #{commentId}
+    </select>
+
+    <select id="findPostState" resultType="string">
+        SELECT state FROM posts WHERE post_id = #{postId}
+    </select>
+
+    <select id="findCommentState" resultType="string">
+        SELECT state FROM comments WHERE comment_id = #{commentId}
     </select>
 
 </mapper>

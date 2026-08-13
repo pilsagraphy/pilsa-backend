@@ -44,12 +44,16 @@ public class SecurityConfig {
                     "/uploads/**" // 파일 경로
                 ).permitAll()
                 
-                // 접근 권한 (member_type=신분 / admin_level=관리등급 기반)
-                //  - ROLE_ADMIN 은 admin_level>=1 일 때 필터에서 부여됨
-                //  - ROLE_STUDENT / ROLE_ALUMNI 는 member_type 에서 부여됨 (관리자도 member_type=STUDENT 라 stu 접근 가능)
+                // 관리자 화면 전용 경로만 URL 레벨에서 막는다 (admin_level>=1 → ROLE_ADMIN)
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                .requestMatchers("/api/stu/**").hasAnyRole("STUDENT", "ALUMNI")
-                .requestMatchers("/api/alu/**").hasRole("ALUMNI")
+
+                // 그 외 회원 기능(/api/stu/**, /api/reports, /api/notifications ...)은
+                // "로그인 여부"만 URL에서 확인하고, 실제 접근 가능 여부는 데이터로 판정한다.
+                //  - 게시판: boards.read_scope(열람 대상) / boards.write_level(작성 최소 관리레벨)
+                //  - 그 외 : 각 서비스가 AuthUtils 로 신분·관리레벨을 확인
+                // 신분(재학생/졸업생)을 URL 접두사로 가르지 않는 이유: 관리자가 런타임에 만든 게시판의
+                // 열람 대상을 정적 URL 패턴으로는 표현할 수 없기 때문이다.
+                .requestMatchers("/api/stu/**", "/api/alu/**").authenticated()
                 
                 // 그 외는 로그인 필요
                 .anyRequest().authenticated()

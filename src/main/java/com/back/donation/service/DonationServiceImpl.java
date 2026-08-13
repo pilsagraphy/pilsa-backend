@@ -19,7 +19,7 @@ public class DonationServiceImpl implements DonationService {
 
         // 익명 처리 : isAnonymous가 true면 이름을 '익명후원자'로 변경
         return Donations.stream().map(Donation -> {
-            if (Donation.isAnonymous()) {
+            if (Boolean.TRUE.equals(Donation.getIsAnonymous())) {
                 Donation.setDisplayName("익명후원자");
                 Donation.setAffiliation(null); // 소속도 숨김 처리
                 Donation.setPhotoUrl(null); // 익명일 경우 사진 경로도 제거

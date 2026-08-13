@@ -11,7 +11,7 @@ public class ReportedContentResponse {
     private Long targetId;
     private Long postId;
     private Long boardId;
-    private String boardCode;
+    private String boardName;
     private Long reasonId;
     private String reasonLabel;
     private String detail;

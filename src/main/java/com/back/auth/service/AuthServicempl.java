@@ -3,6 +3,7 @@ package com.back.auth.service;
 import com.back.auth.dto.*;
 import com.back.auth.mapper.AuthMapper;
 import com.back.auth.exception.AuthException;
+import com.back.auth.exception.BannedException;
 import com.back.global.security.JwtUtil;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
@@ -52,14 +53,16 @@ public class AuthServicempl implements AuthService {
     }
 
     // 정지/영구차단 계정 로그인 차단 (만료된 임시정지는 통과 - 스케줄러가 캐시를 정리하기 전이라도 로그인 허용)
+    // 프론트가 "2026.03.30 00:00 부터 다시 로그인 할 수 있습니다" 화면을 그릴 수 있도록
+    // 메시지 문자열이 아니라 banType/bannedUntil 필드로 내려준다.
     private void checkNotBanned(UserDto user) {
         if ("permanent".equals(user.getBanStatus())) {
-            throw new AuthException("영구적으로 차단된 계정입니다.", HttpStatus.FORBIDDEN);
+            throw new BannedException("영구적으로 차단된 계정입니다.", "permanent", null);
         }
         if ("temporary".equals(user.getBanStatus())
                 && user.getBannedUntil() != null
                 && user.getBannedUntil().isAfter(LocalDateTime.now())) {
-            throw new AuthException("정지된 계정입니다. (해제 예정일: " + user.getBannedUntil() + ")", HttpStatus.FORBIDDEN);
+            throw new BannedException("정지된 계정입니다.", "temporary", user.getBannedUntil());
         }
     }
 

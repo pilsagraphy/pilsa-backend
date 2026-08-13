@@ -12,8 +12,8 @@ public class AdminCommentResponse {
     private String content;
     private Long userId;
     private String authorName;
-    private boolean isAnonymous;
-    private boolean isPrivate;
+    private Boolean isAnonymous;
+    private Boolean isPrivate;
     private String state;          // normal / blind / deleted
     private LocalDateTime created;
     private LocalDateTime updated;
