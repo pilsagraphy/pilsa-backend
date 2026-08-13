@@ -79,7 +79,7 @@ public class AuthServicempl implements AuthService {
 
         authMapper.updateLastLoginAt(request.getLoginId());
 
-        return new AuthResponse(accessToken, user.getUserId(), user.getRole(), refreshExp);
+        return new AuthResponse(accessToken, user.getUserId(), user.getMemberType(), user.getAdminLevel(), refreshExp);
     }
 
     // 로그아웃
@@ -147,7 +147,9 @@ public class AuthServicempl implements AuthService {
         user.setEmail(request.getEmail());
         user.setLoginId(request.getLoginId());
         user.setPasswordHash(encodedPw);
-        user.setRole(request.getRole());
+        // 가입은 재학생 기본, 관리자는 별도 승격(admin_level)으로만 부여
+        user.setMemberType(request.getMemberType() != null ? request.getMemberType() : "STUDENT");
+        user.setAdminLevel(0);
         user.setIsDeleted(Boolean.FALSE);
 
         authMapper.insertUser(user);
@@ -332,7 +334,7 @@ public class AuthServicempl implements AuthService {
             var newClaims = jwtUtil.validateRefreshToken(newRefreshToken);
             long refreshExp = newClaims.getExpiration().getTime();
 
-            return new AuthResponse(newAccessToken, user.getUserId(), user.getRole(), refreshExp);
+            return new AuthResponse(newAccessToken, user.getUserId(), user.getMemberType(), user.getAdminLevel(), refreshExp);
 
         } catch (ExpiredJwtException e) {
             // Refresh Token 자체가 만료된 경우
@@ -346,8 +348,8 @@ public class AuthServicempl implements AuthService {
         }
     }
 
-    // 엑세스 토큰 발급/재발급
-    public AuthResponse refresh(String refreshToken) {
+    // 엑세스 토큰 발급/재발급 (+ 리프레시 토큰 회전: 활동 중이면 refresh도 계속 갱신)
+    public AuthResponse refresh(String refreshToken, HttpServletResponse response) {
         try {
             var claims = jwtUtil.validateRefreshToken(refreshToken);
             String loginId = claims.getSubject();
@@ -361,11 +363,14 @@ public class AuthServicempl implements AuthService {
                 throw new AuthException("탈퇴했거나 승인되지 않은 계정입니다.", HttpStatus.UNAUTHORIZED);
             }
 
-            // 기존 refreshToken 그대로 쓰므로 exp도 동일
-            long refreshExp = claims.getExpiration().getTime();
+            // 액세스 재발급 + 리프레시 토큰 회전(sliding): 재발급받을 때마다 refresh 쿠키도 새로 교체
             String newAccessToken = jwtUtil.generateAccessToken(user);
+            String newRefreshToken = jwtUtil.generateRefreshToken(user);
+            addRefreshTokenCookie(response, newRefreshToken);
 
-            return new AuthResponse(newAccessToken, user.getUserId(), user.getRole(), refreshExp);
+            long refreshExp = jwtUtil.validateRefreshToken(newRefreshToken).getExpiration().getTime();
+
+            return new AuthResponse(newAccessToken, user.getUserId(), user.getMemberType(), user.getAdminLevel(), refreshExp);
 
         } catch (ExpiredJwtException e) {
             // Refresh Token 자체가 만료된 경우

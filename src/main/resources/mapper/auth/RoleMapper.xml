@@ -5,8 +5,9 @@
 
 <mapper namespace="com.back.global.role.mapper.RoleMapper">
 
-    <select id="findRoleByUserId" resultType="string">
-        SELECT role
+    <select id="findMemberInfoByUserId" resultType="com.back.global.role.dto.RoleResponse">
+        SELECT member_type AS memberType,
+               admin_level AS adminLevel
         FROM users
         WHERE user_id = #{userId}
           AND is_deleted = false

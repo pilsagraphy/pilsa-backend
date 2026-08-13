@@ -44,10 +44,12 @@ public class SecurityConfig {
                     "/uploads/**" // 파일 경로
                 ).permitAll()
                 
-                // 역할별 접근
+                // 접근 권한 (member_type=신분 / admin_level=관리등급 기반)
+                //  - ROLE_ADMIN 은 admin_level>=1 일 때 필터에서 부여됨
+                //  - ROLE_STUDENT / ROLE_ALUMNI 는 member_type 에서 부여됨 (관리자도 member_type=STUDENT 라 stu 접근 가능)
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                .requestMatchers("/api/stu/**").hasAnyRole("STUDENTS", "ADMIN", "ALUMNI") // ALUMNI는 임시!
-                .requestMatchers("/api/alu/**").hasAnyRole("ALUMNI", "ADMIN")
+                .requestMatchers("/api/stu/**").hasAnyRole("STUDENT", "ALUMNI")
+                .requestMatchers("/api/alu/**").hasRole("ALUMNI")
                 
                 // 그 외는 로그인 필요
                 .anyRequest().authenticated()

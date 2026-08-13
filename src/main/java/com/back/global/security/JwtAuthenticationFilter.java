@@ -19,7 +19,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.List;
 
 // JWT Access Token 검증 필터
 // - 매 요청마다 Authorization 헤더 검사
@@ -61,7 +62,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             Claims claims = jwtUtil.validateAccessToken(token);
             String loginId = claims.getSubject();
-            String role = claims.get("role", String.class);
 
             // 검증 성공: 어떤 요청(URI) 때문에 검증됐는지 + 쓰레드명 로깅
             log.debug("엑세스 토큰 검증 -> {} ({})",
@@ -79,8 +79,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     return;
                 }
 
-                // JWT 안의 role 값을 Security 권한 객체로 변환
-                var authorities = Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + role));
+                // member_type + admin_level → Security 권한으로 변환 (DB 최신값 기준)
+                List<SimpleGrantedAuthority> authorities = new ArrayList<>();
+                if (user.getMemberType() != null && !user.getMemberType().isBlank()) {
+                    // ROLE_STUDENT / ROLE_ALUMNI
+                    authorities.add(new SimpleGrantedAuthority("ROLE_" + user.getMemberType()));
+                }
+                if (user.getAdminLevel() != null && user.getAdminLevel() >= 1) {
+                    // 관리 레벨 1~3 → ROLE_ADMIN (기존 관리자 체크와 호환)
+                    authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
+                }
 
                 // principal 은 loginId만 사용
                 var userId = user.getUserId();

@@ -13,6 +13,7 @@ public class UserSignupDto {
     private String major;
     private String studentNo;
     private String email;
-    private String role;
+    private String memberType;   // 가입 시 회원 구분(기본 STUDENT)
+    private Integer adminLevel;   // 가입 시 관리 레벨(기본 0)
     private Boolean isDeleted;
 }
