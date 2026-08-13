@@ -114,43 +114,48 @@ WHERE `board_id` IN (1,2,3);
 
 ---
 
-## 5. API 테스트 계획 (dev 대비 신규/변경 전부)
+## 5. API 테스트 결과 (2026-08-14 로컬 기동 + qa_pilsa 실DB, 테스트 데이터는 검증 후 정리 완료)
 
 | # | API | 출처 | 상태 |
 |---|-----|------|------|
 | 로그인/토큰 (#66,#68) |
-| 1 | POST /api/auth/login — memberType/adminLevel 응답 | #66 | [ ] |
-| 2 | POST /api/auth/token/access/refresh — 리프레시 회전 | #66 | [ ] |
-| 3 | GET /api/role — memberType/adminLevel | #66 | [ ] |
-| 4 | 차단회원 로그인 403 / 요청 차단(X-Ban-Type) | #68 | [ ] |
+| 1 | POST /api/auth/login — memberType/adminLevel 응답 | #66 | ✅ |
+| 2 | POST /api/auth/token/access/refresh — 리프레시 회전(rotated 확인) | #66 | ✅ |
+| 3 | GET /api/role — memberType/adminLevel | #66 | ✅ |
+| 4 | 차단회원 로그인 403(+해제예정일) / 세션 중 요청 403 + X-Ban-Type | #68 | ✅ |
+| 4-1 | 회원가입 memberType 화이트리스트 (ADMIN 등 거부 400) | 보강 | ✅ |
+| 4-2 | 미인증 요청 401 / 권한부족 403 구분 (게시글 등록 403 혼선 해결) | 보강 | ✅ |
+| 4-3 | ALUMNI 계정(/api/stu 접근·게시글 등록) — PM 계정(wm5256) 실검증 | #66 | ✅ |
 | 게시판 통합 (#62 + #57 포팅) |
-| 5 | GET /api/stu/{1,2,3}/posts (페이징/검색/정렬, state 필터) | #62 | [ ] |
-| 6 | GET /api/stu/{b}/posts/{id} (상세, 대댓글 포함) | #62 | [ ] |
-| 7 | POST /api/stu/{b}/posts (공지=관리자만, 첨부) | #62 | [ ] |
-| 8 | PUT/DELETE 게시글 (소프트삭제 확인, blind글 수정 차단) | #62+#57 | [ ] |
-| 9 | POST 댓글/대댓글, PUT/DELETE 댓글(소프트) | #62 | [ ] |
-| 10 | PATCH 좋아요 토글 / top5 / categories | #62 | [ ] |
+| 5 | GET /api/stu/{1,2,3}/posts (페이징/검색, state=normal 필터) | #62 | ✅ |
+| 6 | GET /api/stu/{b}/posts/{id} (상세·댓글·대댓글 parentId) | #62 | ✅ |
+| 7 | POST /api/stu/{b}/posts (multipart, 공지=관리자만: 학생 403/관리자 성공) | #62 | ✅ |
+| 8 | PUT/DELETE 게시글 — 소프트삭제(state=deleted), blind글 작성자 수정 404 차단 | #62+#57 | ✅ |
+| 9 | POST 댓글/대댓글(잘못된 부모 400), PUT/DELETE 댓글(소프트, 삭제부모 숨김+답글 잔존) | #62 | ✅ |
+| 10 | PATCH 좋아요 토글(liked/likeCount) / categories | #62 | ✅ |
 | 관리자 게시글/신고 (#57) |
-| 11 | GET /api/admin/posts (필터/검색/페이징, deleted 제외) | #57 | [ ] |
-| 12 | GET /api/admin/posts/{id} (blind/deleted도 열람) | #57 | [ ] |
-| 13 | PATCH blind / restore, DELETE (사유·벌점, 신고 동기화) | #57 | [ ] |
-| 14 | POST bulk-delete (부분 성공) | #57 | [ ] |
-| 15 | GET /api/admin/reports/posts·comments (그룹핑/필터) | #57 | [ ] |
-| 16 | PATCH reject / DELETE / bulk (대상단위, pending 일괄 종료) | #57 | [ ] |
+| 11 | GET /api/admin/posts (keyword 검색·페이징) | #57 | ✅ |
+| 12 | GET /api/admin/posts/{id} (blind 상태 글 열람, 실작성자명) | #57 | ✅ |
+| 13 | PATCH blind(학생 화면 404 확인) / restore(재노출 확인) | #57 | ✅ |
+| 14 | POST bulk-delete — 4성공/1실패(없는 id) 부분 성공 | #57 | ✅ |
+| 15 | GET /api/admin/reports/posts (그룹핑·사유·건수·state) | #57 | ✅ |
+| 16 | 신고 삭제(resolved+resolution_action_id 연결) / 반려(rejected, 대상 normal 유지) | #57 | ✅ |
 | 신고 접수 (#68) |
-| 17 | POST /api/stu/reports (중복 신고 409) | #68 | [ ] |
+| 17 | POST /api/stu/reports — 접수 + 중복 신고 409 | #68 | ✅ |
 | 제재 (#68 재구성) |
-| 18 | 삭제 누적 → 주의(+2)→경고(10pt)→정지(1주/1달)/영구 자동 전환 | #68 | [ ] |
-| 19 | GET /api/admin/sanctions/users, /{id} (태그/누적 수치) | #68 | [ ] |
-| 20 | POST /api/admin/sanctions/users/{id}/lift (수동 해제) | #68 | [ ] |
-| 21 | 회원별 신고내역 GET (sanction으로 이동한 API) | #68 | [ ] |
+| 18 | 삭제 5건 → 주의 10pt → 경고 1 → BAN_W1(7일 temporary) 자동 발동 (ban_log/users 캐시 확인) | #68 | ✅ |
+| 19 | GET /api/admin/sanctions/users, /{id} — tag/cautionRemainder/warningCount/reportDeletedCount | #68 | ✅ |
+| 20 | POST /api/admin/sanctions/users/{id}/lift — 해제(lifted_by 기록) 후 재로그인 성공 | #68 | ✅ |
+| 21 | GET /api/admin/sanctions/users/{id}/reports (이동된 회원별 신고내역) | #68 | ✅ |
 | 회원 관리 (#60 각색) |
-| 22 | GET /api/admin/members (검색/정렬/페이징/게시글·댓글수/정지기간) | #60 | [ ] |
-| 23 | PUT /api/admin/members/{id} (부분수정·중복검사·memberType/adminLevel) | #60 | [ ] |
-| 24 | POST /{id}/suspend, POST /ban (단일/다중) | #60 | [ ] |
+| 22 | GET /api/admin/members — 검색/게시글·댓글수/정지기간(banStartAt~banEndAt)/memberType/adminLevel | #60 | ✅ |
+| 23 | PUT /api/admin/members/{id} — 부분수정 성공, WIZARD·adminLevel=9 → 400 | #60 | ✅ |
+| 24 | suspend(과거일 400/성공/영구차단자 409), ban(다중·중복id 정리, 없는 id 404 전체실패), 학생 접근 403 | #60 | ✅ |
 | 일정 (#69) |
-| 25 | POST/PUT/DELETE /api/admin/schedules (category/description) | #69 | [ ] |
-| 26 | GET /api/public/schedules?from&to (월 단위 변환) | #69 | [ ] |
+| 25 | POST(201)/PUT/DELETE /api/admin/schedules — category/description 반영, 학생 403 | #69 | ✅ |
+| 26 | GET /api/public/schedules?from=YYYY-MM&to=YYYY-MM — 비로그인 조회 | #69 | ✅ |
+
+**전 항목 통과.** 발견·수정된 이슈: ①회원가입 memberType 무검증(권한상승) ②미인증 403 혼선 ③리네임 치환 손상(경로/필드) — 모두 수정 커밋 완료.
 
 ---
 
