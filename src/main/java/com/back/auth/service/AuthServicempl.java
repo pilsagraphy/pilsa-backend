@@ -163,8 +163,14 @@ public class AuthServicempl implements AuthService {
         user.setEmail(request.getEmail());
         user.setLoginId(request.getLoginId());
         user.setPasswordHash(encodedPw);
-        // 가입은 재학생 기본, 관리자는 별도 승격(admin_level)으로만 부여
-        user.setMemberType(request.getMemberType() != null ? request.getMemberType() : "STUDENT");
+        // 가입은 재학생 기본, 관리자는 별도 승격(admin_level)으로만 부여.
+        // memberType은 화이트리스트로만 허용 - 임의 문자열(예: "ADMIN")이 member_type에 저장되면
+        // JWT 필터의 "ROLE_" + memberType 변환으로 권한이 상승할 수 있어 반드시 차단한다.
+        String memberType = request.getMemberType() != null ? request.getMemberType() : "STUDENT";
+        if (!"STUDENT".equals(memberType) && !"ALUMNI".equals(memberType)) {
+            throw new AuthException("유효하지 않은 회원 구분입니다. (STUDENT/ALUMNI)", HttpStatus.BAD_REQUEST);
+        }
+        user.setMemberType(memberType);
         user.setAdminLevel(0);
         user.setIsDeleted(Boolean.FALSE);
 

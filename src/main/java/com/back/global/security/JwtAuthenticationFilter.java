@@ -97,8 +97,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 // member_type + admin_level → Security 권한으로 변환 (DB 최신값 기준)
                 List<SimpleGrantedAuthority> authorities = new ArrayList<>();
-                if (user.getMemberType() != null && !user.getMemberType().isBlank()) {
-                    // ROLE_STUDENT / ROLE_ALUMNI
+                // 알려진 member_type만 권한으로 매핑 (임의 문자열이 ROLE_로 승격되는 것 방지 - 이중 방어)
+                if ("STUDENT".equals(user.getMemberType()) || "ALUMNI".equals(user.getMemberType())) {
                     authorities.add(new SimpleGrantedAuthority("ROLE_" + user.getMemberType()));
                 }
                 if (user.getAdminLevel() != null && user.getAdminLevel() >= 1) {
