@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.admin.post.mapper.AdminPostMapper">
+
+    <!-- 공통 WHERE: deleted 제외 + 게시판 필터 + 제목/글쓴이 검색 -->
+    <sql id="listWhere">
+        WHERE p.state &lt;&gt; 'deleted'
+        <if test="boardId != null">
+            AND p.board_id = #{boardId}
+        </if>
+        <if test="keyword != null and keyword != ''">
+            AND (p.title LIKE CONCAT('%', #{keyword}, '%')
+                 OR u.name LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </sql>
+
+    <select id="findPosts" resultType="com.back.admin.post.dto.AdminPostListResponse">
+        SELECT
+            p.post_id AS postId,
+            p.board_id AS boardId,
+            b.code AS boardCode,
+            p.title,
+            u.name AS authorName,
+            (SELECT COUNT(*) FROM comments cm WHERE cm.post_id = p.post_id) AS commentCount,
+            (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.post_id) AS likeCount,
+            p.view_count AS viewCount,
+            p.created_at AS created,
+            p.state
+        FROM posts p
+        INNER JOIN users u ON p.user_id = u.user_id
+        INNER JOIN boards b ON p.board_id = b.board_id
+        <include refid="listWhere"/>
+        ORDER BY p.created_at DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countPosts" resultType="int">
+        SELECT COUNT(*)
+        FROM posts p
+        INNER JOIN users u ON p.user_id = u.user_id
+        <include refid="listWhere"/>
+    </select>
+
+    <!-- 상세: state 필터 없음 (블라인드/삭제 글도 관리자는 열람 가능) -->
+    <select id="findPostDetail" resultType="com.back.admin.post.dto.AdminPostDetailResponse">
+        SELECT
+            p.post_id      AS postId,
+            p.board_id     AS boardId,
+            b.code         AS boardCode,
+            c.name         AS categoryName,
+            p.title,
+            p.content,
+            p.user_id      AS authorId,
+            u.name         AS authorName,
+            p.is_anonymous AS isAnonymous,
+            p.is_pinned    AS isPinned,
+            p.view_count   AS viewCount,
+            (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.post_id) AS likeCount,
+            (SELECT COUNT(*) FROM comments cm WHERE cm.post_id = p.post_id) AS commentCount,
+            p.state,
+            p.created_at   AS created,
+            p.updated_at   AS updated
+        FROM posts p
+        INNER JOIN boards b ON p.board_id = b.board_id
+        INNER JOIN users  u ON p.user_id = u.user_id
+        LEFT  JOIN categories c ON p.category_id = c.category_id
+        WHERE p.post_id = #{postId}
+    </select>
+
+    <select id="findAttachments" resultType="com.back.admin.post.dto.AdminAttachmentResponse">
+        SELECT attachment_id AS attachmentId,
+               file_name     AS originName,
+               file_size     AS fileSize,
+               file_url      AS fileUrl
+        FROM attachments
+        WHERE post_id = #{postId}
+    </select>
+
+    <!-- 댓글: state 필터 없음 (블라인드/삭제 댓글까지 관리자에게 노출) -->
+    <select id="findComments" resultType="com.back.admin.post.dto.AdminCommentResponse">
+        SELECT c.comment_id   AS commentId,
+               c.content,
+               c.user_id      AS userId,
+               u.name         AS authorName,
+               c.is_anonymous AS isAnonymous,
+               c.is_private   AS isPrivate,
+               c.state,
+               c.created_at   AS created,
+               c.updated_at   AS updated
+        FROM comments c
+        INNER JOIN users u ON c.user_id = u.user_id
+        WHERE c.post_id = #{postId}
+        ORDER BY c.created_at ASC
+    </select>
+
+</mapper>
