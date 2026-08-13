@@ -1,10 +1,10 @@
-package com.back.sanction.service;
+package com.back.admin.sanction.service;
 
-import com.back.report.mapper.ReportMapper;
-import com.back.sanction.dto.SanctionedUserDetailResponse;
-import com.back.sanction.dto.SanctionedUserResponse;
-import com.back.sanction.exception.SanctionException;
-import com.back.sanction.mapper.SanctionMapper;
+import com.back.admin.sanction.dto.ReportedContentResponse;
+import com.back.admin.sanction.dto.SanctionedUserDetailResponse;
+import com.back.admin.sanction.dto.SanctionedUserResponse;
+import com.back.admin.sanction.exception.SanctionException;
+import com.back.admin.sanction.mapper.SanctionMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -18,7 +18,6 @@ import java.util.List;
 public class SanctionAdminService {
 
     private final SanctionMapper sanctionMapper;
-    private final ReportMapper reportMapper;
 
     private static final String DEFAULT_CAUTION_PER_WARNING = "10";
 
@@ -46,8 +45,13 @@ public class SanctionAdminService {
         detail.setBanStartedAt(base.getBanStartedAt());
         detail.setCautionRemainder(cautionSum % cautionPerWarning);
         detail.setWarningCount(sanctionMapper.countValidWarnings(userId));
-        detail.setReportDeletedCount(reportMapper.countResolvedDeletionsByUser(userId));
+        detail.setReportDeletedCount(sanctionMapper.countResolvedDeletionsByUser(userId));
         return detail;
+    }
+
+    // 특정 회원이 작성한 게시글/댓글이 받은 신고 내역 전체 (제재회원 관리 화면)
+    public List<ReportedContentResponse> getReportsByTargetAuthor(Long userId) {
+        return sanctionMapper.findReportsByTargetAuthor(userId);
     }
 
     // 관리자 수동 해제

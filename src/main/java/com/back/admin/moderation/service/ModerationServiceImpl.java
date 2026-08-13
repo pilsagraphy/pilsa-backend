@@ -4,6 +4,7 @@ import com.back.admin.moderation.dto.ModerationLogEntry;
 import com.back.admin.moderation.dto.ModerationState;
 import com.back.admin.moderation.exception.ModerationException;
 import com.back.admin.moderation.mapper.ModerationMapper;
+import com.back.admin.sanction.service.PenaltyEscalationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -18,6 +19,7 @@ public class ModerationServiceImpl implements ModerationService {
     public static final String TARGET_COMMENT = "comment";
 
     private final ModerationMapper moderationMapper;
+    private final PenaltyEscalationService penaltyEscalationService;
 
     @Override
     public void blind(String targetType, Long targetId, Long actorId, Long reasonId, String detail) {
@@ -26,16 +28,17 @@ public class ModerationServiceImpl implements ModerationService {
     }
 
     @Override
-    public void restore(String targetType, Long targetId, Long actorId) {
-        if (!changeState(targetType, targetId, ModerationState.NORMAL)) return; // 이미 normal이면 no-op
+    public Long restore(String targetType, Long targetId, Long actorId) {
+        if (!changeState(targetType, targetId, ModerationState.NORMAL)) return null; // 이미 normal이면 no-op
         // 복원은 사유 없음(reasonId=null). 조치 이력을 남기고 그 action_id 로 주의 포인트를 회수한다.
         ModerationLogEntry entry = writeLog(targetType, targetId, ModerationState.NORMAL, null, null, actorId);
         moderationMapper.voidPenaltiesByTarget(targetType, targetId, entry.getActionId());
+        return entry.getActionId();
     }
 
     @Override
-    public void softDelete(String targetType, Long targetId, Long actorId, Long reasonId, String detail) {
-        if (!changeState(targetType, targetId, ModerationState.DELETED)) return; // 이미 deleted면 no-op (벌점 중복 방지)
+    public Long softDelete(String targetType, Long targetId, Long actorId, Long reasonId, String detail) {
+        if (!changeState(targetType, targetId, ModerationState.DELETED)) return null; // 이미 deleted면 no-op (벌점 중복 방지)
         ModerationLogEntry entry = writeLog(targetType, targetId, ModerationState.DELETED, reasonId, detail, actorId);
 
         Long authorId = findAuthorId(targetType, targetId);
@@ -43,7 +46,11 @@ public class ModerationServiceImpl implements ModerationService {
             throw new ModerationException("작성자를 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
         }
         // 작성자에게 주의 포인트 적립 (+2, 시효는 policy_settings 기준)
+        // 부과 직전 유효 합계를 기억해 두고, 부과 후 경고/정지 전환 여부를 판정한다 (PR #68 제재 파이프라인)
+        int oldValidSum = penaltyEscalationService.currentValidCautionSum(authorId);
         moderationMapper.insertPenalty(authorId, targetType, targetId, entry.getActionId());
+        penaltyEscalationService.escalateAfterPenalty(authorId, oldValidSum);
+        return entry.getActionId();
     }
 
     @Override

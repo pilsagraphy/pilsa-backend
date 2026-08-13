@@ -1,9 +1,8 @@
-package com.back.sanction.mapper;
+package com.back.admin.sanction.mapper;
 
-import com.back.sanction.dto.BanPolicyDto;
-import com.back.sanction.dto.ModerationLogDto;
-import com.back.sanction.dto.PenaltyLogDto;
-import com.back.sanction.dto.SanctionedUserResponse;
+import com.back.admin.sanction.dto.BanPolicyDto;
+import com.back.admin.sanction.dto.ReportedContentResponse;
+import com.back.admin.sanction.dto.SanctionedUserResponse;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -12,12 +11,6 @@ import java.util.List;
 
 @Mapper
 public interface SanctionMapper {
-
-    // 조치 이력(append-only) 기록 - 삭제/복원 등. 생성된 actionId는 dto.actionId로 채워짐
-    void insertModerationLog(ModerationLogDto dto);
-
-    // 주의 포인트 원장 기록
-    void insertPenaltyLog(PenaltyLogDto dto);
 
     // 현재 유효한(회수되지 않고 만료되지 않은) 주의 포인트 합계
     int sumValidCautionPoints(@Param("userId") Long userId);
@@ -52,9 +45,15 @@ public interface SanctionMapper {
     // 특정 회원의 태그/제재 정보 단건 조회
     SanctionedUserResponse findSanctionedUserById(@Param("userId") Long userId);
 
-    // 활성 상태인 최신 ban_log 행을 해제 처리 (liftedBy가 null이면 시스템 자동 해제)
+    // 해당 회원의 열린(미해제) ban_log 행을 모두 해제 처리 (liftedBy가 null이면 시스템 자동/대체)
     void closeActiveBanLog(@Param("userId") Long userId, @Param("liftedBy") Long liftedBy);
 
     // 만료된 임시정지 대상 유저 ID 목록 (스케줄러용)
     List<Long> findExpiredTemporaryBanUserIds();
+
+    // 특정 회원이 작성한 게시글/댓글이 받은 신고 내역 전체 (제재회원 관리 화면)
+    List<ReportedContentResponse> findReportsByTargetAuthor(@Param("userId") Long userId);
+
+    // 신고가 수락(삭제 처리)된 건수 - 제재회원 현황 화면용
+    int countResolvedDeletionsByUser(@Param("userId") Long userId);
 }

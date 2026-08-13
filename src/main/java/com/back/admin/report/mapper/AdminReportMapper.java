@@ -44,9 +44,11 @@ public interface AdminReportMapper {
     );
 
     // 대상의 pending 신고를 일괄 상태변경 (rejected / resolved). active_flag 는 생성컬럼이라 자동 갱신
+    // resolutionActionId: 수락(삭제)로 종료된 경우 연결할 moderation_log 액션 (반려는 null)
     int updatePendingReportsStatus(
             @Param("targetType") String targetType,
             @Param("targetId") Long targetId,
-            @Param("status") String status
+            @Param("status") String status,
+            @Param("resolutionActionId") Long resolutionActionId
     );
 }

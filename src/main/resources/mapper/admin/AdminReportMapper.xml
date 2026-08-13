@@ -113,9 +113,12 @@
         LIMIT 1
     </select>
 
+    <!-- 처리 시각과(수락이면) 유발 조치를 함께 기록 - 제재회원 현황의 '신고 삭제처리 건수' 집계 근거 -->
     <update id="updatePendingReportsStatus">
         UPDATE reports_log
-        SET status = #{status}
+        SET status = #{status},
+            resolved_at = NOW(),
+            resolution_action_id = #{resolutionActionId}
         WHERE target_type = #{targetType}
           AND target_id = #{targetId}
           AND status = 'pending'

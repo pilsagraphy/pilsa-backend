@@ -1,4 +1,4 @@
-package com.back.sanction.dto;
+package com.back.admin.sanction.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

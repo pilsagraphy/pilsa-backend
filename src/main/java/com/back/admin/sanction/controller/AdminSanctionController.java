@@ -1,9 +1,10 @@
-package com.back.sanction.controller;
+package com.back.admin.sanction.controller;
 
-import com.back.sanction.dto.SanctionResponse;
-import com.back.sanction.dto.SanctionedUserDetailResponse;
-import com.back.sanction.dto.SanctionedUserResponse;
-import com.back.sanction.service.SanctionAdminService;
+import com.back.admin.sanction.dto.ReportedContentResponse;
+import com.back.admin.sanction.dto.SanctionResponse;
+import com.back.admin.sanction.dto.SanctionedUserDetailResponse;
+import com.back.admin.sanction.dto.SanctionedUserResponse;
+import com.back.admin.sanction.service.SanctionAdminService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -31,6 +32,13 @@ public class AdminSanctionController {
     public ResponseEntity<SanctionedUserDetailResponse> getSanctionedUserDetail(@PathVariable Long userId) {
         log.info("제재 회원 현황 조회 요청 - userId: {}", userId);
         return ResponseEntity.ok(sanctionAdminService.getSanctionedUserDetail(userId));
+    }
+
+    // 특정 회원이 받은 신고 내역 전체 (제재회원 관리 화면3) - report 패키지에서 이동 (PM 피드백)
+    @GetMapping("/api/admin/sanctions/users/{userId}/reports")
+    public ResponseEntity<List<ReportedContentResponse>> getReportsByTargetAuthor(@PathVariable Long userId) {
+        log.info("회원별 신고 내역 조회 요청 - userId: {}", userId);
+        return ResponseEntity.ok(sanctionAdminService.getReportsByTargetAuthor(userId));
     }
 
     // 관리자 수동 제재 해제

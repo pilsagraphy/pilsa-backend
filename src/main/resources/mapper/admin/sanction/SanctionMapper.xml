@@ -1,16 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.back.sanction.mapper.SanctionMapper">
-
-    <insert id="insertModerationLog" useGeneratedKeys="true" keyProperty="actionId">
-        INSERT INTO moderation_log (target_type, target_id, applied_state, reason_id, detail, acted_by, created_at)
-        VALUES (#{targetType}, #{targetId}, #{appliedState}, #{reasonId}, #{detail}, #{actedBy}, NOW())
-    </insert>
-
-    <insert id="insertPenaltyLog">
-        INSERT INTO penalty_log (user_id, points, target_type, target_id, source_action_id, created_at, expires_at)
-        VALUES (#{userId}, #{points}, #{targetType}, #{targetId}, #{sourceActionId}, NOW(), #{expiresAt})
-    </insert>
+<mapper namespace="com.back.admin.sanction.mapper.SanctionMapper">
 
     <select id="sumValidCautionPoints" resultType="int">
         SELECT COALESCE(SUM(points), 0)
@@ -32,7 +22,7 @@
           AND expires_at > NOW()
     </select>
 
-    <select id="findBanPolicyByWarningNo" resultType="com.back.sanction.dto.BanPolicyDto">
+    <select id="findBanPolicyByWarningNo" resultType="com.back.admin.sanction.dto.BanPolicyDto">
         SELECT ban_policy_id AS banPolicyId,
                code,
                warning_no    AS warningNo,
@@ -62,7 +52,7 @@
     </select>
 
     <!-- 회원 태그: 차단 > 정지 > 주의(주의 포인트만 있고 정지/차단이 아님) 우선순위로 판정 -->
-    <select id="findSanctionedUsers" resultType="com.back.sanction.dto.SanctionedUserResponse">
+    <select id="findSanctionedUsers" resultType="com.back.admin.sanction.dto.SanctionedUserResponse">
         SELECT u.user_id      AS userId,
                u.login_id     AS loginId,
                u.name,
@@ -88,7 +78,7 @@
         ORDER BY u.user_id DESC
     </select>
 
-    <select id="findSanctionedUserById" resultType="com.back.sanction.dto.SanctionedUserResponse">
+    <select id="findSanctionedUserById" resultType="com.back.admin.sanction.dto.SanctionedUserResponse">
         SELECT u.user_id      AS userId,
                u.login_id     AS loginId,
                u.name,
@@ -111,18 +101,14 @@
         WHERE u.user_id = #{userId}
     </select>
 
-    <!-- MySQL은 UPDATE 대상 테이블을 서브쿼리 FROM에서 직접 참조할 수 없어 파생 테이블로 한 번 감쌈 -->
+    <!-- 해당 회원의 열린(미해제) 차단 이력을 전부 닫는다.
+         활성 행이 여러 개 쌓인 비정상 상태도 함께 정리되도록 LIMIT 없이 일괄 처리 (자기치유) -->
     <update id="closeActiveBanLog">
         UPDATE ban_log
         SET lifted_at = NOW(),
             lifted_by = #{liftedBy}
-        WHERE ban_id = (
-            SELECT ban_id FROM (
-                SELECT ban_id FROM ban_log
-                WHERE user_id = #{userId} AND lifted_at IS NULL
-                ORDER BY created_at DESC LIMIT 1
-            ) AS latest_active_ban
-        )
+        WHERE user_id = #{userId}
+          AND lifted_at IS NULL
     </update>
 
     <select id="findExpiredTemporaryBanUserIds" resultType="long">
@@ -130,6 +116,42 @@
         FROM users
         WHERE ban_status = 'temporary'
           AND banned_until &lt;= NOW()
+    </select>
+
+    <!-- ===== 제재회원 관리 화면: 회원별 신고 내역 (report 패키지에서 이동, PM 피드백 4·5) ===== -->
+
+    <select id="findReportsByTargetAuthor" resultType="com.back.admin.sanction.dto.ReportedContentResponse">
+        SELECT
+            r.report_id                                            AS reportId,
+            r.target_type                                          AS targetType,
+            r.target_id                                            AS targetId,
+            CASE WHEN r.target_type = 'post' THEN pb.post_id ELSE c.post_id END AS postId,
+            bd.board_id                                            AS boardId,
+            bd.code                                                AS boardCode,
+            r.reason_id                                            AS reasonId,
+            rs.label                                               AS reasonLabel,
+            r.detail,
+            r.status,
+            r.active_flag                                          AS activeFlag,
+            r.created_at                                           AS createdAt,
+            r.resolved_at                                          AS resolvedAt
+        FROM reports_log r
+        LEFT JOIN posts pb ON r.target_type = 'post' AND r.target_id = pb.post_id
+        LEFT JOIN comments c ON r.target_type = 'comment' AND r.target_id = c.comment_id
+        LEFT JOIN posts cp ON r.target_type = 'comment' AND c.post_id = cp.post_id
+        LEFT JOIN boards bd ON bd.board_id = COALESCE(pb.board_id, cp.board_id)
+        LEFT JOIN reasons rs ON r.reason_id = rs.reason_id
+        WHERE COALESCE(pb.user_id, c.user_id) = #{userId}
+        ORDER BY r.created_at DESC
+    </select>
+
+    <select id="countResolvedDeletionsByUser" resultType="int">
+        SELECT COUNT(*)
+        FROM reports_log r
+        LEFT JOIN posts pb ON r.target_type = 'post' AND r.target_id = pb.post_id
+        LEFT JOIN comments c ON r.target_type = 'comment' AND r.target_id = c.comment_id
+        WHERE COALESCE(pb.user_id, c.user_id) = #{userId}
+          AND r.resolution_action_id IS NOT NULL
     </select>
 
 </mapper>

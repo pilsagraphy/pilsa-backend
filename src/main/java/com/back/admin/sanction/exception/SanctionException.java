@@ -1,4 +1,4 @@
-package com.back.sanction.exception;
+package com.back.admin.sanction.exception;
 
 import com.back.global.exception.BaseException;
 import org.springframework.http.HttpStatus;

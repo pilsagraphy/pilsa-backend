@@ -26,14 +26,16 @@ public class ReportBulkExecutor {
         if (!ModerationState.DELETED.dbValue().equals(moderationService.currentState(targetType, targetId))) {
             moderationService.restore(targetType, targetId, adminId);
         }
-        adminReportMapper.updatePendingReportsStatus(targetType, targetId, ReportStatus.REJECTED.dbValue());
+        // 반려는 삭제 조치가 아니므로 resolution_action_id 없이 종료
+        adminReportMapper.updatePendingReportsStatus(targetType, targetId, ReportStatus.REJECTED.dbValue(), null);
     }
 
     // 삭제: 소프트 삭제(주의 +2) + 신고 resolved. 사유는 대표(최신) 신고 사유 사용
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void deleteItem(String targetType, Long targetId, Long adminId) {
         Long reasonId = adminReportMapper.findLatestReasonId(targetType, targetId);
-        moderationService.softDelete(targetType, targetId, adminId, reasonId, null);
-        adminReportMapper.updatePendingReportsStatus(targetType, targetId, ReportStatus.RESOLVED.dbValue());
+        // actionId: 이번 호출로 실제 삭제됐으면 그 조치 id, 이미 삭제 상태였다면 null (신고만 종료)
+        Long actionId = moderationService.softDelete(targetType, targetId, adminId, reasonId, null);
+        adminReportMapper.updatePendingReportsStatus(targetType, targetId, ReportStatus.RESOLVED.dbValue(), actionId);
     }
 }

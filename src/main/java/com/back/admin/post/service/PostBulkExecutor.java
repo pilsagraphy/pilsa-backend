@@ -22,9 +22,9 @@ public class PostBulkExecutor {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void deletePost(Long postId, Long adminId, Long reasonId, String detail) {
-        moderationService.softDelete(TARGET_POST, postId, adminId, reasonId, detail);
+        Long actionId = moderationService.softDelete(TARGET_POST, postId, adminId, reasonId, detail);
         // 삭제 시 해당 게시글의 미처리(pending) 신고도 함께 종료 (게시글 관리 ↔ 신고 관리 상태 일치).
         // 신고가 없으면 0건 갱신되어 무해.
-        adminReportMapper.updatePendingReportsStatus(TARGET_POST, postId, ReportStatus.RESOLVED.dbValue());
+        adminReportMapper.updatePendingReportsStatus(TARGET_POST, postId, ReportStatus.RESOLVED.dbValue(), actionId);
     }
 }
