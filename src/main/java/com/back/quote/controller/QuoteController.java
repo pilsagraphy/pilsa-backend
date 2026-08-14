@@ -47,7 +47,7 @@ public class QuoteController {
     }
 
     // 5. 랜덤 문장 조회 (GET) - 200 OK (새로고침마다 랜덤 노출되는 공개 API)
-    @GetMapping("/api/public/quotes/random")
+    @GetMapping("/api/quotes/current")
     public ResponseEntity<QuoteDataResponse> getRandomQuote() {
         log.info("랜덤 문장 조회 요청");
         return ResponseEntity.ok(quoteService.getRandomQuote());

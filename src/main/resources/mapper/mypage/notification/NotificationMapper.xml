@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.back.notification.mapper.NotificationMapper">
+<mapper namespace="com.back.mypage.notification.mapper.NotificationMapper">
 
     <insert id="insertNotification">
         INSERT INTO notifications (user_id, type, title, message, link_url, target_type, target_id, created_at)
@@ -15,7 +15,7 @@
         </if>
     </sql>
 
-    <select id="findByUser" resultType="com.back.notification.dto.NotificationResponse">
+    <select id="findByUser" resultType="com.back.mypage.notification.dto.NotificationResponse">
         SELECT notification_id AS notificationId,
                type,
                title,

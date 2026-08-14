@@ -6,6 +6,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -35,6 +37,15 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleBaseException(BaseException e) {
         log.debug("BaseException handled: {}", e.getMessage());
         return ResponseEntity.status(e.getStatus()).body(Map.of("message", e.getMessage()));
+    }
+
+    // 존재하지 않는 경로/정적 리소스는 404로 응답한다.
+    // (catch-all 핸들러가 이걸 먼저 잡으면 오타난 URL이 500으로 나가 원인 파악이 어려워진다)
+    @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
+    public ResponseEntity<Map<String, Object>> handleNotFound(Exception e) {
+        log.debug("매핑되지 않은 요청: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("message", "요청하신 경로를 찾을 수 없습니다."));
     }
 
     // 미처리 예외는 내부 메시지를 노출하지 않는다 (스택은 서버 로그로만)

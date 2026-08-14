@@ -1,6 +1,6 @@
-package com.back.notification.mapper;
+package com.back.mypage.notification.mapper;
 
-import com.back.notification.dto.NotificationResponse;
+import com.back.mypage.notification.dto.NotificationResponse;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 

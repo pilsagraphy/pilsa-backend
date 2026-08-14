@@ -16,7 +16,7 @@ public class MailController {
     private final MailService mailService;
 
     // 1. 인증번호 발송
-    @PostMapping("/verifycode") // 클라이언트가 이 경로로 POST보내면 메서드 실행
+    @PostMapping("/verification-code") // 클라이언트가 이 경로로 POST보내면 메서드 실행
     public ResponseEntity<Long> sendVerifyCode(@RequestBody EmailRequest request) {
         if (request.getEmail() == null || request.getEmail().isEmpty()) {
             log.warn("인증번호 발송 실패 - 이메일이 입력되지 않음");
@@ -37,7 +37,7 @@ public class MailController {
     }
 
     // 2. 인증번호 검사
-    @PostMapping("/verifycode/verify")
+    @PostMapping("/verification-code/verify")
     public ResponseEntity<Boolean> verifyCode(@RequestBody VerifyRequest request) {
         if (request.getEmail() == null || request.getEmail().isEmpty() ||
                 request.getCode() == null || request.getCode().isEmpty()) {

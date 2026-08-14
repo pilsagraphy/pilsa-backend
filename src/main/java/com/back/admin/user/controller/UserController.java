@@ -25,7 +25,7 @@ public class UserController {
     private final UserService userService;
 
     // 회원 전체 목록 조회 (검색, 정렬, 페이지네이션) - 관리자 전용
-    @GetMapping("/api/admin/members")
+    @GetMapping("/api/admin/users")
     public ResponseEntity<UserPageResponse> getUsers(
             @RequestParam(value = "page", defaultValue = "1") int page,
             @RequestParam(value = "size", defaultValue = "10") int size,
@@ -38,7 +38,7 @@ public class UserController {
     }
 
     // 회원 정보 수정 (이름/전화/학번/이메일 + 재학상태/권한) - 관리자 전용
-    @PutMapping("/api/admin/members/{userId}")
+    @PutMapping("/api/admin/users/{userId}")
     public ResponseEntity<UserResponse> updateUser(
             @PathVariable Long userId,
             @RequestBody UserUpdateRequest request) {
@@ -47,7 +47,7 @@ public class UserController {
     }
 
     // 회원 정지 (temporary) - 단일 회원, 종료일까지 - 관리자 전용
-    @PostMapping("/api/admin/members/{userId}/suspend")
+    @PostMapping("/api/admin/users/{userId}/suspend")
     public ResponseEntity<UserResponse> suspendUser(
             @PathVariable Long userId,
             @RequestBody UserSuspendRequest request) {
@@ -56,7 +56,7 @@ public class UserController {
     }
 
     // 회원 영구차단 (permanent) - 단일/다중 회원 - 관리자 전용
-    @PostMapping("/api/admin/members/ban")
+    @PostMapping("/api/admin/users/ban")
     public ResponseEntity<UserResponse> banUsers(@RequestBody UserBanRequest request) {
         log.info("회원 영구차단 요청 - 데이터: {}", request);
         return ResponseEntity.ok(userService.banUsers(request));

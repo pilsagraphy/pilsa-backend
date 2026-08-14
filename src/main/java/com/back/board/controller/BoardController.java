@@ -14,24 +14,26 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
- * 게시판(공지/자유/정보) 통합 컨트롤러.
- * boardId 로 게시판을 구분한다. (1=공지사항, 2=자유게시판, 3=정보게시판)
- * 예) GET /api/stu/2/posts → 자유게시판 전체 조회
+ * 게시판 통합 컨트롤러.
+ *
+ * 경로에 신분(stu/alu)을 두지 않는다 — 게시판 접근 권한은 boards.read_scope / write_level
+ * 데이터로 판정하며, 관리자가 런타임에 만든 게시판도 같은 경로로 동작한다.
+ * 예) GET /api/boards/2/posts → 자유게시판 전체 조회
  */
 @Slf4j
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/stu/{boardId}")
-@Tag(name = "게시판 (공지/자유/정보)", description = "재학생 게시판 통합 API. boardId 로 게시판 구분 → 1=공지사항, 2=자유게시판, 3=정보게시판")
+@RequestMapping("/api/boards/{boardId}")
+@Tag(name = "게시판", description = "게시판 통합 API. boardId 로 게시판 구분(기본: 1=공지사항, 2=자유게시판, 3=정보게시판). 관리자가 추가한 게시판도 동일 경로 사용")
 public class BoardController {
 
     private final BoardService boardService;
 
     // boardId 경로변수 공통 설명 (모든 엔드포인트에서 재사용)
-    private static final String BOARD_ID_DESC = "게시판 ID (1=공지사항, 2=자유게시판, 3=정보게시판)";
+    private static final String BOARD_ID_DESC = "게시판 ID (기본 1=공지사항, 2=자유게시판, 3=정보게시판. /api/boards 로 목록 조회)";
 
     @Operation(summary = "카테고리 목록 조회",
-            description = "게시판의 카테고리 목록을 조회합니다. 공지사항(boardId=1)은 카테고리가 없어 빈 목록이 반환됩니다.")
+            description = "게시판의 카테고리 목록을 조회합니다. 카테고리를 쓰지 않는 게시판은 빈 목록이 반환됩니다.")
     @GetMapping("/categories")
     public ResponseEntity<List<CategoryResponse>> getCategories(
             @Parameter(description = BOARD_ID_DESC, example = "2") @PathVariable Long boardId) {
@@ -41,8 +43,8 @@ public class BoardController {
     }
 
     @Operation(summary = "상단 5개 조회",
-            description = "메인 화면용 상단 5개 글을 조회합니다. 공지사항은 중요표시(is_pinned) 글이 우선 정렬됩니다.")
-    @GetMapping("/top5")
+            description = "메인 화면용 상단 5개 글을 조회합니다. 중요표시(is_pinned) 글이 우선 정렬됩니다.")
+    @GetMapping("/posts/top5")
     public ResponseEntity<List<BoardTop5Response>> getTop5Posts(
             @Parameter(description = BOARD_ID_DESC, example = "1") @PathVariable Long boardId) {
         log.info("메인 화면용 상단 5개 조회 요청 - boardId: {}", boardId);

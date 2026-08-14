@@ -1,6 +1,7 @@
 package com.back.board.service;
 
 import com.back.board.dto.BoardPolicy;
+import com.back.board.dto.BoardSummaryResponse;
 import com.back.board.exception.BoardException;
 import com.back.board.mapper.BoardMapper;
 import com.back.global.security.AuthUtils;
@@ -8,6 +9,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 게시판 정책 조회 + 접근 권한 판정.
@@ -21,6 +25,34 @@ import org.springframework.transaction.annotation.Transactional;
 public class BoardPolicyService {
 
     private final BoardMapper boardMapper;
+
+    /**
+     * 현재 사용자가 열람 가능한 게시판 목록 (네비게이션용).
+     * 게시판이 데이터가 되었으므로 프론트가 메뉴를 하드코딩할 수 없어 이 API가 필요하다.
+     */
+    public List<BoardSummaryResponse> getReadableBoards() {
+        String memberType = AuthUtils.memberType();
+        int adminLevel = AuthUtils.adminLevel();
+
+        List<BoardSummaryResponse> result = new ArrayList<>();
+        for (BoardPolicy policy : boardMapper.findBoardPolicies()) {
+            if (!policy.canRead(memberType, adminLevel)) {
+                continue;
+            }
+            BoardSummaryResponse summary = new BoardSummaryResponse();
+            summary.setBoardId(policy.getBoardId());
+            summary.setName(policy.getName());
+            summary.setDisplayOrder(policy.getDisplayOrder());
+            summary.setCanWrite(policy.canWrite(memberType, adminLevel));
+            summary.setAllowComment(policy.getAllowComment());
+            summary.setAllowAttachment(policy.getAllowAttachment());
+            summary.setCategoryMode(policy.getCategoryMode());
+            summary.setAllowAnonymous(policy.getAllowAnonymous());
+            summary.setAllowPrivateComment(policy.getAllowPrivateComment());
+            result.add(summary);
+        }
+        return result;
+    }
 
     // 게시판 조회 (삭제된 게시판은 없는 것으로 취급)
     public BoardPolicy get(Long boardId) {

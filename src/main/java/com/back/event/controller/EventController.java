@@ -16,7 +16,7 @@ public class EventController {
     private final EventService eventService;
 
     // 1. 일정 등록 (POST) - 201 Created (명세서 기준)
-    @PostMapping("/api/admin/schedules")
+    @PostMapping("/api/admin/events")
     public ResponseEntity<EventResponse> createEvent(@RequestBody EventRequest request) {
         log.info("일정 등록 요청 데이터: {}", request);
         // 성공 시 201 상태코드와 함께 생성된 정보 및 메시지 반환
@@ -25,7 +25,7 @@ public class EventController {
     }
 
     // 2. 일정 수정 (PUT) - 200 OK
-    @PutMapping("/api/admin/schedules/{scheduleId}")
+    @PutMapping("/api/admin/events/{scheduleId}")
     public ResponseEntity<EventResponse> updateEvent(
             @PathVariable Long scheduleId,
             @RequestBody EventUpdateRequest request) {
@@ -34,14 +34,14 @@ public class EventController {
     }
 
     // 3. 일정 삭제 (DELETE) - 200 OK
-    @DeleteMapping("/api/admin/schedules/{scheduleId}")
+    @DeleteMapping("/api/admin/events/{scheduleId}")
     public ResponseEntity<EventResponse> deleteEvent(@PathVariable Long scheduleId) {
         log.info("일정 삭제 요청 - ID: {}", scheduleId);
         return ResponseEntity.ok(eventService.deleteEvent(scheduleId));
     }
 
     // 4. 일정 목록 조회 (GET) - 200 OK
-    @GetMapping("/api/public/schedules")
+    @GetMapping("/api/events")
     public ResponseEntity<EventPageResponse> getEvents(
             @RequestParam("from") String from,
             @RequestParam("to") String to) {

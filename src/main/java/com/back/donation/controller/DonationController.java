@@ -15,13 +15,13 @@ import java.util.List;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/public/honor")
+@RequestMapping("/api/donations")
 @RequiredArgsConstructor
 public class DonationController {
 
     private final DonationService DonationService;
 
-    @GetMapping("/")
+    @GetMapping
     public ResponseEntity<List<DonationResponse>> getAllDonations() {
         log.info("명예의 전당 목록 조회 요청 시작");
 

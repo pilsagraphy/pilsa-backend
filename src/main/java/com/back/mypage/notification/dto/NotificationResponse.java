@@ -1,4 +1,4 @@
-package com.back.notification.dto;
+package com.back.mypage.notification.dto;
 
 import lombok.Getter;
 import lombok.Setter;

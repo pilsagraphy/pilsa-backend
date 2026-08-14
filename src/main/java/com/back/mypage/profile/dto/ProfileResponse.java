@@ -1,4 +1,4 @@
-package com.back.global.role.dto;
+package com.back.mypage.profile.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -9,7 +9,7 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class RoleResponse {
+public class ProfileResponse {
   private String memberType;   // STUDENT / ALUMNI
   private Integer adminLevel;   // 0=일반, 1~3=관리자
 }

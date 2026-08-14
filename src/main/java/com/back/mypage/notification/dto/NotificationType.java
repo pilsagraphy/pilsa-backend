@@ -1,4 +1,4 @@
-package com.back.notification.dto;
+package com.back.mypage.notification.dto;
 
 // 알림 유형. DB(notifications.type)에는 이 이름 그대로 저장된다.
 public enum NotificationType {

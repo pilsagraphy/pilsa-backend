@@ -18,7 +18,7 @@ com.back
 ├── auth            # 로그인/회원가입/토큰 (AuthServicempl — 오타지만 유지)
 ├── board           # 게시판 (posts/comments/boards). 게시판은 데이터로 정의됨
 ├── report          # 신고 — 접수(ReportService)와 처리(ReportAdminService)가 한 도메인
-├── notification    # 알림 (notifications) — 헤더 종 아이콘
+├── mypage          # 마이페이지 — profile(내 신분·권한), notification(헤더 종 아이콘)
 ├── event           # 일정 (events)
 ├── quote           # 이 주의 문장 (quotes)
 ├── donation        # 명예의전당 (donations)
@@ -38,6 +38,9 @@ com.back
 ### 권한은 URL이 아니라 **데이터**로 판정한다
 - 사용자 2축: `users.member_type`(STUDENT/ALUMNI) + `users.admin_level`(0=일반, 1~3=관리자).
   JWT 필터가 매 요청 DB 최신값으로 `ROLE_STUDENT|ROLE_ALUMNI`, `ROLE_ADMIN`, `ADMIN_LV_{n}` 부여.
+- **URL에 신분(stu/alu) 접두사를 쓰지 않는다.** 게시판은 `/api/boards/{boardId}/**`,
+  내 정보는 `/api/mypage/**`, 공개 리소스는 `/api/donations`·`/api/quotes/current`·`/api/events`.
+  전체 매핑표는 `docs/integration-20260814/API-MIGRATION.md`.
 - SecurityConfig는 `/api/admin/**`=ADMIN, 그 외 회원 API는 **로그인 여부만** 확인.
   신분별 접근은 각 도메인이 `AuthUtils`(global.security)로 판정한다. 신분을 URL 접두사로 가르지 않는다 —
   관리자가 런타임에 만든 게시판의 열람 대상을 정적 URL로 표현할 수 없기 때문.

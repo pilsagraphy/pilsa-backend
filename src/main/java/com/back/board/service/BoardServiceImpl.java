@@ -5,7 +5,7 @@ import com.back.board.exception.BoardException;
 import com.back.board.mapper.BoardMapper;
 import com.back.global.security.AuthUtils;
 import com.back.global.util.FileStorageUtil;
-import com.back.notification.service.NotificationService;
+import com.back.mypage.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -83,7 +83,7 @@ public class BoardServiceImpl implements BoardService {
         }
 
         // 이전글/다음글 API 경로 가공
-        String baseApi = "/api/stu/" + boardId + "/posts/";
+        String baseApi = "/api/boards/" + boardId + "/posts/";
         if (detail.getPrevPostApi() != null) detail.setPrevPostApi(baseApi + detail.getPrevPostApi());
         if (detail.getNextPostApi() != null) detail.setNextPostApi(baseApi + detail.getNextPostApi());
 
@@ -288,7 +288,7 @@ public class BoardServiceImpl implements BoardService {
     private void notifyComment(Long boardId, Long postId, Long parentCommentId, Long actorId) {
         try {
             Long postAuthorId = boardMapper.findAuthorIdByPostId(postId);
-            String link = "/api/stu/" + boardId + "/posts/" + postId;
+            String link = "/api/boards/" + boardId + "/posts/" + postId;
 
             if (parentCommentId != null) {
                 Long parentAuthorId = boardMapper.findCommentAuthorId(parentCommentId);

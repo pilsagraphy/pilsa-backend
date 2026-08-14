@@ -1,7 +1,7 @@
-package com.back.global.role.service;
+package com.back.mypage.profile.service;
 
-import com.back.global.role.dto.RoleResponse;
-import com.back.global.role.mapper.RoleMapper;
+import com.back.mypage.profile.dto.ProfileResponse;
+import com.back.mypage.profile.mapper.ProfileMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import com.back.global.security.AuthUtils;
@@ -12,15 +12,15 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class RoleServiceImpl implements RoleService {
+public class ProfileServiceImpl implements ProfileService {
   
-  private final RoleMapper roleMapper;
+  private final ProfileMapper profileMapper;
   
   @Override
-  public RoleResponse getCurrentUserRole() {
+  public ProfileResponse getCurrentUserRole() {
     Long userId = AuthUtils.currentUserId();
     
-    RoleResponse info = roleMapper.findMemberInfoByUserId(userId);
+    ProfileResponse info = profileMapper.findMemberInfoByUserId(userId);
     if (info == null) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자 정보를 찾을 수 없습니다.");
     }

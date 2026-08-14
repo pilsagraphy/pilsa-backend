@@ -1,9 +1,9 @@
-package com.back.notification.service;
+package com.back.mypage.notification.service;
 
-import com.back.notification.dto.NotificationPageResponse;
-import com.back.notification.dto.NotificationResponse;
-import com.back.notification.dto.NotificationType;
-import com.back.notification.mapper.NotificationMapper;
+import com.back.mypage.notification.dto.NotificationPageResponse;
+import com.back.mypage.notification.dto.NotificationResponse;
+import com.back.mypage.notification.dto.NotificationType;
+import com.back.mypage.notification.mapper.NotificationMapper;
 import com.back.global.security.AuthUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

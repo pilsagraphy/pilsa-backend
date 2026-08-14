@@ -1,7 +1,7 @@
-package com.back.notification.controller;
+package com.back.mypage.notification.controller;
 
-import com.back.notification.dto.NotificationPageResponse;
-import com.back.notification.service.NotificationService;
+import com.back.mypage.notification.dto.NotificationPageResponse;
+import com.back.mypage.notification.service.NotificationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -14,7 +14,7 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/notifications")
+@RequestMapping("/api/mypage/notifications")
 @Tag(name = "알림", description = "헤더 종 아이콘. 로그인 회원 공통 기능(신분·관리자 여부 무관)")
 public class NotificationController {
 
