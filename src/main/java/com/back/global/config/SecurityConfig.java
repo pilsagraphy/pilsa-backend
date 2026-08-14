@@ -37,24 +37,49 @@ public class SecurityConfig {
                 // 누구나 접근
                 .requestMatchers(
                     "/api/auth/**",
-                    "/api/public/**",
+                    // 비로그인 공개 리소스 (기존 /api/public/** 접두사 폐지 → 리소스 경로로 명시)
+                    "/api/donations",        // 명예의전당
+                    "/api/quotes/current",   // 이 주의 문장
+                    "/api/events",           // 일정(캘린더) 조회
                     "/api/mail/**", // 인증번호 관련
                     "/swagger-ui/**", // 스웨거 관련
                     "/v3/api-docs/**", // 스웨거 관련
                     "/uploads/**" // 파일 경로
                 ).permitAll()
                 
-                // 역할별 접근
+                // 관리자 화면 전용 경로만 URL 레벨에서 막는다 (admin_level>=1 → ROLE_ADMIN)
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                .requestMatchers("/api/stu/**").hasAnyRole("STUDENTS", "ADMIN", "ALUMNI") // ALUMNI는 임시!
-                .requestMatchers("/api/alu/**").hasAnyRole("ALUMNI", "ADMIN")
-                
+
+                // 그 외 회원 기능(게시판 쓰기, /api/reports, /api/mypage/** ...)은
+                // "로그인 여부"만 URL에서 확인하고, 실제 접근 가능 여부는 데이터로 판정한다.
+                //  - 게시판: boards.read_scope(열람 대상) / boards.write_level(작성 최소 관리레벨)
+                //  - 그 외 : 각 서비스가 AuthUtils 로 신분·관리레벨을 확인
+                // 신분(재학생/졸업생)을 URL 접두사로 가르지 않는 이유: 관리자가 런타임에 만든 게시판의
+                // 열람 대상을 정적 URL 패턴으로는 표현할 수 없기 때문이다.
+
                 // 그 외는 로그인 필요
                 .anyRequest().authenticated()
             )
+            // 미인증(토큰 누락/무효)과 권한 부족을 구분해서 응답
+            //  - 기본 EntryPoint는 미인증도 403으로 떨어져서 "로그인했는데 왜 403?" 혼선을 유발
+            //    (특히 multipart 게시글 등록에서 Authorization 헤더가 빠질 때) → 401로 명확히 구분
+            // 에러 응답은 항상 {"message": ...} JSON — sendError는 기본 설정에서 메시지가 본문에 실리지 않아 계약 위반
+            .exceptionHandling(ex -> ex
+                .authenticationEntryPoint((request, response, authException) -> {
+                    response.setHeader("WWW-Authenticate", "Bearer");
+                    response.setStatus(jakarta.servlet.http.HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setContentType("application/json;charset=UTF-8");
+                    response.getWriter().write("{\"message\":\"인증이 필요합니다. (Authorization 헤더 누락 또는 유효하지 않은 토큰)\"}");
+                })
+                .accessDeniedHandler((request, response, accessDeniedException) -> {
+                    response.setStatus(jakarta.servlet.http.HttpServletResponse.SC_FORBIDDEN);
+                    response.setContentType("application/json;charset=UTF-8");
+                    response.getWriter().write("{\"message\":\"접근 권한이 없습니다.\"}");
+                })
+            )
             // 필터 입히기
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
-        
+
         return http.build();
     }
     

@@ -11,5 +11,5 @@ public class SignupRequest {
     private String email;
     private String loginId;
     private String password;
-    private String role;
+    private String memberType;   // 회원 구분: STUDENT / ALUMNI (미지정 시 서비스에서 STUDENT 기본)
 }

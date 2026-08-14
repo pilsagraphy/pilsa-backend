@@ -3,6 +3,7 @@ package com.back.auth.service;
 import com.back.auth.dto.*;
 import com.back.auth.mapper.AuthMapper;
 import com.back.auth.exception.AuthException;
+import com.back.auth.exception.BannedException;
 import com.back.global.security.JwtUtil;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
@@ -21,6 +22,7 @@ import com.back.auth.dto.FindIdVerifyRequest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 
+import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -50,6 +52,20 @@ public class AuthServicempl implements AuthService {
         response.addCookie(cookie);
     }
 
+    // 정지/영구차단 계정 로그인 차단 (만료된 임시정지는 통과 - 스케줄러가 캐시를 정리하기 전이라도 로그인 허용)
+    // 프론트가 "2026.03.30 00:00 부터 다시 로그인 할 수 있습니다" 화면을 그릴 수 있도록
+    // 메시지 문자열이 아니라 banType/bannedUntil 필드로 내려준다.
+    private void checkNotBanned(UserDto user) {
+        if ("permanent".equals(user.getBanStatus())) {
+            throw new BannedException("영구적으로 차단된 계정입니다.", "permanent", null);
+        }
+        if ("temporary".equals(user.getBanStatus())
+                && user.getBannedUntil() != null
+                && user.getBannedUntil().isAfter(LocalDateTime.now())) {
+            throw new BannedException("정지된 계정입니다.", "temporary", user.getBannedUntil());
+        }
+    }
+
     // 로그인(소셜로그인은 후순위)
     public AuthResponse login(LoginRequest request,
                               HttpServletRequest httpRequest,
@@ -67,6 +83,9 @@ public class AuthServicempl implements AuthService {
             throw new AuthException("승인되지 않은 계정입니다.", HttpStatus.UNAUTHORIZED);
         }
 
+        // 정지/영구차단 계정 로그인 차단
+        checkNotBanned(user);
+
         String accessToken = jwtUtil.generateAccessToken(user);
         String refreshToken = jwtUtil.generateRefreshToken(user);
 
@@ -79,7 +98,7 @@ public class AuthServicempl implements AuthService {
 
         authMapper.updateLastLoginAt(request.getLoginId());
 
-        return new AuthResponse(accessToken, user.getUserId(), user.getRole(), refreshExp);
+        return new AuthResponse(accessToken, user.getUserId(), user.getMemberType(), user.getAdminLevel(), refreshExp);
     }
 
     // 로그아웃
@@ -147,7 +166,15 @@ public class AuthServicempl implements AuthService {
         user.setEmail(request.getEmail());
         user.setLoginId(request.getLoginId());
         user.setPasswordHash(encodedPw);
-        user.setRole(request.getRole());
+        // 가입은 재학생 기본, 관리자는 별도 승격(admin_level)으로만 부여.
+        // memberType은 화이트리스트로만 허용 - 임의 문자열(예: "ADMIN")이 member_type에 저장되면
+        // JWT 필터의 "ROLE_" + memberType 변환으로 권한이 상승할 수 있어 반드시 차단한다.
+        String memberType = request.getMemberType() != null ? request.getMemberType() : "STUDENT";
+        if (!"STUDENT".equals(memberType) && !"ALUMNI".equals(memberType)) {
+            throw new AuthException("유효하지 않은 회원 구분입니다. (STUDENT/ALUMNI)", HttpStatus.BAD_REQUEST);
+        }
+        user.setMemberType(memberType);
+        user.setAdminLevel(0);
         user.setIsDeleted(Boolean.FALSE);
 
         authMapper.insertUser(user);
@@ -308,6 +335,7 @@ public class AuthServicempl implements AuthService {
             if (Boolean.TRUE.equals(user.getIsDeleted())) {
                 throw new AuthException("탈퇴했거나 승인되지 않은 계정입니다.", HttpStatus.UNAUTHORIZED);
             }
+            checkNotBanned(user);
 
             // 3) 새 토큰 발급
             String newAccessToken = jwtUtil.generateAccessToken(user);
@@ -332,7 +360,7 @@ public class AuthServicempl implements AuthService {
             var newClaims = jwtUtil.validateRefreshToken(newRefreshToken);
             long refreshExp = newClaims.getExpiration().getTime();
 
-            return new AuthResponse(newAccessToken, user.getUserId(), user.getRole(), refreshExp);
+            return new AuthResponse(newAccessToken, user.getUserId(), user.getMemberType(), user.getAdminLevel(), refreshExp);
 
         } catch (ExpiredJwtException e) {
             // Refresh Token 자체가 만료된 경우
@@ -346,8 +374,8 @@ public class AuthServicempl implements AuthService {
         }
     }
 
-    // 엑세스 토큰 발급/재발급
-    public AuthResponse refresh(String refreshToken) {
+    // 엑세스 토큰 발급/재발급 (+ 리프레시 토큰 회전: 활동 중이면 refresh도 계속 갱신)
+    public AuthResponse refresh(String refreshToken, HttpServletResponse response) {
         try {
             var claims = jwtUtil.validateRefreshToken(refreshToken);
             String loginId = claims.getSubject();
@@ -360,12 +388,16 @@ public class AuthServicempl implements AuthService {
             if (Boolean.TRUE.equals(user.getIsDeleted())) {
                 throw new AuthException("탈퇴했거나 승인되지 않은 계정입니다.", HttpStatus.UNAUTHORIZED);
             }
+            checkNotBanned(user);
 
-            // 기존 refreshToken 그대로 쓰므로 exp도 동일
-            long refreshExp = claims.getExpiration().getTime();
+            // 액세스 재발급 + 리프레시 토큰 회전(sliding): 재발급받을 때마다 refresh 쿠키도 새로 교체
             String newAccessToken = jwtUtil.generateAccessToken(user);
+            String newRefreshToken = jwtUtil.generateRefreshToken(user);
+            addRefreshTokenCookie(response, newRefreshToken);
 
-            return new AuthResponse(newAccessToken, user.getUserId(), user.getRole(), refreshExp);
+            long refreshExp = jwtUtil.validateRefreshToken(newRefreshToken).getExpiration().getTime();
+
+            return new AuthResponse(newAccessToken, user.getUserId(), user.getMemberType(), user.getAdminLevel(), refreshExp);
 
         } catch (ExpiredJwtException e) {
             // Refresh Token 자체가 만료된 경우

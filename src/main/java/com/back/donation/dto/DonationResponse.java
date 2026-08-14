@@ -1,0 +1,20 @@
+package com.back.donation.dto;
+
+import lombok.Getter;
+import lombok.Setter;
+import java.time.LocalDateTime;
+
+@Getter
+@Setter
+public class DonationResponse {
+    private Long donationId;
+    private Long amount;
+    private String displayName; // 익명일 경우 '익명후원자'로 변환됨
+    private String affiliation;
+    private String major;
+    private String message;
+    private LocalDateTime donatedAt;
+    private Boolean isAnonymous;
+
+    private String photoUrl;
+}

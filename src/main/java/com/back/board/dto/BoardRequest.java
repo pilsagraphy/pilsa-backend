@@ -1,0 +1,46 @@
+package com.back.board.dto;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.Getter;
+import lombok.Setter;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
+
+/**
+ * 게시글 등록 요청 (공지/자유/정보 통합).
+ * 게시판에 따라 사용하는 필드가 다르다.
+ *  - isAnonymous : 자유게시판 익명 여부
+ *  - isPinned    : 공지사항 중요표시
+ *  - categoryId  : 자유/정보게시판 카테고리 (공지는 미사용)
+ */
+@Getter
+@Setter
+public class BoardRequest {
+
+    @Schema(description = "제목", example = "안녕하세요")
+    private String title;
+
+    @Schema(description = "내용", example = "본문 내용입니다.")
+    private String content;
+
+    // Boolean 래퍼를 쓰는 이유: primitive boolean + 필드명 isXxx 조합은 자바 빈 규약상
+    // 프로퍼티명이 "anonymous"/"pinned"가 되어 요청 폼 키 isAnonymous/isPinned 가 바인딩되지 않고
+    // 응답 JSON 필드명도 anonymous/pinned 로 나간다. 래퍼면 프로퍼티명이 isAnonymous 그대로 유지된다.
+    @Schema(description = "익명 여부 (익명 허용 게시판 전용). 그 외 게시판은 무시됨", example = "false")
+    private Boolean isAnonymous = false;
+
+    @Schema(description = "중요표시(상단 고정) 여부. 관리자(레벨 1~3)만 설정 가능", example = "false")
+    private Boolean isPinned = false;
+
+    @Schema(description = "카테고리 ID (선택). 미입력하거나 없는 값이면 게시판별 기본값 자동 적용(자유=1, 정보=2). 공지사항은 미사용",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+    private Long categoryId;
+
+    @Schema(description = "첨부파일 목록 (선택). 미첨부 시 그대로 등록됨",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+    private List<MultipartFile> files;
+
+    @Schema(description = "[서버 내부용] DB 저장 후 생성된 게시글 ID. 요청 시 입력 불필요", hidden = true)
+    private Long postId;
+}

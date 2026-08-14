@@ -9,7 +9,7 @@ import com.back.quote.mapper.QuoteMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.context.SecurityContextHolder;
+import com.back.global.security.AuthUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,11 +26,9 @@ public class QuoteServiceImpl implements QuoteService {
 
     private final QuoteMapper quoteMapper;
 
-    // 관리자 권한 확인만 공통으로 사용
+    // 관리자 권한 확인 (공통 유틸 사용)
     private void checkAdminRole() {
-        boolean isAdmin = SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
-        if (!isAdmin) {
+        if (!AuthUtils.isAdmin()) {
             throw new QuoteException("관리자 권한이 필요합니다.", HttpStatus.FORBIDDEN);
         }
     }
@@ -53,10 +51,9 @@ public class QuoteServiceImpl implements QuoteService {
         }
     }
 
-    // 로그인한 사용자의 id 추출
+    // 로그인한 사용자의 id 추출 (공통 유틸 사용)
     private Long getCurrentUserId() {
-        String sub = SecurityContextHolder.getContext().getAuthentication().getName();
-        return Long.parseLong(sub);
+        return AuthUtils.currentUserId();
     }
 
     @Override

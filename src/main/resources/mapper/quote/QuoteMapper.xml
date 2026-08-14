@@ -29,13 +29,14 @@
             writer_id = #{writerId},
             updated_at = NOW()
         </set>
-        WHERE quote_id = #{quoteId}
+        WHERE quote_id = #{quoteId} AND state = 'normal'
     </update>
 
-    <delete id="deleteQuote">
-        DELETE FROM quotes
-        WHERE quote_id = #{quoteId}
-    </delete>
+    <!-- 소프트 삭제 (프로젝트 전역 원칙: 물리 삭제 없음) -->
+    <update id="deleteQuote">
+        UPDATE quotes SET state = 'deleted', updated_at = NOW()
+        WHERE quote_id = #{quoteId} AND state = 'normal'
+    </update>
 
     <select id="findAllQuotes" resultType="com.back.quote.dto.QuoteDataResponse">
         SELECT
@@ -47,6 +48,7 @@
             created_at AS createdAt,
             updated_at AS updatedAt
         FROM quotes
+        WHERE state = 'normal'
         ORDER BY quote_id DESC
     </select>
 
@@ -60,7 +62,8 @@
             created_at AS createdAt,
             updated_at AS updatedAt
         FROM quotes
-        WHERE CURDATE() BETWEEN start_date AND end_date
+        WHERE state = 'normal'
+          AND CURDATE() BETWEEN start_date AND end_date
         ORDER BY RAND()
         LIMIT 1
     </select>
