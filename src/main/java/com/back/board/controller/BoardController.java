@@ -33,7 +33,7 @@ public class BoardController {
     private static final String BOARD_ID_DESC = "게시판 ID (기본 1=공지사항, 2=자유게시판, 3=정보게시판. /api/boards 로 목록 조회)";
 
     @Operation(summary = "카테고리 목록 조회",
-            description = "게시판의 카테고리 목록을 조회합니다. 카테고리를 쓰지 않는 게시판은 빈 목록이 반환됩니다.")
+            description = "게시판의 카테고리 목록을 조회합니다. 요청 파라미터는 없으며, 관리자에게만 '중요'(code=PINNED) 카테고리가 포함되어 내려갑니다.")
     @GetMapping("/categories")
     public ResponseEntity<List<CategoryResponse>> getCategories(
             @Parameter(description = BOARD_ID_DESC, example = "2") @PathVariable Long boardId) {
@@ -75,7 +75,7 @@ public class BoardController {
     }
 
     @Operation(summary = "게시글 단일 상세 조회",
-            description = "게시글 1건의 상세 정보를 조회합니다. 조회수가 1 증가하며, 첨부파일·좋아요·댓글·이전글/다음글 링크를 함께 반환합니다.")
+            description = "게시글 1건의 상세 정보를 조회합니다. 조회수가 1 증가하며, 첨부파일·좋아요·댓글과 이전글/다음글(제목·카테고리·작성일)을 함께 반환합니다.")
     @GetMapping("/posts/{postId}")
     public ResponseEntity<BoardDetailResponse> getPostDetail(
             @Parameter(description = BOARD_ID_DESC, example = "2") @PathVariable Long boardId,
@@ -109,9 +109,9 @@ public class BoardController {
     }
 
     @Operation(summary = "게시글 수정",
-            description = "게시글을 수정합니다. 관리자 또는 작성자 본인만 가능합니다.")
+            description = "게시글을 수정합니다. 관리자 또는 작성자 본인만 가능하며, 수정된 게시글 상세를 그대로 반환합니다(조회수 미증가).")
     @PutMapping("/posts/{postId}")
-    public ResponseEntity<BoardResponse> updatePost(
+    public ResponseEntity<BoardDetailResponse> updatePost(
             @Parameter(description = BOARD_ID_DESC, example = "2") @PathVariable Long boardId,
             @Parameter(description = "게시글 ID", example = "140") @PathVariable Long postId,
             @RequestBody BoardUpdateRequest request) {
@@ -120,7 +120,7 @@ public class BoardController {
     }
 
     @Operation(summary = "게시글 삭제",
-            description = "게시글을 삭제합니다. 공지사항(boardId=1)은 관리자만, 자유·정보게시판은 작성자 본인만 삭제할 수 있습니다.")
+            description = "게시글을 삭제합니다(소프트). 작성자 본인만 가능하며, 관리자 조치는 /api/admin/posts/{postId} 를 사용합니다.")
     @DeleteMapping("/posts/{postId}")
     public ResponseEntity<BoardResponse> deletePost(
             @Parameter(description = BOARD_ID_DESC, example = "2") @PathVariable Long boardId,

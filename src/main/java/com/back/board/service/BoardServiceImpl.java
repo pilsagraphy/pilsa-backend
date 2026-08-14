@@ -33,14 +33,19 @@ public class BoardServiceImpl implements BoardService {
     private final FileStorageUtil fileStorageUtil;
     private final NotificationService notificationService;
 
-    // 게시판 카테고리 목록 조회 (카테고리 미사용 게시판은 빈 목록)
+    /**
+     * 게시판 카테고리 목록 (카테고리 미사용 게시판은 빈 목록).
+     *
+     * 요청 파라미터를 받지 않는다 — 토큰의 사용자로 관리자 여부를 판정해
+     * 관리자에게만 '중요'(code=PINNED)를 포함시킨다. 프론트는 받은 목록을 그대로 그리면 된다.
+     */
     @Override
     public List<CategoryResponse> getCategoryList(Long boardId) {
         BoardPolicy policy = boardPolicyService.requireReadable(boardId);
         if (!policy.isCategoryUsed()) {
             return List.of();
         }
-        return boardMapper.findCategoriesByBoardId(boardId);
+        return boardMapper.findCategoriesByBoardId(boardId, AuthUtils.isAdmin());
     }
 
     // 메인용 상단 5개 조회
@@ -74,6 +79,14 @@ public class BoardServiceImpl implements BoardService {
     @Override
     @Transactional
     public BoardDetailResponse getPostDetail(Long boardId, Long postId, String sort) {
+        return buildDetail(boardId, postId, sort, true);
+    }
+
+    /**
+     * 상세 응답 조립.
+     * @param increaseView 조회수를 올릴지 — 수정 직후 응답으로 재사용할 때는 올리지 않는다
+     */
+    private BoardDetailResponse buildDetail(Long boardId, Long postId, String sort, boolean increaseView) {
         boardPolicyService.requireReadable(boardId);
         Long currentUserId = AuthUtils.currentUserId();
 
@@ -82,12 +95,18 @@ public class BoardServiceImpl implements BoardService {
             throw new BoardException("존재하지 않는 게시글입니다.", HttpStatus.NOT_FOUND);
         }
 
-        // 이전글/다음글 API 경로 가공
-        String baseApi = "/api/boards/" + boardId + "/posts/";
-        if (detail.getPrevPostApi() != null) detail.setPrevPostApi(baseApi + detail.getPrevPostApi());
-        if (detail.getNextPostApi() != null) detail.setNextPostApi(baseApi + detail.getNextPostApi());
+        // 이전글/다음글: id만 뽑아온 뒤 제목·카테고리·작성일을 채운다 (하단 내비게이션용)
+        if (detail.getPrevPostId() != null) {
+            detail.setPrevPost(boardMapper.findAdjacentPost(detail.getPrevPostId()));
+        }
+        if (detail.getNextPostId() != null) {
+            detail.setNextPost(boardMapper.findAdjacentPost(detail.getNextPostId()));
+        }
 
-        boardMapper.updateViewCount(postId);
+        if (increaseView) {
+            boardMapper.updateViewCount(postId);
+            detail.setViewCount(detail.getViewCount() + 1); // 방금 올린 값을 응답에 반영
+        }
 
         List<AttachmentFileResponse> attachments = boardMapper.findAttachmentsByPostId(postId);
         detail.setAttachments(attachments);
@@ -154,8 +173,9 @@ public class BoardServiceImpl implements BoardService {
         Long userId = AuthUtils.currentUserId();
 
         applyWritePolicy(policy, request);
+        boolean pinned = resolvePinned(policy, request.getCategoryId());
 
-        boardMapper.insertPost(request, userId, boardId);
+        boardMapper.insertPost(request, userId, boardId, pinned);
 
         if (policy.isAttachmentAllowed() && request.getFiles() != null && !request.getFiles().isEmpty()) {
             for (MultipartFile file : request.getFiles()) {
@@ -177,7 +197,7 @@ public class BoardServiceImpl implements BoardService {
     // 게시글 수정: 관리자이거나 작성자 본인일 경우 가능
     @Override
     @Transactional
-    public BoardResponse updatePost(Long boardId, Long postId, BoardUpdateRequest request) {
+    public BoardDetailResponse updatePost(Long boardId, Long postId, BoardUpdateRequest request) {
         BoardPolicy policy = boardPolicyService.requireReadable(boardId);
         requirePostInBoard(postId, boardId);
         Long currentUserId = AuthUtils.currentUserId();
@@ -187,21 +207,22 @@ public class BoardServiceImpl implements BoardService {
             throw new BoardException("수정 권한이 없습니다.", HttpStatus.FORBIDDEN);
         }
 
-        // 카테고리/익명/중요표시도 등록과 동일한 정책으로 보정
-        if (request.getCategoryId() != null && !isValidCategory(policy, request.getCategoryId())) {
-            request.setCategoryId(policy.getDefaultCategoryId());
-        }
+        // 카테고리/익명은 등록과 동일한 정책으로 보정하고, 상단 고정은 카테고리에서 다시 판정한다
+        // (중요 → 일반 카테고리로 바꾸면 고정이 자동 해제된다)
+        request.setCategoryId(resolveCategoryId(policy, request.getCategoryId()));
         if (!policy.isAnonymousAllowed()) {
             request.setIsAnonymous(false);
         }
-        request.setIsPinned(resolvePinned(request.getIsPinned()));
+        boolean pinned = resolvePinned(policy, request.getCategoryId());
 
-        int updated = boardMapper.updatePost(postId, request);
+        int updated = boardMapper.updatePost(postId, request, pinned);
         if (updated == 0) {
             // state != normal (블라인드/삭제) 이거나 존재하지 않는 글
             throw new BoardException("수정할 수 없는 게시글입니다.", HttpStatus.NOT_FOUND);
         }
-        return new BoardResponse("게시글이 성공적으로 수정되었습니다.");
+        // 수정 결과를 상세 조회와 동일한 형태로 반환 → 프론트가 재조회 없이 화면을 갱신할 수 있다
+        // (조회수는 올리지 않는다)
+        return buildDetail(boardId, postId, "created", false);
     }
 
     /**
@@ -309,31 +330,43 @@ public class BoardServiceImpl implements BoardService {
         }
     }
 
-    // 등록 요청에 게시판 정책을 적용 (카테고리 보정, 익명 허용 여부, 중요표시 권한)
+    // 등록 요청에 게시판 정책을 적용 (카테고리 보정, 익명 허용 여부)
     private void applyWritePolicy(BoardPolicy policy, BoardRequest request) {
-        if (!policy.isCategoryUsed()) {
-            request.setCategoryId(null);
-        } else if (!isValidCategory(policy, request.getCategoryId())) {
-            // 미선택이거나 이 게시판에 없는 값이면 게시판 기본값으로 대체
-            request.setCategoryId(policy.getDefaultCategoryId());
-        }
+        request.setCategoryId(resolveCategoryId(policy, request.getCategoryId()));
         if (!policy.isAnonymousAllowed()) {
             request.setIsAnonymous(false);
         }
-        request.setIsPinned(resolvePinned(request.getIsPinned()));
     }
 
-    private boolean isValidCategory(BoardPolicy policy, Long categoryId) {
-        return categoryId != null && boardMapper.existsCategory(categoryId, policy.getBoardId());
-    }
-
-    // 중요표시(상단 고정)는 게시판 종류와 무관하게 관리자(레벨 1~3)만 설정할 수 있다
-    private Boolean resolvePinned(Boolean requested) {
-        if (Boolean.TRUE.equals(requested) && !AuthUtils.isAdmin()) {
-            log.debug("일반 회원의 isPinned 요청 무시 - userId: {}", AuthUtils.currentUserIdOrNull());
-            return false;
+    /**
+     * 카테고리 보정.
+     * 카테고리 미사용 게시판은 null, 이 게시판에 없는 값이면 게시판 기본값으로 대체한다.
+     * '중요'는 관리자만 고를 수 있으므로, 일반 회원이 강제로 보내면 기본값으로 되돌린다
+     * (자동으로 상단 고정도 풀린다 — isPinned 판정이 카테고리에서 파생되기 때문).
+     */
+    private Long resolveCategoryId(BoardPolicy policy, Long requestedCategoryId) {
+        if (!policy.isCategoryUsed()) {
+            return null;
         }
-        return Boolean.TRUE.equals(requested);
+        if (requestedCategoryId == null || !boardMapper.existsCategory(requestedCategoryId, policy.getBoardId())) {
+            return policy.getDefaultCategoryId();
+        }
+        if (!AuthUtils.isAdmin() && boardMapper.isPinnedCategory(requestedCategoryId, policy.getBoardId())) {
+            log.debug("일반 회원의 '중요' 카테고리 선택 무시 - userId: {}", AuthUtils.currentUserIdOrNull());
+            return policy.getDefaultCategoryId();
+        }
+        return requestedCategoryId;
+    }
+
+    /**
+     * 상단 고정 여부 판정.
+     * 요청 필드가 아니라 "선택한 카테고리가 이 게시판의 '중요'(code=PINNED)인가"로 결정한다.
+     * is_pinned 컬럼을 그대로 두는 이유는 목록 정렬(ORDER BY is_pinned DESC)에서 조인 없이 쓰기 위함.
+     */
+    private boolean resolvePinned(BoardPolicy policy, Long categoryId) {
+        return categoryId != null
+                && AuthUtils.isAdmin()
+                && boardMapper.isPinnedCategory(categoryId, policy.getBoardId());
     }
 
     // 댓글/대댓글 알림 발행 (실패해도 댓글 등록 자체는 성공시킨다)

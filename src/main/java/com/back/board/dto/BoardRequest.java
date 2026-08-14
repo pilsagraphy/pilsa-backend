@@ -25,13 +25,13 @@ public class BoardRequest {
     private String content;
 
     // Boolean 래퍼를 쓰는 이유: primitive boolean + 필드명 isXxx 조합은 자바 빈 규약상
-    // 프로퍼티명이 "anonymous"/"pinned"가 되어 요청 폼 키 isAnonymous/isPinned 가 바인딩되지 않고
-    // 응답 JSON 필드명도 anonymous/pinned 로 나간다. 래퍼면 프로퍼티명이 isAnonymous 그대로 유지된다.
+    // 프로퍼티명이 "anonymous"가 되어 요청 폼 키 isAnonymous 가 바인딩되지 않고
+    // 응답 JSON 필드명도 anonymous 로 나간다. 래퍼면 프로퍼티명이 isAnonymous 그대로 유지된다.
     @Schema(description = "익명 여부 (익명 허용 게시판 전용). 그 외 게시판은 무시됨", example = "false")
     private Boolean isAnonymous = false;
 
-    @Schema(description = "중요표시(상단 고정) 여부. 관리자(레벨 1~3)만 설정 가능", example = "false")
-    private Boolean isPinned = false;
+    // isPinned 는 요청으로 받지 않는다 — 선택한 카테고리가 '중요'(code=PINNED)인지로 서버가 결정한다.
+    // 카테고리 목록은 관리자에게만 '중요'를 포함해 내려가므로 일반 회원은 애초에 고를 수 없다.
 
     @Schema(description = "카테고리 ID (선택). 미입력하거나 없는 값이면 게시판별 기본값 자동 적용(자유=1, 정보=2). 공지사항은 미사용",
             requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)

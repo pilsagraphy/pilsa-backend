@@ -21,7 +21,7 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/boards")
-@Tag(name = "게시판", description = "게시판 목록 — 현재 사용자가 열람 가능한 게시판만 반환")
+@Tag(name = "게시판", description = "사이드바 게시판 목록 — 현재 사용자가 열람 가능한 게시판만 반환")
 public class BoardListController {
 
     private final BoardPolicyService boardPolicyService;

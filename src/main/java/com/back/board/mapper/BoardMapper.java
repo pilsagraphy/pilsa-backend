@@ -37,11 +37,21 @@ public interface BoardMapper {
     // 게시판명 중복 확인 (본인 제외)
     boolean existsBoardName(@Param("name") String name, @Param("excludeBoardId") Long excludeBoardId);
 
-    // 게시판 카테고리 목록 조회 (공지사항은 데이터가 없어 빈 목록 반환)
-    List<CategoryResponse> findCategoriesByBoardId(@Param("boardId") Long boardId);
+    /**
+     * 게시판 카테고리 목록.
+     * includePinned=false 면 '중요'(code=PINNED)를 제외한다 — 일반 회원에게는 내려가지 않는다.
+     */
+    List<CategoryResponse> findCategoriesByBoardId(@Param("boardId") Long boardId,
+                                                   @Param("includePinned") boolean includePinned);
 
     // 해당 카테고리가 이 게시판에 실제로 존재하는지 확인 (등록 시 유효성 검사용)
     boolean existsCategory(@Param("categoryId") Long categoryId, @Param("boardId") Long boardId);
+
+    // 선택한 카테고리가 이 게시판의 '중요'(code=PINNED) 카테고리인가 → is_pinned 판정용
+    boolean isPinnedCategory(@Param("categoryId") Long categoryId, @Param("boardId") Long boardId);
+
+    // 이전글/다음글 상세 (카테고리 뱃지·제목·작성일 표시용)
+    AdjacentPostResponse findAdjacentPost(@Param("postId") Long postId);
 
     // 메인 화면용 상단 5개 조회 (공지사항은 is_pinned 우선 정렬)
     List<BoardTop5Response> findTop5Posts(@Param("boardId") Long boardId);
@@ -95,14 +105,19 @@ public interface BoardMapper {
     // 좋아요 취소
     void deleteLike(@Param("postId") Long postId, @Param("userId") Long userId);
 
-    // 게시글 등록
-    void insertPost(@Param("request") BoardRequest request, @Param("userId") Long userId, @Param("boardId") Long boardId);
+    // 게시글 등록. isPinned 는 요청값이 아니라 서비스가 카테고리('중요')로 판정한 결과다
+    void insertPost(@Param("request") BoardRequest request,
+                    @Param("userId") Long userId,
+                    @Param("boardId") Long boardId,
+                    @Param("isPinned") boolean isPinned);
 
     // 게시글 수정 및 삭제 권한 확인을 위한 작성자 ID 조회
     Long findAuthorIdByPostId(@Param("postId") Long postId);
 
-    // 게시글 수정
-    int updatePost(@Param("postId") Long postId, @Param("request") BoardUpdateRequest request);
+    // 게시글 수정. isPinned 는 카테고리로 재판정된 값 (중요 → 일반 카테고리로 바꾸면 자동 해제)
+    int updatePost(@Param("postId") Long postId,
+                   @Param("request") BoardUpdateRequest request,
+                   @Param("isPinned") boolean isPinned);
 
     // 게시글 삭제
     int deletePost(@Param("postId") Long postId);

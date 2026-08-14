@@ -19,8 +19,8 @@ public class BoardUpdateRequest {
     @Schema(description = "익명 여부 (익명 허용 게시판 전용). 그 외 게시판은 무시됨", example = "false")
     private Boolean isAnonymous = false;
 
-    @Schema(description = "중요표시(상단 고정) 여부. 관리자(레벨 1~3)만 설정 가능", example = "false")
-    private Boolean isPinned = false;
+    // isPinned 는 요청으로 받지 않는다 — 카테고리('중요')로 서버가 결정. 등록(BoardRequest)과 동일 규칙
+    // 중요 → 일반 카테고리로 바꾸면 상단 고정도 자동 해제된다
 
     @Schema(description = "카테고리 ID (자유/정보게시판). 공지사항은 미사용")
     private Long categoryId;

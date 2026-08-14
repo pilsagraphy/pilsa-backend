@@ -27,7 +27,7 @@ public interface BoardService {
 
     // 게시글 등록, 수정, 삭제
     BoardResponse createPost(Long boardId, BoardRequest request);
-    BoardResponse updatePost(Long boardId, Long postId, BoardUpdateRequest request);
+    BoardDetailResponse updatePost(Long boardId, Long postId, BoardUpdateRequest request);
     BoardResponse deletePost(Long boardId, Long postId);
 
     // 댓글 등록, 수정, 삭제
