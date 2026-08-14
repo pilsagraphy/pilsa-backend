@@ -34,9 +34,9 @@ CREATE TABLE `drafts` (
 - **소프트삭제 대전제의 예외**: drafts는 발행 전 개인 작업물이라 감사·증적 대상이 아니다.
   `state` 컬럼 없이 물리 DELETE를 쓴다 (CLAUDE.md의 "세션성 데이터" 예외에 해당).
   → 팀원이 습관적으로 state를 넣어오면 반려할 것.
-- **첨부파일은 이번 범위에서 제외**: attachments가 `post_id` NOT NULL FK라 초안에 붙일 수 없다.
-  임시저장은 제목/본문/카테고리/익명여부만 보존하고, 파일 첨부는 발행 시점에 올린다.
-  (본문 인라인 이미지는 A-4가 붙으면 URL이 content에 들어가므로 자동으로 함께 보존됨)
+- **첨부파일**: attachments가 `post_id` NOT NULL FK라 그대로는 초안에 붙일 수 없다.
+  → **§6의 attachments 수정안을 함께 적용하면 초안 첨부까지 가능**하다. PM이 §6 적용 여부를 먼저 결정할 것.
+  (미적용 시: 임시저장은 제목/본문/카테고리/익명여부만 보존, 파일은 발행 시점에 업로드)
 - boards 정책(allow_anonymous 등)은 저장 시점에 검증하지 말고 **발행 시점에만** 검증한다.
   초안 단계에서 게시판 정책이 바뀔 수 있기 때문.
 
@@ -83,12 +83,17 @@ CREATE TABLE `drafts` (
 - [ ] 제목·본문 모두 빈 저장 → 400
 - [ ] 공지사항(쓰기 권한 없는 게시판)에 일반 회원이 초안 저장 시도 → 403
 
+### §6 적용 시 추가
+- [ ] 초안에 파일 2개 첨부 → 발행 → 게시글 상세에 첨부 2개 그대로 노출 (재업로드 없이)
+- [ ] 발행 후 `attachments`의 해당 행이 `post_id=값, draft_id=NULL`인지 DB로 확인
+- [ ] 첨부 있는 초안을 삭제 → attachments 행 삭제 + **물리 파일도 삭제**됨
+- [ ] 학생 목록/상세 조회에 초안 첨부(post_id NULL)가 절대 섞이지 않음
+
 ---
 
 ## 4. 후속(이번 범위 밖, 별도 티켓)
 - 오래된 초안 정리 배치 (보관기간 경과분 삭제) — §5-3 확정 후
 - 자동저장(주기적 PUT) — 프론트 주도. 백엔드는 2번 API로 이미 대응됨
-- 첨부파일 초안 보존 — attachments 스키마 변경이 필요해 별건
 
 ---
 
@@ -101,3 +106,104 @@ CREATE TABLE `drafts` (
 3. **보관 기간**: 무기한 vs N일 후 자동 삭제 (제안: 90일)
 4. **관리자 열람 여부**: 발행 전 초안을 관리자가 볼 수 있어야 하나?
    (제안: 불가 — 개인 작업물, 신고·제재 대상도 아님)
+5. **§6 첨부파일 수정안 적용 여부** + 적용 시 **회원당 초안 첨부 총량 상한** (제안: 적용 / 회원당 50MB)
+
+---
+
+# 6. attachments 테이블 수정안 (초안 첨부 지원)
+
+> 현재 `attachments.post_id`가 NOT NULL이라 "게시글이 없는 파일"을 못 담는다.
+> **2026-08-14 기준 attachments는 0행** → 마이그레이션·백필 부담 없이 지금이 바꾸기 가장 좋은 시점.
+
+## 6-1. 설계안 비교
+
+| 안 | 방식 | 장점 | 단점 | 판정 |
+|----|------|------|------|------|
+| **A** | `post_id` NULL 허용 + `draft_id` 컬럼 추가 (둘 중 하나만 채움) | 발행 시 **UPDATE 한 줄로 소유권 이전**(파일 재업로드·행 복사 없음). FK 무결성 유지. 조회 코드 무영향 | 컬럼 2개 중 하나만 유효 → CHECK 제약 필요 | ✅ **채택** |
+| B | `owner_type`/`owner_id` 다형성 (moderation_log 방식) | 나중에 방명록·갤러리 첨부도 같은 테이블로 수용 | **FK 못 검 → 고아 행이 DB 차원에서 안 막힘.** 파일은 실물 자원이라 정합성이 로그성 테이블보다 중요 | ❌ |
+| C | `draft_attachments` 별도 테이블 | 기존 테이블 무손상 | 발행 시 행 복사+삭제, 업로드/조회/삭제 코드가 **2벌**로 갈라짐 | ❌ |
+
+## 6-2. DDL (팀원 작성 → PM 승인 → 수동 적용. drafts 테이블 생성 **이후** 실행)
+
+```sql
+-- ① 초안 첨부는 아직 게시글이 없으므로 post_id NULL 허용
+ALTER TABLE `attachments`
+  MODIFY COLUMN `post_id` bigint NULL COMMENT '게시글 고유 번호 (초안 첨부 상태면 NULL)';
+
+-- ② 초안 소유 컬럼 추가. 초안이 지워지면 첨부 메타도 함께 정리(CASCADE)
+ALTER TABLE `attachments`
+  ADD COLUMN `draft_id` bigint NULL COMMENT '임시저장 고유 번호 (발행되면 NULL로 비움)' AFTER `post_id`,
+  ADD KEY `idx_attachments_draft` (`draft_id`),
+  ADD CONSTRAINT `fk_attachments_draft` FOREIGN KEY (`draft_id`) REFERENCES `drafts` (`draft_id`)
+      ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- ③ 소유자는 반드시 정확히 하나 (둘 다 NULL=고아 / 둘 다 값=이중소속 → 양쪽 다 차단)
+ALTER TABLE `attachments`
+  ADD CONSTRAINT `ck_attachments_owner` CHECK (
+       (`post_id` IS NOT NULL AND `draft_id` IS NULL)
+    OR (`post_id` IS NULL     AND `draft_id` IS NOT NULL)
+  );
+```
+
+**롤백**
+```sql
+ALTER TABLE `attachments` DROP CHECK `ck_attachments_owner`;
+ALTER TABLE `attachments` DROP FOREIGN KEY `fk_attachments_draft`;
+ALTER TABLE `attachments` DROP KEY `idx_attachments_draft`, DROP COLUMN `draft_id`;
+-- post_id NOT NULL 복구는 NULL 행을 먼저 정리한 뒤에 실행할 것
+DELETE FROM `attachments` WHERE `post_id` IS NULL;
+ALTER TABLE `attachments` MODIFY COLUMN `post_id` bigint NOT NULL COMMENT '게시글 고유 번호';
+```
+
+## 6-3. 발행 트랜잭션 — 순서를 틀리면 파일이 사라진다 ⚠️
+
+```sql
+-- ① 소유권 이전 먼저 (draft_id를 비워 CASCADE 대상에서 제외시킨다)
+UPDATE attachments SET post_id = #{postId}, draft_id = NULL WHERE draft_id = #{draftId};
+
+-- ② 그 다음 초안 삭제
+DELETE FROM drafts WHERE draft_id = #{draftId} AND user_id = #{userId};
+```
+
+> **①과 ②를 바꾸면** `ON DELETE CASCADE`가 첨부 행을 통째로 지워서, 방금 발행한 글의 첨부가
+> 전부 없어진다. 코드 리뷰에서 이 순서를 최우선으로 확인할 것. 반드시 같은 트랜잭션.
+
+## 6-4. 물리 파일 처리
+
+- **파일 이동 불필요.** 저장 경로는 업로드 시점에 확정되고, 발행은 DB 소유자만 바꾼다.
+  (`FileStorageUtil`은 그대로 사용. 초안 업로드분은 `uploads/drafts/` 같은 별도 디렉터리를 쓰지 말 것 —
+  발행 후 경로와 실제 소속이 어긋나 헷갈린다)
+- **초안 삭제 시 물리 파일 삭제 필수.** DB는 CASCADE로 지워지지만 디스크 파일은 남는다.
+  → 삭제 전 `SELECT file_url FROM attachments WHERE draft_id = ?`로 목록을 먼저 확보한 뒤
+  DB 삭제 → 파일 삭제 순으로 처리. 보관기간 정리 배치도 동일한 절차를 탈 것.
+- **용량 상한 필요**(§5-5): 초안은 발행되지 않아도 디스크를 계속 점유한다.
+  회원당 초안 첨부 총량을 검사해 초과 시 413/409 반환.
+
+## 6-5. 기존 코드 영향도 (전부 무영향 — 확인 완료)
+
+| 코드 | 영향 |
+|------|------|
+| `BoardMapper.insertAttachment` | 항상 post_id를 넣으므로 그대로 동작. 초안용 insert만 신규 추가 |
+| `BoardMapper.findAttachmentsByPostId` | `WHERE post_id = #{postId}` → draft 행(post_id NULL)은 자연히 제외됨 |
+| `AdminPostMapper.findAttachments` | 위와 동일 |
+| 첨부 다운로드(`/uploads/**` 정적) | 경로 불변이라 무영향 |
+
+> 참고: `fk_attachments_post`의 `ON DELETE CASCADE`는 게시글이 전면 소프트삭제로 바뀐 뒤
+> **발동할 일이 없는 죽은 제약**이다. 이번에 굳이 건드릴 필요는 없으나, 물리삭제가 없다는 전제를
+> 팀원이 오해하지 않도록 리뷰 때 짚어줄 것.
+
+## 6-6. A-4(본문 인라인 이미지)와의 관계 — 선택 사항
+
+인라인 이미지도 "발행 전에 업로드되는 파일"이라 같은 문제를 겪는다. 한 테이블로 통합하려면:
+
+```sql
+ALTER TABLE `attachments`
+  ADD COLUMN `usage_type` varchar(20) NOT NULL DEFAULT 'attachment'
+    COMMENT 'attachment=첨부목록 노출 / inline=본문 삽입 이미지' AFTER `file_type`;
+```
+- 상세 화면 첨부 목록은 `WHERE usage_type='attachment'`로 필터 (시안 p25의 `[붙임1] …` 행)
+- 인라인 이미지도 DB에 기록되므로 **고아 파일 정리를 한 곳에서** 처리 가능
+- 컬럼명은 `usage`가 아니라 `usage_type` — `USAGE`는 MySQL 예약어라 백틱 없이는 파싱 오류
+
+> A-4를 나중에 할 거면 이 컬럼은 그때 추가해도 된다. 다만 **A-4와 A-5를 같은 사람이 함께 맡으면**
+> 지금 한 번에 넣는 편이 DDL 두 번 치는 것보다 낫다.
