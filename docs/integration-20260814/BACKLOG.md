@@ -53,12 +53,20 @@
 - 🔵 본문 저장 포맷(HTML? 마크다운?) 기획 확정 필요 — XSS 필터링 정책 포함.
 
 ### A-5. 🔴 임시저장(글 저장하기) — 시안 p21 "저장 | 1" (담당 제안: 사라연)
+📄 **상세 지시서: [SPEC-A5-drafts.md](SPEC-A5-drafts.md)** — DDL·API 6종·수용기준·PM 확정항목 포함. 인계 시 이 문서를 전달할 것.
+
 | 메서드 | 경로 | 요청 | 응답 | 권한 |
 |--------|------|------|------|------|
-| POST | /api/stu/{boardId}/drafts | {title?,content?,categoryId?} | {draftId} | 로그인 |
-| GET | /api/stu/{boardId}/drafts | - | [{draftId,title,updatedAt}] | 본인 |
+| POST | /api/stu/{boardId}/drafts | {title?,content?,categoryId?,isAnonymous?} | {draftId} | 로그인 |
+| PUT | /api/stu/{boardId}/drafts/{draftId} | 위와 동일 | message | 본인 |
+| GET | /api/stu/{boardId}/drafts | - | {count, drafts:[{draftId,title,updatedAt}]} | 본인 |
+| GET | /api/stu/{boardId}/drafts/{draftId} | - | 초안 전체(이어쓰기용) | 본인 |
 | DELETE | /api/stu/{boardId}/drafts/{draftId} | - | message | 본인 |
-- posts.state 재사용보다 **별도 drafts 테이블** 권장(목록/조회수/신고 로직 오염 방지).
+| POST(수정) | /api/stu/{boardId}/posts | form-data에 draftId? 추가 | 기존과 동일 | 기존과 동일 |
+
+- posts.state 재사용 금지 → **별도 drafts 테이블**(목록/조회수/신고/제재 쿼리 오염 방지).
+- drafts는 소프트삭제 대전제의 **예외**(세션성 데이터) → state 컬럼 없이 물리 삭제.
+- 첨부파일은 attachments.post_id NOT NULL 제약상 초안 보존 불가 → 이번 범위 제외.
 
 ### A-6. 🟡 목록 정렬 옵션 확장 — FE가 `sort=liked`(좋아요순) 사용 예정. 현재 created/viewCount만 지원.
 
