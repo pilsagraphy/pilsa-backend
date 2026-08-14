@@ -22,6 +22,7 @@ public class BoardListResponse {
     private int commentCount;
     private String categoryName;
     private Boolean isPinned;
+    private Boolean isAnonymous;   // 익명글이면 authorName은 SQL에서 이미 '익명'으로 마스킹되어 내려간다
     private boolean hasAttachment;
     private LocalDateTime created;
 }

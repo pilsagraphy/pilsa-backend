@@ -32,8 +32,9 @@
 
     <!-- 회원가입 -->
     <insert id="insertUser" useGeneratedKeys="true" keyProperty="userId">
+        <!-- major는 NOT NULL DEFAULT 'NONE' — 요청에서 누락돼도 DB 기본값 의도대로 'NONE' 저장 (null 바인딩 시 1048 오류) -->
         INSERT INTO users (name, phone, major, student_no, email, login_id, password_hash, member_type, admin_level, is_deleted)
-        VALUES (#{name},#{phone}, #{major}, #{studentNo}, #{email}, #{loginId}, #{passwordHash}, #{memberType}, #{adminLevel}, #{isDeleted})
+        VALUES (#{name},#{phone}, COALESCE(#{major}, 'NONE'), #{studentNo}, #{email}, #{loginId}, #{passwordHash}, #{memberType}, #{adminLevel}, #{isDeleted})
     </insert>
 
     <!-- 회원가입 - 아이디 & 이메일 중복 확인 -->

@@ -41,7 +41,7 @@ public class BoardPolicyService {
             }
             BoardSummaryResponse summary = new BoardSummaryResponse();
             summary.setBoardId(policy.getBoardId());
-            summary.setName(policy.getName());
+            summary.setBoardName(policy.getName());
             summary.setDisplayOrder(policy.getDisplayOrder());
             summary.setCanWrite(policy.canWrite(memberType, adminLevel));
             summary.setAllowComment(policy.getAllowComment());

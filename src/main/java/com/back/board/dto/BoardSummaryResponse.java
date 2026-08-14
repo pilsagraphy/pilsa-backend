@@ -12,7 +12,7 @@ import lombok.Setter;
 @Setter
 public class BoardSummaryResponse {
     private Long boardId;
-    private String name;              // 한글 게시판명 (화면에 그대로 노출)
+    private String boardName;         // 한글 게시판명 (화면에 그대로 노출) — 응답 필드 boardName 컨벤션
     private Integer displayOrder;
     private Boolean canWrite;         // 현재 사용자가 글을 쓸 수 있는가 → 작성 버튼 노출 판단
     private Boolean allowComment;

@@ -6,6 +6,7 @@ import com.back.report.dto.ReportPageResponse;
 import com.back.report.dto.ReportedItemResponse;
 import com.back.report.exception.ReportAdminException;
 import com.back.report.mapper.ReportAdminMapper;
+import com.back.global.security.AuthUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -36,6 +37,7 @@ public class ReportAdminServiceImpl implements ReportAdminService {
 
     @Override
     public ReportPageResponse getReportedPosts(int page, int size, String status, Long boardId, String sort) {
+        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
         page = AdminServiceSupport.clampPage(page);
         size = AdminServiceSupport.clampSize(size);
         int totalCount = reportAdminMapper.countReportedPosts(status, boardId);
@@ -47,6 +49,7 @@ public class ReportAdminServiceImpl implements ReportAdminService {
 
     @Override
     public ReportPageResponse getReportedComments(int page, int size, String status, Long boardId, String sort) {
+        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
         page = AdminServiceSupport.clampPage(page);
         size = AdminServiceSupport.clampSize(size);
         int totalCount = reportAdminMapper.countReportedComments(status, boardId);
@@ -58,18 +61,21 @@ public class ReportAdminServiceImpl implements ReportAdminService {
 
     @Override
     public void reject(String targetType, Long targetId) {
+        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
         validateTargetType(targetType);
         reportBulkExecutor.rejectItem(targetType, targetId, AdminServiceSupport.currentAdminId());
     }
 
     @Override
     public void delete(String targetType, Long targetId) {
+        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
         validateTargetType(targetType);
         reportBulkExecutor.deleteItem(targetType, targetId, AdminServiceSupport.currentAdminId());
     }
 
     @Override
     public BulkResultResponse bulkReject(String targetType, List<Long> targetIds) {
+        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
         validateTargetType(targetType);
         if (CollectionUtils.isEmpty(targetIds)) {
             throw new ReportAdminException("반려할 항목을 선택해 주세요.", HttpStatus.BAD_REQUEST);
@@ -91,6 +97,7 @@ public class ReportAdminServiceImpl implements ReportAdminService {
 
     @Override
     public BulkResultResponse bulkDelete(String targetType, List<Long> targetIds) {
+        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
         validateTargetType(targetType);
         if (CollectionUtils.isEmpty(targetIds)) {
             throw new ReportAdminException("삭제할 항목을 선택해 주세요.", HttpStatus.BAD_REQUEST);

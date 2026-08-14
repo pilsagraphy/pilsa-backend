@@ -76,7 +76,7 @@
 | 신고 패키지 이원화 | **하나로 통합** — 신고는 관리자·일반회원 동일 처리 | `admin.report` → `report` 통합. 접수는 `POST /api/reports`(신분·관리자 무관). 관리자 특권은 "신고 없이 즉시 조치"이며 `admin.moderation` 담당 |
 | member 패키지 | **admin 아래 + user로** | `com.back.admin.user` |
 | student 패키지 | 제거 | FileStorageUtil → `global.util` |
-| aboutPilsa 패키지 | 제거 | `donation`(donations 테이블 기준). API 경로 `/api/public/honor`는 유지 |
+| aboutPilsa 패키지 | 제거 | `donation`(donations 테이블 기준). 경로는 이후 URL 재설계에서 `GET /api/donations`로 변경 |
 | events/quotes 물리삭제(3절) | **소프트삭제로 전환** — 물리 삭제는 없다 | `state` 컬럼 추가, DELETE문 제거. 잔존 물리삭제는 post_likes 토글뿐 |
 | 인증 코드 중복(4절) | 공통 유틸로 수렴 | `global.security.AuthUtils` — 도메인 6곳 정리 |
 | G-1 정지 응답 | 구조화 | `{message, banType, bannedUntil}` + 전역 에러 JSON 통일 |
@@ -96,16 +96,16 @@
 boards(code→name 한글, display_order·default_category_id·allow_anonymous·allow_private_comment·state 추가),
 events/quotes(state 추가), ban_log(warning_no nullable + source), notifications 신규 테이블.
 
-## 5. pilsa-frontend 대조 결과 (기획 반영 전 코드 기준)
+## 5. pilsa-frontend 대조 결과 (병합 1차 시점 기준 — **경로는 이후 URL 재설계로 전부 변경, 현행은 API-MIGRATION.md가 정본**)
 
-| FE 현황 | 백엔드 판단 |
+| FE 현황 | 백엔드 판단 (⚠️ 경로는 1차 시점 표기) |
 |---------|-------------|
-| `/api/stu/free|info|notices/...` 경로별 모듈 호출 | #62에서 `/api/stu/{boardId}/posts`로 통합됨 — **FE 마이그레이션 필요 목록** 전달 대상 (방향은 백엔드가 맞음: 게시판 동적화 대비) |
-| 신고 사유 상수 = reasons 테이블 코드와 1:1 일치 | ✅ 그대로 사용 가능 (`POST /api/stu/reports`) |
+| `/api/stu/free|info|notices/...` 경로별 모듈 호출 | boardId 통합 후 재설계로 **`/api/boards/{boardId}/posts`** 가 최종 — FE 마이그레이션 필요 |
+| 신고 사유 상수 = reasons 테이블 코드와 1:1 일치 | 사유 코드는 그대로. 접수 경로는 **`POST /api/reports`** 로 변경 |
 | 회원관리 라벨: 일반회원/관리 Lv.1~3, 재학생/동문회 | ✅ member_type+admin_level 각색과 정확히 대응 |
-| 일정 `GET /api/public/schedules?from=YYYY-MM&to=YYYY-MM` | ✅ 그대로 동작 (월 문자열 변환 지원) |
-| `GET /api/role` 사용 | ✅ 응답이 {role}→{memberType,adminLevel}로 변경됨 — FE 수정 필요 안내 |
+| 일정 `GET /api/public/schedules?from=YYYY-MM&to=YYYY-MM` | 동작은 동일하나 경로가 **`GET /api/events`** 로 변경 |
+| `GET /api/role` 사용 | **`GET /api/mypage/profile`** 로 변경 + 응답 {role}→{memberType,adminLevel} — FE 수정 필요 |
 | 로그인 응답 role 사용처 | AuthResponse가 memberType/adminLevel로 변경 — FE 수정 필요 안내 |
-| honor(명예의전당) `/api/public/honor` | ✅ 패키지명만 donation으로 변경, 경로 불변 |
+| honor(명예의전당) `/api/public/honor` | 경로가 **`GET /api/donations`** 로 변경 (패키지도 donation) |
 | admin members/community — 아직 더미 데이터 | 신규 API(#57/#60/#68)가 계약 선점 — 노션 명세 공유로 정렬 |
 | gallery/guestbook 라우트 존재, API 없음 | BACKLOG E/F |

@@ -33,7 +33,7 @@
 > **`GET /api/boards` 는 새로 추가한 필수 API다.** 게시판이 데이터가 되어(관리자가 런타임 생성)
 > 프론트가 게시판 목록을 하드코딩할 수 없다. 응답은 **현재 사용자가 열람 가능한 게시판만** 노출 순서대로 준다.
 > ```json
-> [{ "boardId":2, "name":"자유게시판", "displayOrder":2, "canWrite":true,
+> [{ "boardId":2, "boardName":"자유게시판", "displayOrder":2, "canWrite":true,
 >    "allowComment":true, "allowAttachment":true, "categoryMode":true,
 >    "allowAnonymous":true, "allowPrivateComment":false }]
 > ```
@@ -124,3 +124,15 @@
 
 > 요청 쪽도 동일하다. 기존에는 폼 키 `isPinned`가 **바인딩되지 않아 관리자가 상단 고정을 해도 저장되지 않았다.**
 > 지금은 `isPinned`/`isAnonymous`/`isPrivate` 그대로 보내면 된다.
+
+## 동작 변경 (2026-08-14 최종 검토 반영)
+
+| 변경 | 내용 |
+|------|------|
+| 익명글 마스킹 | 익명글의 `authorName`은 서버에서 `"익명"`으로, `userId`는 `null`로 내려간다 (목록·상세 공통). **관리자와 작성자 본인에게만** 실명·id가 보인다 — FE 마스킹 코드는 제거해도 된다 |
+| 비밀댓글 마스킹 | 비밀댓글 `content`는 관리자/댓글 작성자/원글 작성자 외에는 `"비밀댓글입니다."`로 내려간다 |
+| 목록 응답 | `GET /api/boards/{boardId}/posts` 목록 행에 `isAnonymous` 필드 추가 |
+| 게시글/댓글 삭제 | **작성자 본인만** 가능(관리자 포함 타인 글은 403) — 관리자 조치는 `/api/admin/posts/**` 사용(조치 로그·벌점 연동) |
+| 블라인드 글 자삭 차단 | 블라인드된 본인 글/댓글은 삭제 불가(404) — 제재 회피 방지 |
+| 만료 토큰 + 공개 API | 만료/무효 토큰을 달고 공개 리소스(`/api/donations` 등)를 호출해도 401이 아니라 정상 응답 |
+| 401/403/410 본문 | 시큐리티 레벨 거부도 이제 전부 `{"message": ...}` JSON 본문을 갖는다. 세션 중 차단 403은 `banType`/`bannedUntil` 필드 포함 (로그인 403과 동일 형태) |

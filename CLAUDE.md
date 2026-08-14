@@ -29,7 +29,7 @@ com.back
 │   ├── moderation  # 게시글·댓글 공통 조치(blind/restore/softDelete) + moderation_log/penalty_log
 │   ├── sanction    # 제재 현황/해제 + 주의→경고→정지 에스컬레이션
 │   └── user        # 회원 관리 (users)
-└── global          # config, security(JWT·AuthUtils), util(FileStorageUtil), mail, role, exception
+└── global          # config, security(JWT·AuthUtils), util(FileStorageUtil), mail, exception
 ```
 매퍼 XML: `src/main/resources/mapper/<도메인 경로>/*.xml`.
 
@@ -51,8 +51,10 @@ com.back
 ### 게시판은 하드코딩하지 않는다
 - `BoardType` enum은 **제거됨**. 게시판별 정책(열람·작성 권한, 익명/비밀댓글/첨부/카테고리 사용, 기본 카테고리,
   노출 순서)은 전부 `boards` 테이블 컬럼이며 `BoardPolicy`로 읽는다.
-- 관리자가 `/api/admin/boards`로 게시판을 만들면 코드 수정·재배포 없이 `/api/stu/{boardId}/**`가 즉시 동작한다.
-- `boards.name`은 화면에 그대로 노출하는 **한글명**(공지사항/자유게시판/정보게시판). 응답 필드는 `boardName`.
+- 관리자가 `/api/admin/boards`로 게시판을 만들면 코드 수정·재배포 없이 `/api/boards/{boardId}/**`가 즉시 동작한다.
+- 프론트는 게시판 메뉴를 하드코딩할 수 없다 — `GET /api/boards`(열람 가능 게시판 목록, canWrite 포함)로 그린다.
+- `boards.name`은 화면에 그대로 노출하는 **한글명**(공지사항/자유게시판/정보게시판).
+  게시판명을 담는 응답 필드는 어디서든 `boardName`으로 통일 (게시판 목록·관리자 게시글·신고·제재 응답 모두).
 - `is_pinned`(상단 고정)는 게시판 종류와 무관하게 **관리자(admin_level≥1)만** 설정 가능.
 
 ### 소프트삭제가 대전제 — 물리 삭제는 없다

@@ -35,7 +35,7 @@
 
 | 메서드 | 경로 | 요청 | 응답 | 권한 |
 |--------|------|------|------|------|
-| GET | /api/admin/comments | ?page&size&boardId&keyword | {totalPages,totalCount,comments:[{commentId,postId,boardId,boardCode,authorName,content,created,state}]} | ADMIN |
+| GET | /api/admin/comments | ?page&size&boardId&keyword | {totalPages,totalCount,comments:[{commentId,postId,boardId,boardName,authorName,content,created,state}]} | ADMIN |
 | PATCH | /api/admin/comments/{id}/blind | {reasonId?,detail?} | message | ADMIN |
 | PATCH | /api/admin/comments/{id}/restore | - | message | ADMIN |
 | DELETE | /api/admin/comments/{id} | {reasonId?,detail?} | message (벌점 +2 자동) | ADMIN |
@@ -48,7 +48,7 @@
 ### A-4. 🔴 본문 인라인 이미지/동영상 업로드 — 시안 p21·23 리치 에디터 (담당 제안: 사라연)
 | 메서드 | 경로 | 요청 | 응답 | 권한 |
 |--------|------|------|------|------|
-| POST | /api/stu/{boardId}/posts/images | multipart(file) | {url} | 로그인 |
+| POST | /api/boards/{boardId}/posts/images | multipart(file) | {url} | 로그인 |
 - 에디터가 본문에 삽입할 URL 반환. 미사용 고아 이미지 정리 정책(배치) 함께 설계.
 - 🔵 본문 저장 포맷(HTML? 마크다운?) 기획 확정 필요 — XSS 필터링 정책 포함.
 
@@ -57,12 +57,12 @@
 
 | 메서드 | 경로 | 요청 | 응답 | 권한 |
 |--------|------|------|------|------|
-| POST | /api/stu/{boardId}/drafts | {title?,content?,categoryId?,isAnonymous?} | {draftId} | 로그인 |
-| PUT | /api/stu/{boardId}/drafts/{draftId} | 위와 동일 | message | 본인 |
-| GET | /api/stu/{boardId}/drafts | - | {count, drafts:[{draftId,title,updatedAt}]} | 본인 |
-| GET | /api/stu/{boardId}/drafts/{draftId} | - | 초안 전체(이어쓰기용) | 본인 |
-| DELETE | /api/stu/{boardId}/drafts/{draftId} | - | message | 본인 |
-| POST(수정) | /api/stu/{boardId}/posts | form-data에 draftId? 추가 | 기존과 동일 | 기존과 동일 |
+| POST | /api/boards/{boardId}/drafts | {title?,content?,categoryId?,isAnonymous?} | {draftId} | 로그인 |
+| PUT | /api/boards/{boardId}/drafts/{draftId} | 위와 동일 | message | 본인 |
+| GET | /api/boards/{boardId}/drafts | - | {count, drafts:[{draftId,title,updatedAt}]} | 본인 |
+| GET | /api/boards/{boardId}/drafts/{draftId} | - | 초안 전체(이어쓰기용) | 본인 |
+| DELETE | /api/boards/{boardId}/drafts/{draftId} | - | message | 본인 |
+| POST(수정) | /api/boards/{boardId}/posts | form-data에 draftId? 추가 | 기존과 동일 | 기존과 동일 |
 
 - posts.state 재사용 금지 → **별도 drafts 테이블**(목록/조회수/신고/제재 쿼리 오염 방지).
 - drafts는 소프트삭제 대전제의 **예외**(세션성 데이터) → state 컬럼 없이 물리 삭제.
@@ -85,15 +85,15 @@
 ### C-1. 🔴 프로필/활동 요약
 | 메서드 | 경로 | 응답 | 권한 |
 |--------|------|------|------|
-| GET | /api/stu/mypage | {loginId, name, joinedAt, postCount, commentCount, likedCount, semester:{posts,comments,receivedLikes}} | 본인 |
+| GET | /api/mypage | {loginId, name, joinedAt, postCount, commentCount, likedCount, semester:{posts,comments,receivedLikes}} | 본인 |
 - "이번 학기" 기준일(3/1, 9/1) 상수화. 삭제(state != normal) 글 포함 여부 🔵 확정 필요.
 
 ### C-2. 🔴 내가 쓴 글 / 내가 쓴 댓글 / 좋아요 누른 글 목록
 | 메서드 | 경로 | 요청 | 응답 |
 |--------|------|------|------|
-| GET | /api/stu/mypage/posts | ?page&size&sort&categoryId&keyword | 목록(제목/좋아요/조회수/작성일) |
-| GET | /api/stu/mypage/comments | ?page&size&sort&keyword | 목록(제목=원글, 내용, 작성일) |
-| GET | /api/stu/mypage/likes | ?page&size&sort&categoryId&keyword | 목록(제목/좋아요/조회수/작성일) |
+| GET | /api/mypage/posts | ?page&size&sort&categoryId&keyword | 목록(제목/좋아요/조회수/작성일) |
+| GET | /api/mypage/comments | ?page&size&sort&keyword | 목록(제목=원글, 내용, 작성일) |
+| GET | /api/mypage/likes | ?page&size&sort&categoryId&keyword | 목록(제목/좋아요/조회수/작성일) |
 
 ### C-3. 🔴 내 정보 수정 — "정보 수정" 버튼. 수정 가능 범위(비밀번호? 전화? 전공?) 🔵 기획 확정 필요.
 
@@ -108,9 +108,9 @@
 ### E-1. 🔴 guestbook 테이블 + CRUD
 | 메서드 | 경로 | 요청 | 응답 | 권한 |
 |--------|------|------|------|------|
-| GET | /api/stu/guestbook | ?page&size | 목록 | 로그인 |
-| POST | /api/stu/guestbook | {content, isAnonymous?} | message | 로그인 |
-| DELETE | /api/stu/guestbook/{id} | - | message | 본인/관리자 |
+| GET | /api/guestbook | ?page&size | 목록 | 로그인 |
+| POST | /api/guestbook | {content, isAnonymous?} | message | 로그인 |
+| DELETE | /api/guestbook/{id} | - | message | 본인/관리자 |
 - 🔵 방명록 화면 시안 상세(익명/비밀 여부, 관리자 관리 탭 존재)가 이번 PDF에 없음 — 기획 확인 후 착수.
 - 소프트삭제 대전제 적용(state 컬럼 포함) + 신고 대상 포함 여부 확정.
 
@@ -118,22 +118,21 @@
 ### F-1. 🔴 갤러리 테이블 + 조회/관리 API
 | 메서드 | 경로 | 요청 | 응답 | 권한 |
 |--------|------|------|------|------|
-| GET | /api/stu/gallery | ?page&size | [{galleryId,title,tags,thumbnailUrl,images:[...]}] | 로그인 |
+| GET | /api/gallery | ?page&size | [{galleryId,title,tags,thumbnailUrl,images:[...]}] | 로그인 |
 | POST | /api/admin/gallery | multipart(title,tags,files[]) | {galleryId} | ADMIN |
 | PUT/DELETE | /api/admin/gallery/{id} | ... | message | ADMIN |
 - 시안: 앨범 카드(제목 "필사그래피 MT" + 해시태그 "#바다 #날씨_최고 #2026") 형태.
 
 ## G. 신고/제재 보완
 
-- G-1. 🟡 정지/차단 로그인 응답 구조화 — 시안 p14: "2026.03.30 00:00 부터 다시 로그인 할 수 있습니다"
-  현재 message 문자열에 일시 포함 → `{message, banType, bannedUntil}` JSON 필드로 내려 FE가 포맷팅하게.
-- G-2. 🟡 댓글 신고 목록 행에 원글 postId 포함 (원문 Link 이동용) — ReportedItemResponse 확장.
-- G-3. 🔵 제재 상세 "누적 경고 N/5" — 시안 분모 5 vs ban_policy 3단계(1주/1달/영구). 기획 확정 필요.
-- G-4. 🟡 신고 접수 시 이미 삭제된 대상 거부(404/409) — 현재는 접수됨(무해하나 UX상 정리).
+- G-1. ✅ **완료(2026-08-14)** 정지/차단 응답 구조화 — 로그인·세션 중 차단 모두 `{message, banType, bannedUntil}` JSON.
+- G-2. ✅ **완료(2026-08-14)** 댓글 신고 목록 행에 원글 postId 포함 — ReportedItemResponse 확장.
+- G-3. ✅ **종결(PM 확정)** 경고 단계는 **ban_policy 3단계**(1주/1달/영구)가 정답 — 시안 `N/5`는 오표기, **FE가 `/3`으로 수정**할 것.
+- G-4. ✅ **완료(2026-08-14)** 이미 삭제된 대상 신고 409 거부 + 본인 글 신고 400 거부.
 
 ## H. 기타
 
-- H-1. ✅ **완료(2026-08-14)** 알림(헤더 종 아이콘) — notifications 테이블 + `/api/notifications` (목록/미읽음수/읽음/전체읽음/삭제).
+- H-1. ✅ **완료(2026-08-14)** 알림(헤더 종 아이콘) — notifications 테이블 + `/api/mypage/notifications` (목록/미읽음수/읽음/전체읽음/삭제).
   현재 발행 이벤트: 댓글·답글. 신고 처리·제재 알림은 발행 지점만 연결하면 되는 상태(NotificationService.notifyReportResolved/notifySanction).
 - H-2. ⚪ 아이디 저장(로그인 체크박스) — FE 로컬스토리지 처리로 충분, 백엔드 불필요.
 - H-3. 🔵 재학생 인증 절차(회원가입 승인 플로우) — 현재 가입 즉시 활성. 승인 대기 개념 유무 기획 확인.

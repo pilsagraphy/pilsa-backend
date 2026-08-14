@@ -5,6 +5,7 @@ import com.back.admin.sanction.dto.SanctionedUserDetailResponse;
 import com.back.admin.sanction.dto.SanctionedUserResponse;
 import com.back.admin.sanction.exception.SanctionException;
 import com.back.admin.sanction.mapper.SanctionMapper;
+import com.back.global.security.AuthUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -23,11 +24,13 @@ public class SanctionAdminService {
 
     // 현재 제재(정지/영구차단/주의) 중인 회원 목록
     public List<SanctionedUserResponse> getSanctionedUsers() {
+        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
         return sanctionMapper.findSanctionedUsers();
     }
 
     // 특정 회원의 현재 제재 현황 (태그, 정지 기간, 누적주의, 누적경고, 신고삭제처리건수)
     public SanctionedUserDetailResponse getSanctionedUserDetail(Long userId) {
+        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
         SanctionedUserResponse base = sanctionMapper.findSanctionedUserById(userId);
         if (base == null) {
             throw new SanctionException("존재하지 않는 회원입니다.", HttpStatus.NOT_FOUND);
@@ -51,12 +54,14 @@ public class SanctionAdminService {
 
     // 특정 회원이 작성한 게시글/댓글이 받은 신고 내역 전체 (제재회원 관리 화면)
     public List<ReportedContentResponse> getReportsByTargetAuthor(Long userId) {
+        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
         return sanctionMapper.findReportsByTargetAuthor(userId);
     }
 
     // 관리자 수동 해제
     @Transactional
     public void liftBan(Long userId, Long adminUserId) {
+        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
         sanctionMapper.updateUserBanStatus(userId, "none", null);
         sanctionMapper.closeActiveBanLog(userId, adminUserId);
     }

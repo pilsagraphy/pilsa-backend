@@ -27,15 +27,15 @@
 | 충돌 지점 | 관련 PR | 결정 |
 |-----------|---------|------|
 | `UserDto` / `AuthServicempl` / `JwtAuthenticationFilter` / `AuthMapper.xml` | #66 vs #68 | **양쪽 병합**: #66의 memberType/adminLevel + #68의 banStatus/bannedUntil·차단 검사 모두 반영 |
-| `SecurityConfig` `/api/stu/**` 접근 | #66 vs dev(#51 핫픽스) | **#66 채택** (STUDENT·ALUMNI 허용). #51 핫픽스가 ALUMNI를 제외했었으나, 권한 개편 전담 PR(#66)의 명시 설계 + #61의 read_scope='MEMBER' 초기값과 일치. ⚠️ PM 재확인 포인트 |
+| `SecurityConfig` `/api/stu/**` 접근 | #66 vs dev(#51 핫픽스) | **#66 채택** (STUDENT·ALUMNI 허용). ~~⚠️ PM 재확인 포인트~~ → **논점 소멸(2차 반영)**: 신분별 URL 분기 자체가 제거되고 `boards.read_scope` 데이터 판정으로 전환됨 |
 | student 게시판 매퍼 수정 (`state` 필터·소프트삭제) | #57 vs #62(파일 삭제) | #62의 `BoardMapper.xml`에 #57 의미 **포팅**: 목록/상세/top5/이전다음글 `state='normal'`, commentCount도 normal만, 댓글목록 normal만, 삭제=소프트(`state='deleted'`), **수정 시 state='normal' 조건 추가**(블라인드/삭제글 몰래 수정 방지 — 리뷰 지적 반영) |
 | student 게시판 `state` 필터 방식 | #57(`= 'normal'`) vs #68(`!= 'deleted'`) | **#57 채택** (블라인드도 숨김). #68 student 변경분은 PM 지시로 제거 |
 | 관리자 강제 삭제 API | #57(`/api/admin/posts/{id}` 등 moderation) vs #68(`/api/admin/free|info/...`) | **#57 채택**. #68의 free/info 강제삭제는 PM 지시로 제거 |
 | 신고 수락/거절 | #57(`/api/admin/reports/{type}/{id}` 반려·삭제, 일괄, 대상단위) vs #68(`/api/admin/reports/{reportId}/resolve|reject`, 신고단위) | **#57 채택** (대상 단위 처리 + pending 일괄 종료 → 중복신고 이중벌점 원천 차단). #68의 resolve/reject 제거(PM 지시) |
 | 주의→경고→정지 에스컬레이션 | #57(moderation: 주의 +2까지만) vs #68(PenaltyService: 경고/차단 자동전환) | **결합**: #57 `ModerationServiceImpl.softDelete`의 벌점 부여 직후 #68 에스컬레이션 로직 호출. #68 PenaltyService는 `admin/sanction`으로 이동·축소(중복 로그 INSERT 제거) |
 | ban_log 기록 | #60(수동 정지/차단) vs #68(자동 제재) | **공존**: #60=회원관리 화면의 수동 조치, #68=자동 제재+해제/현황. 단, 신규 차단 INSERT 전 기존 활성 ban_log를 닫아 "활성 행 최대 1개" 불변식 유지(리뷰 지적 반영) |
-| `checkAdminRole()` 중복 구현 | #60, #68, #69 각자 보유 | 각 도메인 유지 (기능 동일, 리팩터링은 후속) |
-| boards.code → name 변경 | #61 vs #57(`b.code` 사용) | **rename 미적용** (PM: 권한 부분만). `code` 유지 → #57 쿼리 안전 |
+| `checkAdminRole()` 중복 구현 | #60, #68, #69 각자 보유 | ~~각 도메인 유지~~ → **완료(2차 반영)**: `global.security.AuthUtils`로 수렴 |
+| boards.code → name 변경 | #61 vs #57(`b.code` 사용) | ~~rename 미적용~~ → **완료(2차 반영, PM 지시)**: `code`→`name`(한글) rename 적용, 응답 필드 `boardName` 통일. 아래 §4 DDL의 "AFTER code" 문구는 병합 당시 기록 |
 
 ---
 
@@ -107,9 +107,13 @@ WHERE `board_id` IN (1,2,3);
 - [x] boards 권한 컬럼 DDL 적용 (#61 §1)
 - [x] ~~boards 컬럼 제거 (#70)~~ → 적용 후 **PM 지시로 원복 완료** (allow_comment/allow_attachment/category_mode 원값 유지)
 - [x] 적용 후 스키마 재검증 (DESCRIBE 확인)
+- [x] **api_endpoints 테이블 생성 + 95행 시드** (2026-08-14 PM 지시) — API 인벤토리 정본.
+  `phase`(1기=6월 이전 / 2기) × `status`(active=구현·검증 완료 70 / planned=예정 25) × `auth`(PUBLIC/MEMBER/ADMIN).
+  경로 변경 이력은 note 컬럼에 기록. 노션 명세와 동기 대상.
 
 ### 보류/참고
-- `read_scope`/`write_level`은 아직 **코드에서 미사용** (게시판관리 화면 후속 작업용 선반영).
+- ~~`read_scope`/`write_level`은 아직 코드에서 미사용~~ → **2차 반영으로 사용 중**: 모든 게시판 요청의
+  열람·작성 판정에 사용된다 (`BoardPolicy.canRead/canWrite` ← `BoardPolicyService.requireReadable/requireWritable`).
 - comments FK `ON DELETE CASCADE` 미부여: 전 경로 소프트삭제 전환으로 물리삭제 없음 → 변경 불필요.
 
 ---
@@ -159,8 +163,10 @@ WHERE `board_id` IN (1,2,3);
 
 ---
 
-## 6. PM 재확인 포인트 (병합은 진행하되 최종 승인 전 확인 권장)
-1. `/api/stu/**`에 ALUMNI 허용(#66 설계 채택) — #51 핫픽스와 상반. 졸업생의 재학생 게시판 열람 정책 확정 필요.
-2. `isPinned`를 자유/정보 게시판에서 일반 회원이 설정 가능(#62, PM 보류 결정 유지) — 후속 PR 권장.
-3. #60의 수동 정지(warning_no=1 재사용)와 #68 자동 제재의 ban_log 혼재 — 현재는 공존 설계, 통계 분리 필요 시 후속.
-4. 신고 접수 경로가 `/api/stu/reports`라 ALUMNI 정책과 연동됨(1번과 동일 축).
+## 6. PM 재확인 포인트 — **전 항목 종결 (2026-08-14 2차 반영)**
+1. ~~`/api/stu/**`에 ALUMNI 허용~~ → **폐기**: 신분별 URL 분기 제거. 열람 대상은 `boards.read_scope` 데이터로 판정 (REVIEW-NOTES §6).
+2. ~~일반 회원 isPinned 설정 가능~~ → **해결**: 모든 게시판에서 관리자(레벨 1~3)만 설정 가능 (`resolvePinned`, 실측 검증).
+3. ~~ban_log 수동/자동 혼재~~ → **해결**: `source`(auto/manual) 컬럼 + `warning_no` nullable — 수동 조치가 경고로 집계되지 않음.
+4. ~~신고 접수 경로 /api/stu/reports ALUMNI 연동~~ → **폐기**: 최종 경로 `POST /api/reports` (신분·관리자 무관 공통).
+
+> §5 테스트 표의 경로들은 **병합 당시(1차) 경로**다. 이후 URL 재설계로 전부 변경됨 — 현행 경로는 `API-MIGRATION.md` 참조.

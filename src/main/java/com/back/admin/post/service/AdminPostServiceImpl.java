@@ -8,6 +8,7 @@ import com.back.admin.post.dto.AdminPostListResponse;
 import com.back.admin.post.dto.AdminPostPageResponse;
 import com.back.admin.post.exception.AdminPostException;
 import com.back.admin.post.mapper.AdminPostMapper;
+import com.back.global.security.AuthUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,7 @@ public class AdminPostServiceImpl implements AdminPostService {
 
     @Override
     public AdminPostPageResponse getPostList(int page, int size, Long boardId, String keyword) {
+        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
         page = AdminServiceSupport.clampPage(page);
         size = AdminServiceSupport.clampSize(size);
 
@@ -49,6 +51,7 @@ public class AdminPostServiceImpl implements AdminPostService {
 
     @Override
     public AdminPostDetailResponse getPostDetail(Long postId) {
+        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
         // state 필터 없이 조회 → 블라인드/삭제 글도 열람. 조회수는 올리지 않음.
         AdminPostDetailResponse detail = adminPostMapper.findPostDetail(postId);
         if (detail == null) {
@@ -62,23 +65,27 @@ public class AdminPostServiceImpl implements AdminPostService {
     @Override
     @Transactional
     public void blindPost(Long postId, Long reasonId, String detail) {
+        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
         moderationService.blind(TARGET_POST, postId, AdminServiceSupport.currentAdminId(), reasonId, detail);
     }
 
     @Override
     @Transactional
     public void restorePost(Long postId) {
+        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
         moderationService.restore(TARGET_POST, postId, AdminServiceSupport.currentAdminId());
     }
 
     @Override
     public void deletePost(Long postId, Long reasonId, String detail) {
+        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
         // 항목별 독립 트랜잭션으로 실행 (단건도 동일 경로 사용)
         postBulkExecutor.deletePost(postId, AdminServiceSupport.currentAdminId(), reasonId, detail);
     }
 
     @Override
     public BulkResultResponse bulkDeletePosts(List<Long> postIds, Long reasonId, String detail) {
+        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
         if (CollectionUtils.isEmpty(postIds)) {
             throw new AdminPostException("삭제할 게시글을 선택해 주세요.", HttpStatus.BAD_REQUEST);
         }

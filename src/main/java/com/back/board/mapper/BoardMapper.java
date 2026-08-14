@@ -46,6 +46,13 @@ public interface BoardMapper {
     // 메인 화면용 상단 5개 조회 (공지사항은 is_pinned 우선 정렬)
     List<BoardTop5Response> findTop5Posts(@Param("boardId") Long boardId);
 
+    // 게시글이 URL의 게시판 소속 + 노출(normal) 상태인지 — 좋아요/댓글/수정/삭제 공통 가드.
+    // 이 검증이 없으면 열람 가능한 게시판 URL에 타 게시판 postId를 넣어 read_scope를 우회할 수 있다.
+    boolean existsNormalPostInBoard(@Param("postId") Long postId, @Param("boardId") Long boardId);
+
+    // 댓글이 URL의 게시판 게시글에 달린 normal 댓글인지 — 댓글 수정/삭제 가드
+    boolean existsNormalCommentInBoard(@Param("commentId") Long commentId, @Param("boardId") Long boardId);
+
     // 게시글 전체 목록 조회 (페이징, 카테고리 필터, 검색, 정렬 포함)
     List<BoardListResponse> findAllPosts(
             @Param("boardId") Long boardId,

@@ -8,7 +8,7 @@ import lombok.Setter;
 @Setter
 public class AdminBoardResponse {
     private Long boardId;
-    private String name;
+    private String boardName;   // 한글 게시판명 — 응답 필드 boardName 컨벤션
     private int postCount;
     private String readScope;
     private Integer writeLevel;

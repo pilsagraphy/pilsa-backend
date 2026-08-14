@@ -19,7 +19,7 @@ import java.util.Set;
 /**
  * 게시판 관리 서비스.
  * 게시판이 데이터가 되었으므로(=BoardType enum 제거) 관리자가 만든 게시판도
- * 별도 배포 없이 /api/stu/{boardId}/** 로 즉시 동작한다.
+ * 별도 배포 없이 /api/boards/{boardId}/** 로 즉시 동작한다.
  */
 @Slf4j
 @Service
@@ -139,7 +139,7 @@ public class AdminBoardService {
     private AdminBoardResponse toResponse(BoardPolicy policy, int postCount) {
         AdminBoardResponse response = new AdminBoardResponse();
         response.setBoardId(policy.getBoardId());
-        response.setName(policy.getName());
+        response.setBoardName(policy.getName());
         response.setPostCount(postCount);
         response.setReadScope(policy.getReadScope());
         response.setWriteLevel(policy.getWriteLevel());

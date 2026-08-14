@@ -93,10 +93,41 @@ public class BoardServiceImpl implements BoardService {
         detail.setAttachments(attachments);
         detail.setAttachmentCount(attachments != null ? attachments.size() : 0);
         detail.setLikeCount(boardMapper.countLikesByPostId(postId));
-        detail.setComments(boardMapper.findCommentsByPostId(postId));
+        detail.setComments(maskComments(boardMapper.findCommentsByPostId(postId), detail.getUserId(), currentUserId));
         detail.setIsLiked(boardMapper.existsLikeByPostIdAndUserId(postId, currentUserId));
 
+        // 익명 글 작성자 마스킹 — 마스킹은 서버 책임 (프론트 마스킹은 API 직접 호출로 우회된다)
+        // 관리자와 작성자 본인에게만 실작성자를 보여준다. 댓글 마스킹(maskComments)이 원글 작성자
+        // 판정에 원본 userId를 쓰므로 반드시 댓글 처리 후에 가린다.
+        if (Boolean.TRUE.equals(detail.getIsAnonymous())
+                && !AuthUtils.isAdmin() && !currentUserId.equals(detail.getUserId())) {
+            detail.setAuthorName("익명");
+            detail.setUserId(null);
+        }
+
         return detail;
+    }
+
+    /**
+     * 댓글 목록 서버측 마스킹.
+     *  - 비밀댓글: 관리자 / 댓글 작성자 / 원글 작성자만 내용 열람, 그 외에는 내용을 가린다
+     *  - 익명댓글: 관리자 / 댓글 작성자 외에는 실명·userId를 가린다
+     */
+    private List<CommentDetailResponse> maskComments(List<CommentDetailResponse> comments,
+                                                     Long postAuthorId, Long currentUserId) {
+        boolean admin = AuthUtils.isAdmin();
+        boolean postAuthor = currentUserId.equals(postAuthorId);
+        for (CommentDetailResponse comment : comments) {
+            boolean commentAuthor = currentUserId.equals(comment.getUserId());
+            if (Boolean.TRUE.equals(comment.getIsPrivate()) && !admin && !commentAuthor && !postAuthor) {
+                comment.setContent("비밀댓글입니다.");
+            }
+            if (Boolean.TRUE.equals(comment.getIsAnonymous()) && !admin && !commentAuthor) {
+                comment.setAuthorName("익명");
+                comment.setUserId(null);
+            }
+        }
+        return comments;
     }
 
     // 게시글 좋아요 토글
@@ -104,6 +135,7 @@ public class BoardServiceImpl implements BoardService {
     @Transactional
     public BoardResponse togglePostLike(Long boardId, Long postId) {
         boardPolicyService.requireReadable(boardId);
+        requirePostInBoard(postId, boardId);
         Long userId = AuthUtils.currentUserId();
 
         if (boardMapper.existsLikeByPostIdAndUserId(postId, userId)) {
@@ -147,6 +179,7 @@ public class BoardServiceImpl implements BoardService {
     @Transactional
     public BoardResponse updatePost(Long boardId, Long postId, BoardUpdateRequest request) {
         BoardPolicy policy = boardPolicyService.requireReadable(boardId);
+        requirePostInBoard(postId, boardId);
         Long currentUserId = AuthUtils.currentUserId();
         Long authorId = boardMapper.findAuthorIdByPostId(postId);
 
@@ -172,20 +205,21 @@ public class BoardServiceImpl implements BoardService {
     }
 
     /**
-     * 게시글 삭제 (소프트).
-     * 관리자는 모든 글, 일반 회원은 본인 글만 삭제할 수 있다.
+     * 게시글 삭제 (소프트). 작성자 본인만 가능하다.
+     * 관리자의 타인 글 삭제는 이 API가 아니라 관리자 API(/api/admin/posts/{postId})를 쓴다 —
+     * 그쪽만 ModerationService를 경유해 moderation_log 기록과 벌점 부과가 일어나기 때문.
+     * 여기서 관리자를 허용하면 로그·벌점 없는 우회 삭제 경로가 생긴다.
      */
     @Override
     @Transactional
     public BoardResponse deletePost(Long boardId, Long postId) {
         boardPolicyService.requireReadable(boardId);
+        requirePostInBoard(postId, boardId);
         Long currentUserId = AuthUtils.currentUserId();
 
-        if (!AuthUtils.isAdmin()) {
-            Long authorId = boardMapper.findAuthorIdByPostId(postId);
-            if (!currentUserId.equals(authorId)) {
-                throw new BoardException("본인 글만 삭제할 수 있습니다.", HttpStatus.FORBIDDEN);
-            }
+        Long authorId = boardMapper.findAuthorIdByPostId(postId);
+        if (!currentUserId.equals(authorId)) {
+            throw new BoardException("본인 글만 삭제할 수 있습니다. (관리자 조치는 관리자 게시글 관리에서)", HttpStatus.FORBIDDEN);
         }
 
         int deleted = boardMapper.deletePost(postId);
@@ -198,6 +232,7 @@ public class BoardServiceImpl implements BoardService {
     @Transactional
     public CommentResponse createComment(Long boardId, Long postId, CommentRequest request) {
         BoardPolicy policy = boardPolicyService.requireReadable(boardId);
+        requirePostInBoard(postId, boardId); // 타 게시판 글·블라인드/삭제 글에 대한 댓글 차단
         Long userId = AuthUtils.currentUserId();
 
         if (!policy.isCommentAllowed()) {
@@ -226,6 +261,7 @@ public class BoardServiceImpl implements BoardService {
     @Transactional
     public CommentResponse updateComment(Long boardId, Long commentId, CommentRequest request) {
         BoardPolicy policy = boardPolicyService.requireReadable(boardId);
+        requireCommentInBoard(commentId, boardId);
         Long currentUserId = AuthUtils.currentUserId();
         Long authorId = boardMapper.findCommentAuthorId(commentId);
 
@@ -239,16 +275,17 @@ public class BoardServiceImpl implements BoardService {
         return new CommentResponse("댓글이 성공적으로 수정되었습니다.");
     }
 
-    // 댓글 삭제 (소프트): 관리자 또는 작성자 본인
+    // 댓글 삭제 (소프트): 작성자 본인만. 관리자 조치는 admin.moderation 경유(로그+벌점) — deletePost와 동일한 이유
     @Override
     @Transactional
     public BoardResponse deleteComment(Long boardId, Long commentId) {
         boardPolicyService.requireReadable(boardId);
+        requireCommentInBoard(commentId, boardId);
         Long currentUserId = AuthUtils.currentUserId();
         Long authorId = boardMapper.findCommentAuthorId(commentId);
 
-        if (!AuthUtils.isAdmin() && !currentUserId.equals(authorId)) {
-            throw new BoardException("본인 댓글만 삭제할 수 있습니다.", HttpStatus.FORBIDDEN);
+        if (!currentUserId.equals(authorId)) {
+            throw new BoardException("본인 댓글만 삭제할 수 있습니다. (관리자 조치는 관리자 화면에서)", HttpStatus.FORBIDDEN);
         }
 
         boardMapper.deleteComment(commentId);
@@ -256,6 +293,21 @@ public class BoardServiceImpl implements BoardService {
     }
 
     // ---- 내부 헬퍼 ----
+
+    // 게시글이 URL의 게시판 소속 + normal 상태인지 확인 (read_scope 우회·블라인드/삭제 글 조작 차단)
+    // 타 게시판 글이면 대상의 존재 자체를 노출하지 않기 위해 403이 아니라 404로 응답한다
+    private void requirePostInBoard(Long postId, Long boardId) {
+        if (!boardMapper.existsNormalPostInBoard(postId, boardId)) {
+            throw new BoardException("존재하지 않는 게시글입니다.", HttpStatus.NOT_FOUND);
+        }
+    }
+
+    // 댓글 버전 동일 가드
+    private void requireCommentInBoard(Long commentId, Long boardId) {
+        if (!boardMapper.existsNormalCommentInBoard(commentId, boardId)) {
+            throw new BoardException("존재하지 않는 댓글입니다.", HttpStatus.NOT_FOUND);
+        }
+    }
 
     // 등록 요청에 게시판 정책을 적용 (카테고리 보정, 익명 허용 여부, 중요표시 권한)
     private void applyWritePolicy(BoardPolicy policy, BoardRequest request) {
