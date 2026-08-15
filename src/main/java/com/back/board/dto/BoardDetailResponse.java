@@ -41,7 +41,9 @@ public class BoardDetailResponse {
     private List<AttachmentFileResponse> attachments;
     private int attachmentCount;
 
-    private List<CommentDetailResponse> comments;
+    // 댓글 본문은 상세 응답에 싣지 않는다 — GET /api/user/boards/{boardId}/posts/{postId}/comments 로 따로 조회한다.
+    // 목록/헤더에 "댓글 n"을 그리는 데는 개수만 있으면 되기 때문.
+    private int commentCount;
 
     // 매퍼가 이전/다음 글 id만 먼저 채우고, 서비스가 이 id로 상세를 조회해 위 prevPost/nextPost 를 세팅한다.
     // 내부 전달용이라 응답 JSON에는 나가지 않는다.

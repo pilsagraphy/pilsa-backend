@@ -115,6 +115,37 @@
         )
     </select>
 
+    <!-- 게시판 생성 시 '중요' 카테고리 자동 생성.
+         INSERT IGNORE + uq_categories_board_code 로 재실행해도 중복이 생기지 않는다(멱등). -->
+    <insert id="insertPinnedCategory">
+        INSERT IGNORE INTO categories (name, code, display_order, is_active, board_id)
+        VALUES ('중요', 'PINNED', 99, 1, #{boardId})
+    </insert>
+
+    <!-- 삭제 대상 첨부의 물리 경로 (소프트삭제 전에 확보해 디스크 파일까지 지운다) -->
+    <select id="findAttachmentUrls" resultType="string">
+        SELECT file_url
+        FROM attachments
+        WHERE post_id = #{postId}
+          AND state = 'normal'
+          AND attachment_id IN
+          <foreach collection="attachmentIds" item="id" open="(" separator="," close=")">
+              #{id}
+          </foreach>
+    </select>
+
+    <!-- 첨부 소프트삭제. 대상 글 소속인 것만 지운다(남의 글 첨부 id를 섞어 보내도 무해) -->
+    <update id="softDeleteAttachments">
+        UPDATE attachments
+        SET state = 'deleted'
+        WHERE post_id = #{postId}
+          AND state = 'normal'
+          AND attachment_id IN
+          <foreach collection="attachmentIds" item="id" open="(" separator="," close=")">
+              #{id}
+          </foreach>
+    </update>
+
     <!-- 이전글/다음글 상세 (하단 내비게이션: 카테고리 뱃지 + 제목 + 작성일) -->
     <select id="findAdjacentPost" resultType="com.back.board.dto.AdjacentPostResponse">
         SELECT p.post_id    AS postId,
@@ -126,9 +157,9 @@
         WHERE p.post_id = #{postId}
     </select>
 
-    <!-- 메인 화면용 상단 5개 조회 (공지사항은 is_pinned 우선, 그 외는 최신순)
+    <!-- 메인 화면용 상단 N개 조회 (is_pinned 우선, 그 외는 최신순). 개수는 프론트가 요청한 값
          블라인드/삭제(state != normal) 글은 학생 화면에서 숨김 (PR #57 포팅) -->
-    <select id="findTop5Posts" resultType="com.back.board.dto.BoardTop5Response">
+    <select id="findTopPosts" resultType="com.back.board.dto.BoardTopPostResponse">
         SELECT post_id   AS postId,
                title,
                is_pinned AS isPinned
@@ -136,7 +167,7 @@
         WHERE board_id = #{boardId}
           AND state = 'normal'
         ORDER BY is_pinned DESC, created_at DESC
-        LIMIT 5
+        LIMIT #{limit}
     </select>
 
     <!-- 게시글-게시판 소속 + 상태 가드 (read_scope 우회 차단) -->
@@ -261,9 +292,20 @@
                file_url      AS fileUrl
         FROM attachments
         WHERE post_id = #{postId}
+          AND state = 'normal'
     </select>
 
-    <!-- 댓글 목록 조회 (자유=익명, 정보=비밀댓글). 블라인드/삭제 댓글은 숨김 -->
+    <!-- 노출 대상 댓글 수 (블라인드/삭제 제외) — 목록 count 와 같은 기준 -->
+    <select id="countCommentsByPostId" resultType="int">
+        SELECT COUNT(*)
+        FROM comments
+        WHERE post_id = #{postId}
+          AND state = 'normal'
+    </select>
+
+    <!-- 댓글 목록 조회 (자유=익명, 정보=비밀댓글).
+         state='normal' 만 내려간다 — 관리자가 블라인드(blind)했거나 삭제(deleted)한 댓글,
+         작성자가 지운 댓글은 학생 화면에 절대 노출되지 않는다. -->
     <select id="findCommentsByPostId" resultType="com.back.board.dto.CommentDetailResponse">
         SELECT
             c.comment_id AS commentId,

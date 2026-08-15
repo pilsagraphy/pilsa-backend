@@ -46,12 +46,12 @@ CREATE TABLE `drafts` (
 
 | # | 메서드 | 경로 | 요청 | 응답 | 권한 |
 |---|--------|------|------|------|------|
-| 1 | POST | `/api/boards/{boardId}/drafts` | `{title?, content?, categoryId?, isAnonymous?}` | `{draftId}` | 로그인 + 해당 게시판 쓰기 권한 |
-| 2 | PUT | `/api/boards/{boardId}/drafts/{draftId}` | 위와 동일 | `{message}` | 본인 |
-| 3 | GET | `/api/boards/{boardId}/drafts` | - | `{count, drafts:[{draftId,title,updatedAt}]}` | 본인 |
-| 4 | GET | `/api/boards/{boardId}/drafts/{draftId}` | - | `{draftId,title,content,categoryId,isAnonymous,updatedAt}` | 본인 |
-| 5 | DELETE | `/api/boards/{boardId}/drafts/{draftId}` | - | `{message}` | 본인 |
-| 6 | (기존 수정) POST | `/api/boards/{boardId}/posts` | form-data에 `draftId?` 추가 | 기존과 동일 | 기존과 동일 |
+| 1 | POST | `/api/user/boards/{boardId}/drafts` | `{title?, content?, categoryId?, isAnonymous?}` | `{draftId}` | 로그인 + 해당 게시판 쓰기 권한 |
+| 2 | PUT | `/api/user/boards/{boardId}/drafts/{draftId}` | 위와 동일 | `{message}` | 본인 |
+| 3 | GET | `/api/user/boards/{boardId}/drafts` | - | `{count, drafts:[{draftId,title,updatedAt}]}` | 본인 |
+| 4 | GET | `/api/user/boards/{boardId}/drafts/{draftId}` | - | `{draftId,title,content,categoryId,isAnonymous,updatedAt}` | 본인 |
+| 5 | DELETE | `/api/user/boards/{boardId}/drafts/{draftId}` | - | `{message}` | 본인 |
+| 6 | (기존 수정) POST | `/api/user/boards/{boardId}/posts` | form-data에 `draftId?` 추가 | 기존과 동일 | 기존과 동일 |
 
 **초안 3개에서 늘어난 이유**
 - **2번(덮어쓰기)**: 저장 버튼을 두 번 누르면 초안이 계속 쌓이면 안 된다. 프론트가 draftId를 들고 있으면 PUT.

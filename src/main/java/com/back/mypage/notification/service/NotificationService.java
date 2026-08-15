@@ -1,12 +1,16 @@
 package com.back.mypage.notification.service;
 
+import com.back.mypage.notification.dto.NotificationDeviceRequest;
 import com.back.mypage.notification.dto.NotificationPageResponse;
 import com.back.mypage.notification.dto.NotificationResponse;
 import com.back.mypage.notification.dto.NotificationType;
+import com.back.mypage.notification.exception.NotificationException;
+import com.back.mypage.notification.mapper.NotificationDeviceMapper;
 import com.back.mypage.notification.mapper.NotificationMapper;
 import com.back.global.security.AuthUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +30,8 @@ import java.util.List;
 public class NotificationService {
 
     private final NotificationMapper notificationMapper;
+    private final NotificationDeviceMapper notificationDeviceMapper;
+    private final NotificationPushService notificationPushService;
 
     // ---- 조회 ----
 
@@ -103,8 +109,33 @@ public class NotificationService {
         try {
             notificationMapper.insertNotification(receiverId, type.name(), type.defaultTitle(),
                     message, linkUrl, targetType, targetId);
+            // 등록된 기기(웹앱·모바일 브라우저)로도 발송 — 비동기라 본 기능을 지연시키지 않는다
+            notificationPushService.sendToUser(receiverId, type.defaultTitle(), message, linkUrl);
         } catch (Exception e) {
             log.warn("알림 발행 실패 - userId: {}, type: {}, {}", receiverId, type, e.getMessage());
         }
+    }
+
+    // ---- 알림 수신 기기 등록부 (웹 푸시 전달 채널. 캘린더 구독과 무관) ----
+
+    @Transactional
+    public void registerDevice(NotificationDeviceRequest request) {
+        if (request.getEndpoint() == null || request.getEndpoint().isBlank()
+                || request.getKeys() == null
+                || request.getKeys().getP256dh() == null || request.getKeys().getP256dh().isBlank()
+                || request.getKeys().getAuth() == null || request.getKeys().getAuth().isBlank()) {
+            throw new NotificationException("기기 등록 정보가 올바르지 않습니다.", HttpStatus.BAD_REQUEST);
+        }
+        notificationDeviceMapper.upsertDevice(AuthUtils.currentUserId(),
+                request.getEndpoint(), request.getKeys().getP256dh(), request.getKeys().getAuth());
+    }
+
+    @Transactional
+    public void unregisterDevice(String endpoint) {
+        if (endpoint == null || endpoint.isBlank()) {
+            throw new NotificationException("해제할 기기의 endpoint 가 필요합니다.", HttpStatus.BAD_REQUEST);
+        }
+        // 이미 없는 기기여도 결과 상태는 동일하므로 성공으로 처리
+        notificationDeviceMapper.deleteByEndpoint(AuthUtils.currentUserId(), endpoint);
     }
 }

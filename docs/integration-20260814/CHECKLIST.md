@@ -102,6 +102,33 @@ SET `read_scope` = 'MEMBER',
 WHERE `board_id` IN (1,2,3);
 -- (원본 SQL의 'STUDENTS' 표기는 users.member_type('STUDENT')과 맞추기 위해 'STUDENT'로 통일해 주석 반영)
 
+-- [2026-08-15] read_scope 에서 전체공개(ALL) 폐지 — 게시판은 최소 로그인 회원만 열람 가능
+-- (기존 데이터에 ALL 사용 게시판 0건이라 값 마이그레이션 없이 코멘트만 정정)
+ALTER TABLE `boards`
+  MODIFY COLUMN `read_scope` varchar(20) NOT NULL DEFAULT 'MEMBER'
+    COMMENT '열람 대상: MEMBER(재학+졸업) / STUDENT(재학생만) / ALUMNI(졸업생만) — 전체공개(ALL) 없음';
+
+-- [2026-08-16] event_categories(일정 카테고리 테이블)는 적용했다가 **PM 지시로 당일 롤백** —
+--               팀원 과제로 전환. 완성 구현본(DDL+시드+API+검증)은 git 브랜치 archive/event-categories 에 보관.
+
+-- [2026-08-16] 임시저장 보관 상한 5개 확정 (PM 지시 — 코드는 하드코딩 대신 이 값을 로드할 것)
+INSERT INTO `policy_settings` (code, setting_value, description)
+VALUES ('draft_max_count', '5', '임시저장 보관 상한 (회원당 게시판별)');
+
+-- [2026-08-16] 알림 수신 기기 등록부 (웹 푸시 채널 — PM 지시로 2기 개발). 세션성 데이터라 물리삭제 예외
+CREATE TABLE `notification_devices` (
+  `device_id`   bigint       NOT NULL AUTO_INCREMENT COMMENT '알림 수신 기기 고유 번호',
+  `user_id`     bigint       NOT NULL COMMENT '기기 소유 회원 (→users)',
+  `endpoint`    varchar(500) NOT NULL COMMENT '브라우저가 발급한 푸시 수신 주소',
+  `p256dh`      varchar(255) NOT NULL COMMENT '페이로드 암호화 공개키 (브라우저 발급)',
+  `auth_secret` varchar(255) NOT NULL COMMENT '페이로드 암호화 인증 시크릿 (브라우저 발급)',
+  `created_at`  datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '등록 일시',
+  PRIMARY KEY (`device_id`),
+  UNIQUE KEY `uq_notification_devices_endpoint` (`endpoint`),
+  KEY `idx_notification_devices_user` (`user_id`),
+  CONSTRAINT `fk_notification_devices_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='알림 수신 기기 등록부 (웹 푸시. 세션성 데이터 — 물리 삭제 허용)';
+
 ```
 - [x] events DDL 적용 (2026-08-14, location 값 전부 NULL 확인 후 제거)
 - [x] boards 권한 컬럼 DDL 적용 (#61 §1)
@@ -167,6 +194,6 @@ WHERE `board_id` IN (1,2,3);
 1. ~~`/api/stu/**`에 ALUMNI 허용~~ → **폐기**: 신분별 URL 분기 제거. 열람 대상은 `boards.read_scope` 데이터로 판정 (REVIEW-NOTES §6).
 2. ~~일반 회원 isPinned 설정 가능~~ → **해결**: 모든 게시판에서 관리자(레벨 1~3)만 설정 가능 (`resolvePinned`, 실측 검증).
 3. ~~ban_log 수동/자동 혼재~~ → **해결**: `source`(auto/manual) 컬럼 + `warning_no` nullable — 수동 조치가 경고로 집계되지 않음.
-4. ~~신고 접수 경로 /api/stu/reports ALUMNI 연동~~ → **폐기**: 최종 경로 `POST /api/reports` (신분·관리자 무관 공통).
+4. ~~신고 접수 경로 /api/stu/reports ALUMNI 연동~~ → **폐기**: 최종 경로 `POST /api/user/reports` (신분·관리자 무관 공통).
 
 > §5 테스트 표의 경로들은 **병합 당시(1차) 경로**다. 이후 URL 재설계로 전부 변경됨 — 현행 경로는 `API-MIGRATION.md` 참조.

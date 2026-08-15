@@ -9,15 +9,17 @@ import lombok.Setter;
  * 예전에는 BoardType enum 이 boardId 1/2/3 을 하드코딩하고 있어서 관리자가 게시판을 새로 만들면
  * 코드 수정·재배포 전까지 동작하지 않았다. 이제 게시판 정책은 전부 이 DTO(=boards 행)로 온다.
  *
- *  - readScope  : 열람 대상 집합 ALL / MEMBER / STUDENT / ALUMNI  (신분 기준)
- *  - writeLevel : 작성에 필요한 최소 관리레벨 0~3                  (관리레벨 기준)
+ *  - readScope  : 열람 대상 집합 MEMBER / STUDENT / ALUMNI  (신분 기준)
+ *  - writeLevel : 작성에 필요한 최소 관리레벨 0~3            (관리레벨 기준)
  * 열람과 작성은 기준 축이 달라서 하나의 숫자로 합치지 않는다.
+ *
+ * 게시판에는 "전체 공개(ALL)"가 없다 — 어떤 게시판이든 최소한 로그인 회원이어야 열람할 수 있다.
+ * 비로그인에게 열어야 하는 것은 게시판이 아니라 공개 리소스(/api/donations, /api/quotes/current, /api/event)다.
  */
 @Getter
 @Setter
 public class BoardPolicy {
 
-    public static final String SCOPE_ALL = "ALL";          // 비로그인 포함 전체 공개
     public static final String SCOPE_MEMBER = "MEMBER";    // 로그인 회원 전체(재학생+졸업생)
     public static final String SCOPE_STUDENT = "STUDENT";  // 재학생 전용
     public static final String SCOPE_ALUMNI = "ALUMNI";    // 졸업생(동문) 전용
@@ -68,14 +70,11 @@ public class BoardPolicy {
         if (adminLevel >= 1) {
             return true;
         }
-        if (SCOPE_ALL.equals(readScope)) {
-            return true;
-        }
         if (memberType == null) {
-            return false; // 비로그인은 ALL 게시판만
+            return false; // 비로그인은 어떤 게시판도 열람 불가 (ALL 스코프 폐지)
         }
         if (SCOPE_MEMBER.equals(readScope)) {
-            return true;
+            return true; // 재학생 + 졸업생
         }
         return readScope != null && readScope.equals(memberType); // STUDENT / ALUMNI 정확히 일치
     }

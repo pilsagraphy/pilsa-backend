@@ -1,6 +1,7 @@
 package com.back.admin.sanction.service;
 
-import com.back.admin.sanction.dto.ReportedContentResponse;
+import com.back.admin.sanction.dto.ReportedCommentResponse;
+import com.back.admin.sanction.dto.ReportedPostResponse;
 import com.back.admin.sanction.dto.SanctionedUserDetailResponse;
 import com.back.admin.sanction.dto.SanctionedUserResponse;
 import com.back.admin.sanction.exception.SanctionException;
@@ -52,10 +53,16 @@ public class SanctionAdminService {
         return detail;
     }
 
-    // 특정 회원이 작성한 게시글/댓글이 받은 신고 내역 전체 (제재회원 관리 화면)
-    public List<ReportedContentResponse> getReportsByTargetAuthor(Long userId) {
+    // 특정 회원이 작성한 '게시글'이 받은 신고 내역 (제재회원 관리 화면)
+    public List<ReportedPostResponse> getReportedPosts(Long userId) {
         AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
-        return sanctionMapper.findReportsByTargetAuthor(userId);
+        return sanctionMapper.findReportedPostsByAuthor(userId);
+    }
+
+    // 특정 회원이 작성한 '댓글'이 받은 신고 내역 (제재회원 관리 화면)
+    public List<ReportedCommentResponse> getReportedComments(Long userId) {
+        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
+        return sanctionMapper.findReportedCommentsByAuthor(userId);
     }
 
     // 관리자 수동 해제

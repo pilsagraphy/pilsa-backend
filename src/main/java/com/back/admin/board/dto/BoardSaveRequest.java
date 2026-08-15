@@ -13,7 +13,7 @@ import lombok.ToString;
 @ToString
 public class BoardSaveRequest {
     private String name;                  // 게시판 이름 (한글, 중복 불가)
-    private String readScope;             // ALL / MEMBER / STUDENT / ALUMNI
+    private String readScope;             // MEMBER(재학+졸업) / STUDENT(재학) / ALUMNI(졸업) — 전체 공개(ALL) 불가
     private Integer writeLevel;           // 0=일반회원, 1~3=관리자 레벨
     private Integer displayOrder;         // 노출 순서 (미지정 시 맨 뒤)
     private Boolean allowComment;         // 댓글 사용
