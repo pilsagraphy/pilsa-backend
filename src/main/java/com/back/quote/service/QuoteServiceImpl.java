@@ -1,6 +1,7 @@
 package com.back.quote.service;
 
 import com.back.quote.dto.QuoteDataResponse;
+import com.back.quote.dto.QuoteListItemResponse;
 import com.back.quote.dto.QuoteListResponse;
 import com.back.quote.dto.QuoteRequest;
 import com.back.quote.dto.QuoteResponse;
@@ -126,7 +127,7 @@ public class QuoteServiceImpl implements QuoteService {
     public QuoteListResponse getAllQuotes() {
         checkAdminRole();
 
-        List<QuoteDataResponse> quotes = quoteMapper.findAllQuotes();
+        List<QuoteListItemResponse> quotes = quoteMapper.findAllQuotes();
         return new QuoteListResponse("문장 목록을 성공적으로 불러왔습니다.", quotes);
     }
 

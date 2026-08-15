@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -27,6 +28,9 @@ import java.util.List;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class BoardServiceImpl implements BoardService {
+
+    // 상단 N개 조회 상한 — 프론트가 큰 값을 보내 목록 API를 대체해버리는 것을 막는다
+    private static final int MAX_TOP_POSTS = 50;
 
     private final BoardMapper boardMapper;
     private final BoardPolicyService boardPolicyService;
@@ -48,11 +52,14 @@ public class BoardServiceImpl implements BoardService {
         return boardMapper.findCategoriesByBoardId(boardId, AuthUtils.isAdmin());
     }
 
-    // 메인용 상단 5개 조회
+    // 메인용 상단 N개 조회 (개수는 프론트가 정한다)
     @Override
-    public List<BoardTop5Response> getTop5Posts(Long boardId) {
+    public List<BoardTopPostResponse> getTopPosts(Long boardId, int num) {
         boardPolicyService.requireReadable(boardId);
-        return boardMapper.findTop5Posts(boardId);
+        if (num < 1 || num > MAX_TOP_POSTS) {
+            throw new BoardException("조회 개수는 1 이상 " + MAX_TOP_POSTS + " 이하여야 합니다.", HttpStatus.BAD_REQUEST);
+        }
+        return boardMapper.findTopPosts(boardId, num);
     }
 
     // 게시판 전체 목록 조회
@@ -75,18 +82,15 @@ public class BoardServiceImpl implements BoardService {
         return response;
     }
 
-    // 게시글 단일 상세 조회 (조회수 증가 및 첨부/좋아요/댓글 포함)
+    // 게시글 단일 상세 조회 (조회수 증가, 첨부/좋아요/댓글 수 포함 — 댓글 본문은 getComments 별도 API)
     @Override
     @Transactional
     public BoardDetailResponse getPostDetail(Long boardId, Long postId, String sort) {
-        return buildDetail(boardId, postId, sort, true);
+        return buildDetail(boardId, postId, sort);
     }
 
-    /**
-     * 상세 응답 조립.
-     * @param increaseView 조회수를 올릴지 — 수정 직후 응답으로 재사용할 때는 올리지 않는다
-     */
-    private BoardDetailResponse buildDetail(Long boardId, Long postId, String sort, boolean increaseView) {
+    // 상세 응답 조립
+    private BoardDetailResponse buildDetail(Long boardId, Long postId, String sort) {
         boardPolicyService.requireReadable(boardId);
         Long currentUserId = AuthUtils.currentUserId();
 
@@ -103,21 +107,19 @@ public class BoardServiceImpl implements BoardService {
             detail.setNextPost(boardMapper.findAdjacentPost(detail.getNextPostId()));
         }
 
-        if (increaseView) {
-            boardMapper.updateViewCount(postId);
-            detail.setViewCount(detail.getViewCount() + 1); // 방금 올린 값을 응답에 반영
-        }
+        boardMapper.updateViewCount(postId);
+        detail.setViewCount(detail.getViewCount() + 1); // 방금 올린 값을 응답에 반영
 
         List<AttachmentFileResponse> attachments = boardMapper.findAttachmentsByPostId(postId);
         detail.setAttachments(attachments);
         detail.setAttachmentCount(attachments != null ? attachments.size() : 0);
         detail.setLikeCount(boardMapper.countLikesByPostId(postId));
-        detail.setComments(maskComments(boardMapper.findCommentsByPostId(postId), detail.getUserId(), currentUserId));
+        // 댓글 본문은 상세에 싣지 않는다 (별도 API). 화면 헤더용 개수만 채운다
+        detail.setCommentCount(boardMapper.countCommentsByPostId(postId));
         detail.setIsLiked(boardMapper.existsLikeByPostIdAndUserId(postId, currentUserId));
 
         // 익명 글 작성자 마스킹 — 마스킹은 서버 책임 (프론트 마스킹은 API 직접 호출로 우회된다)
-        // 관리자와 작성자 본인에게만 실작성자를 보여준다. 댓글 마스킹(maskComments)이 원글 작성자
-        // 판정에 원본 userId를 쓰므로 반드시 댓글 처리 후에 가린다.
+        // 관리자와 작성자 본인에게만 실작성자를 보여준다.
         if (Boolean.TRUE.equals(detail.getIsAnonymous())
                 && !AuthUtils.isAdmin() && !currentUserId.equals(detail.getUserId())) {
             detail.setAuthorName("익명");
@@ -125,6 +127,21 @@ public class BoardServiceImpl implements BoardService {
         }
 
         return detail;
+    }
+
+    /**
+     * 게시글의 댓글 목록 (상세와 분리된 API).
+     *
+     * 매퍼가 state='normal' 만 조회하므로 관리자가 블라인드했거나 삭제 처리한 댓글,
+     * 작성자가 지운 댓글은 학생 화면에 내려가지 않는다.
+     * 비밀댓글 열람 판정에 원글 작성자가 필요해 여기서 원글 작성자 id를 함께 조회한다.
+     */
+    @Override
+    public List<CommentDetailResponse> getComments(Long boardId, Long postId) {
+        boardPolicyService.requireReadable(boardId);
+        requirePostInBoard(postId, boardId); // 타 게시판 글·블라인드/삭제 글의 댓글 열람 차단
+        Long postAuthorId = boardMapper.findAuthorIdByPostId(postId);
+        return maskComments(boardMapper.findCommentsByPostId(postId), postAuthorId, AuthUtils.currentUserId());
     }
 
     /**
@@ -159,10 +176,10 @@ public class BoardServiceImpl implements BoardService {
 
         if (boardMapper.existsLikeByPostIdAndUserId(postId, userId)) {
             boardMapper.deleteLike(postId, userId);
-            return new BoardResponse("좋아요 취소");
+            return new BoardResponse("좋아요를 취소했습니다.");
         }
         boardMapper.insertLike(postId, userId);
-        return new BoardResponse("좋아요 +1");
+        return new BoardResponse("좋아요를 눌렀습니다.");
     }
 
     // 게시글 신규 등록 (파일 업로드 포함)
@@ -176,28 +193,33 @@ public class BoardServiceImpl implements BoardService {
         boolean pinned = resolvePinned(policy, request.getCategoryId());
 
         boardMapper.insertPost(request, userId, boardId, pinned);
+        saveAttachments(policy, request.getPostId(), request.getFiles());
 
-        if (policy.isAttachmentAllowed() && request.getFiles() != null && !request.getFiles().isEmpty()) {
-            for (MultipartFile file : request.getFiles()) {
-                if (!file.isEmpty()) {
-                    String savedPath = fileStorageUtil.save(file, policy.uploadDir(), null);
-                    boardMapper.insertAttachment(
-                            request.getPostId(),
-                            file.getOriginalFilename(),
-                            savedPath,
-                            file.getSize(),
-                            file.getContentType()
-                    );
-                }
-            }
+        // 생성 PK 반환 — 프론트가 등록 직후 상세 페이지로 이동하는 데 필요
+        return new BoardResponse("게시글이 성공적으로 등록되었습니다.", request.getPostId());
+    }
+
+    // 첨부 저장 (등록·수정 공통). 첨부를 쓰지 않는 게시판이면 조용히 무시한다
+    // 저장 경로는 uploads/board-{boardId}/{postId}/원본파일명 — 글 단위 폴더라 글끼리 이름이 겹칠 일이 없다
+    private void saveAttachments(BoardPolicy policy, Long postId, List<MultipartFile> files) {
+        if (!policy.isAttachmentAllowed() || CollectionUtils.isEmpty(files)) {
+            return;
         }
-        return new BoardResponse("게시글이 성공적으로 등록되었습니다.");
+        String dir = policy.uploadDir() + "/" + postId;
+        for (MultipartFile file : files) {
+            if (file.isEmpty()) {
+                continue;
+            }
+            String savedPath = fileStorageUtil.save(file, dir);
+            boardMapper.insertAttachment(postId, file.getOriginalFilename(), savedPath,
+                    file.getSize(), file.getContentType());
+        }
     }
 
     // 게시글 수정: 관리자이거나 작성자 본인일 경우 가능
     @Override
     @Transactional
-    public BoardDetailResponse updatePost(Long boardId, Long postId, BoardUpdateRequest request) {
+    public BoardResponse updatePost(Long boardId, Long postId, BoardUpdateRequest request) {
         BoardPolicy policy = boardPolicyService.requireReadable(boardId);
         requirePostInBoard(postId, boardId);
         Long currentUserId = AuthUtils.currentUserId();
@@ -220,9 +242,19 @@ public class BoardServiceImpl implements BoardService {
             // state != normal (블라인드/삭제) 이거나 존재하지 않는 글
             throw new BoardException("수정할 수 없는 게시글입니다.", HttpStatus.NOT_FOUND);
         }
-        // 수정 결과를 상세 조회와 동일한 형태로 반환 → 프론트가 재조회 없이 화면을 갱신할 수 있다
-        // (조회수는 올리지 않는다)
-        return buildDetail(boardId, postId, "created", false);
+
+        // 첨부는 증분 처리: 지운 것만 소프트삭제하고, 새로 올린 것만 추가한다
+        if (!CollectionUtils.isEmpty(request.getDeleteAttachmentIds())) {
+            // 물리 파일까지 지워 고아 파일이 디스크에 남지 않게 한다 (PM 결정 2026-08-16).
+            // 삭제할 경로를 먼저 확보한 뒤 행을 소프트삭제하고 파일을 지운다 —
+            // 대상 글 소속인 것만 조회/삭제되므로 남의 첨부 id가 섞여도 무해하다
+            List<String> fileUrls = boardMapper.findAttachmentUrls(postId, request.getDeleteAttachmentIds());
+            boardMapper.softDeleteAttachments(postId, request.getDeleteAttachmentIds());
+            fileUrls.forEach(fileStorageUtil::delete);
+        }
+        saveAttachments(policy, postId, request.getFiles());
+        // 응답은 message 만 — 어차피 프론트가 상세로 이동하며 GET 을 한 번 더 하므로 상세 객체 반환은 낭비 (PM 합의)
+        return new BoardResponse("게시글이 성공적으로 수정되었습니다.");
     }
 
     /**
@@ -373,7 +405,7 @@ public class BoardServiceImpl implements BoardService {
     private void notifyComment(Long boardId, Long postId, Long parentCommentId, Long actorId) {
         try {
             Long postAuthorId = boardMapper.findAuthorIdByPostId(postId);
-            String link = "/api/boards/" + boardId + "/posts/" + postId;
+            String link = "/api/user/boards/" + boardId + "/posts/" + postId;
 
             if (parentCommentId != null) {
                 Long parentAuthorId = boardMapper.findCommentAuthorId(parentCommentId);

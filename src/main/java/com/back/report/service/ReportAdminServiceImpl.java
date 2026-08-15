@@ -60,25 +60,42 @@ public class ReportAdminServiceImpl implements ReportAdminService {
     }
 
     @Override
-    public void reject(String targetType, Long targetId) {
-        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
-        validateTargetType(targetType);
-        reportBulkExecutor.rejectItem(targetType, targetId, AdminServiceSupport.currentAdminId());
+    @Transactional
+    public BulkResultResponse selectRestore(String targetType, List<Long> targetIds) {
+        return execute(targetType, targetIds, "복원할",
+                (adminId, targetId) -> reportBulkExecutor.restoreItem(targetType, targetId, adminId));
     }
 
     @Override
-    public void delete(String targetType, Long targetId) {
-        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
-        validateTargetType(targetType);
-        reportBulkExecutor.deleteItem(targetType, targetId, AdminServiceSupport.currentAdminId());
+    @Transactional
+    public BulkResultResponse selectDelete(String targetType, List<Long> targetIds, Long reasonId, String detail) {
+        return execute(targetType, targetIds, "삭제할",
+                (adminId, targetId) -> reportBulkExecutor.deleteItem(targetType, targetId, adminId, reasonId, detail));
     }
 
     @Override
-    public BulkResultResponse bulkReject(String targetType, List<Long> targetIds) {
+    @Transactional
+    public BulkResultResponse selectBlind(String targetType, List<Long> targetIds, Long reasonId, String detail) {
+        return execute(targetType, targetIds, "블라인드 처리할",
+                (adminId, targetId) -> reportBulkExecutor.blindItem(targetType, targetId, adminId, reasonId, detail));
+    }
+
+    // 조치 1건을 실행하는 동작 (executor 호출부만 다르다)
+    @FunctionalInterface
+    private interface ItemAction {
+        void run(Long adminId, Long targetId);
+    }
+
+    /**
+     * 선택 처리 공통 루프.
+     * 항목마다 독립 트랜잭션(REQUIRES_NEW)이라 한 건이 실패해도 나머지는 그대로 처리되고,
+     * 실패분은 사유와 함께 응답에 담긴다(부분 성공). 중복 id는 한 번만 처리한다.
+     */
+    private BulkResultResponse execute(String targetType, List<Long> targetIds, String actionLabel, ItemAction action) {
         AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
         validateTargetType(targetType);
         if (CollectionUtils.isEmpty(targetIds)) {
-            throw new ReportAdminException("반려할 항목을 선택해 주세요.", HttpStatus.BAD_REQUEST);
+            throw new ReportAdminException(actionLabel + " 항목을 선택해 주세요.", HttpStatus.BAD_REQUEST);
         }
         Long adminId = AdminServiceSupport.currentAdminId();
 
@@ -86,29 +103,7 @@ public class ReportAdminServiceImpl implements ReportAdminService {
         List<BulkResultResponse.FailureItem> failures = new ArrayList<>();
         for (Long targetId : new LinkedHashSet<>(targetIds)) {
             try {
-                reportBulkExecutor.rejectItem(targetType, targetId, adminId);
-                successCount++;
-            } catch (Exception e) {
-                failures.add(new BulkResultResponse.FailureItem(targetId, AdminServiceSupport.resolveFailureMessage(e)));
-            }
-        }
-        return new BulkResultResponse(successCount, failures);
-    }
-
-    @Override
-    public BulkResultResponse bulkDelete(String targetType, List<Long> targetIds) {
-        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
-        validateTargetType(targetType);
-        if (CollectionUtils.isEmpty(targetIds)) {
-            throw new ReportAdminException("삭제할 항목을 선택해 주세요.", HttpStatus.BAD_REQUEST);
-        }
-        Long adminId = AdminServiceSupport.currentAdminId();
-
-        int successCount = 0;
-        List<BulkResultResponse.FailureItem> failures = new ArrayList<>();
-        for (Long targetId : new LinkedHashSet<>(targetIds)) {
-            try {
-                reportBulkExecutor.deleteItem(targetType, targetId, adminId);
+                action.run(adminId, targetId);
                 successCount++;
             } catch (Exception e) {
                 failures.add(new BulkResultResponse.FailureItem(targetId, AdminServiceSupport.resolveFailureMessage(e)));

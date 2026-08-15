@@ -38,15 +38,15 @@
         WHERE quote_id = #{quoteId} AND state = 'normal'
     </update>
 
-    <select id="findAllQuotes" resultType="com.back.quote.dto.QuoteDataResponse">
+    <!-- 목록은 생성일만 내려준다 (수정일은 단건 조회 전용) -->
+    <select id="findAllQuotes" resultType="com.back.quote.dto.QuoteListItemResponse">
         SELECT
             quote_id AS quoteId,
             content,
             start_date AS startDate,
             end_date AS endDate,
             writer_id AS writerId,
-            created_at AS createdAt,
-            updated_at AS updatedAt
+            created_at AS createdAt
         FROM quotes
         WHERE state = 'normal'
         ORDER BY quote_id DESC

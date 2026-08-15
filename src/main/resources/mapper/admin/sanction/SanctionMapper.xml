@@ -120,28 +120,57 @@
 
     <!-- ===== 제재회원 관리 화면: 회원별 신고 내역 (report 패키지에서 이동, PM 피드백 4·5) ===== -->
 
-    <select id="findReportsByTargetAuthor" resultType="com.back.admin.sanction.dto.ReportedContentResponse">
+    <!-- 회원이 작성한 '게시글'이 받은 신고 내역 -->
+    <select id="findReportedPostsByAuthor" resultType="com.back.admin.sanction.dto.ReportedPostResponse">
         SELECT
-            r.report_id                                            AS reportId,
-            r.target_type                                          AS targetType,
-            r.target_id                                            AS targetId,
-            CASE WHEN r.target_type = 'post' THEN pb.post_id ELSE c.post_id END AS postId,
-            bd.board_id                                            AS boardId,
-            bd.name                                                AS boardName,
-            r.reason_id                                            AS reasonId,
-            rs.label                                               AS reasonLabel,
+            r.report_id        AS reportId,
+            p.post_id          AS postId,
+            bd.board_id        AS boardId,
+            bd.name            AS boardName,
+            p.title,
+            LEFT(p.content, 30) AS preview,
+            p.state,
+            r.reason_id        AS reasonId,
+            rs.label           AS reasonLabel,
             r.detail,
             r.status,
-            r.active_flag                                          AS activeFlag,
-            r.created_at                                           AS createdAt,
-            r.resolved_at                                          AS resolvedAt
+            r.active_flag      AS activeFlag,
+            r.created_at       AS createdAt,
+            r.resolved_at      AS resolvedAt
         FROM reports_log r
-        LEFT JOIN posts pb ON r.target_type = 'post' AND r.target_id = pb.post_id
-        LEFT JOIN comments c ON r.target_type = 'comment' AND r.target_id = c.comment_id
-        LEFT JOIN posts cp ON r.target_type = 'comment' AND c.post_id = cp.post_id
-        LEFT JOIN boards bd ON bd.board_id = COALESCE(pb.board_id, cp.board_id)
+        JOIN posts p ON r.target_id = p.post_id
+        LEFT JOIN boards bd ON bd.board_id = p.board_id
         LEFT JOIN reasons rs ON r.reason_id = rs.reason_id
-        WHERE COALESCE(pb.user_id, c.user_id) = #{userId}
+        WHERE r.target_type = 'post'
+          AND p.user_id = #{userId}
+        ORDER BY r.created_at DESC
+    </select>
+
+    <!-- 회원이 작성한 '댓글'이 받은 신고 내역 (이동 경로는 댓글이 아니라 소속 게시글) -->
+    <select id="findReportedCommentsByAuthor" resultType="com.back.admin.sanction.dto.ReportedCommentResponse">
+        SELECT
+            r.report_id        AS reportId,
+            c.comment_id       AS commentId,
+            cp.post_id         AS postId,
+            bd.board_id        AS boardId,
+            bd.name            AS boardName,
+            cp.title           AS postTitle,
+            LEFT(c.content, 30) AS preview,
+            c.state,
+            r.reason_id        AS reasonId,
+            rs.label           AS reasonLabel,
+            r.detail,
+            r.status,
+            r.active_flag      AS activeFlag,
+            r.created_at       AS createdAt,
+            r.resolved_at      AS resolvedAt
+        FROM reports_log r
+        JOIN comments c ON r.target_id = c.comment_id
+        LEFT JOIN posts cp ON c.post_id = cp.post_id
+        LEFT JOIN boards bd ON bd.board_id = cp.board_id
+        LEFT JOIN reasons rs ON r.reason_id = rs.reason_id
+        WHERE r.target_type = 'comment'
+          AND c.user_id = #{userId}
         ORDER BY r.created_at DESC
     </select>
 

@@ -13,21 +13,24 @@ public interface BoardService {
     // 카테고리 목록 조회 (공지사항은 빈 목록)
     List<CategoryResponse> getCategoryList(Long boardId);
 
-    // 상단 5개 조회
-    List<BoardTop5Response> getTop5Posts(Long boardId);
+    // 상단 N개 조회 (num = 프론트가 요청한 개수)
+    List<BoardTopPostResponse> getTopPosts(Long boardId, int num);
 
     // 전체 조회
     BoardPageResponse getPostList(Long boardId, int page, int size, Long categoryId, String keyword, String sort);
 
-    // 단일글 상세 조회
+    // 단일글 상세 조회 (댓글 미포함 — 댓글은 getComments 로 따로 조회)
     BoardDetailResponse getPostDetail(Long boardId, Long postId, String sort);
+
+    // 게시글의 댓글 목록 (블라인드·삭제 댓글 제외, 익명/비밀댓글 마스킹 적용)
+    List<CommentDetailResponse> getComments(Long boardId, Long postId);
 
     // 좋아요 토글
     BoardResponse togglePostLike(Long boardId, Long postId);
 
-    // 게시글 등록, 수정, 삭제
+    // 게시글 등록, 수정, 삭제 (등록 응답에는 postId 포함 — 상세 이동용)
     BoardResponse createPost(Long boardId, BoardRequest request);
-    BoardDetailResponse updatePost(Long boardId, Long postId, BoardUpdateRequest request);
+    BoardResponse updatePost(Long boardId, Long postId, BoardUpdateRequest request);
     BoardResponse deletePost(Long boardId, Long postId);
 
     // 댓글 등록, 수정, 삭제

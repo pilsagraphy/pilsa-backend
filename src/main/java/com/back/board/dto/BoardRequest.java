@@ -1,6 +1,8 @@
 package com.back.board.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.web.multipart.MultipartFile;
@@ -18,10 +20,13 @@ import java.util.List;
 @Setter
 public class BoardRequest {
 
-    @Schema(description = "제목", example = "안녕하세요")
+    @Schema(description = "제목 (필수, 200자 이내)", example = "안녕하세요")
+    @NotBlank(message = "제목은 필수입니다.")
+    @Size(max = 200, message = "제목은 200자를 넘을 수 없습니다.")
     private String title;
 
-    @Schema(description = "내용", example = "본문 내용입니다.")
+    @Schema(description = "내용 (필수)", example = "본문 내용입니다.")
+    @NotBlank(message = "내용은 필수입니다.")
     private String content;
 
     // Boolean 래퍼를 쓰는 이유: primitive boolean + 필드명 isXxx 조합은 자바 빈 규약상

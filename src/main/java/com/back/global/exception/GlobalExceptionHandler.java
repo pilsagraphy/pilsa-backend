@@ -4,6 +4,9 @@ import com.back.auth.exception.BannedException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.BindException;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.NoHandlerFoundException;
@@ -11,6 +14,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * 전역 예외 처리기.
@@ -37,6 +41,19 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleBaseException(BaseException e) {
         log.debug("BaseException handled: {}", e.getMessage());
         return ResponseEntity.status(e.getStatus()).body(Map.of("message", e.getMessage()));
+    }
+
+    // 요청 값 검증 실패(@Valid) → 400. 첫 위반 메시지를 그대로 내려 프론트가 폼에 표시할 수 있게 한다.
+    // (없으면 NOT NULL 위반이 DB까지 내려가 500으로 나간다)
+    @ExceptionHandler({MethodArgumentNotValidException.class, BindException.class})
+    public ResponseEntity<Map<String, Object>> handleValidation(BindException e) {
+        String message = e.getBindingResult().getFieldErrors().stream()
+                .map(FieldError::getDefaultMessage)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse("요청 값이 올바르지 않습니다.");
+        log.debug("검증 실패: {}", message);
+        return ResponseEntity.badRequest().body(Map.of("message", message));
     }
 
     // 존재하지 않는 경로/정적 리소스는 404로 응답한다.

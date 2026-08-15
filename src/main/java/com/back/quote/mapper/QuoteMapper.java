@@ -1,6 +1,7 @@
 package com.back.quote.mapper;
 
 import com.back.quote.dto.QuoteDataResponse;
+import com.back.quote.dto.QuoteListItemResponse;
 import com.back.quote.dto.QuoteRequest;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -20,7 +21,7 @@ public interface QuoteMapper {
     int deleteQuote(@Param("quoteId") Long quoteId);
 
     // 4. 문장 전체 목록 조회 (관리자)
-    List<QuoteDataResponse> findAllQuotes();
+    List<QuoteListItemResponse> findAllQuotes();
 
     // 5. 랜덤 문장 1건 조회 (공개)
     QuoteDataResponse findRandomQuote();

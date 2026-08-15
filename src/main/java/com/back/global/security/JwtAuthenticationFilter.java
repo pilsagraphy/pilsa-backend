@@ -160,7 +160,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 || path.startsWith("/uploads/")
                 || path.equals("/api/donations")
                 || path.equals("/api/quotes/current")
-                || path.equals("/api/events");
+                || path.equals("/api/event")
+                || path.equals("/api/event/categories")
+                || path.equals("/api/event/calendar.ics");
     }
 
     // 에러 응답은 항상 {"message": ...} JSON 객체 계약을 지킨다 (sendError는 본문에서 메시지가 탈락함)

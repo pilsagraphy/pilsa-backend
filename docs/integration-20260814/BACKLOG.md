@@ -48,7 +48,7 @@
 ### A-4. 🔴 본문 인라인 이미지/동영상 업로드 — 시안 p21·23 리치 에디터 (담당 제안: 사라연)
 | 메서드 | 경로 | 요청 | 응답 | 권한 |
 |--------|------|------|------|------|
-| POST | /api/boards/{boardId}/posts/images | multipart(file) | {url} | 로그인 |
+| POST | /api/user/boards/{boardId}/posts/images | multipart(file) | {url} | 로그인 |
 - 에디터가 본문에 삽입할 URL 반환. 미사용 고아 이미지 정리 정책(배치) 함께 설계.
 - 🔵 본문 저장 포맷(HTML? 마크다운?) 기획 확정 필요 — XSS 필터링 정책 포함.
 
@@ -57,12 +57,12 @@
 
 | 메서드 | 경로 | 요청 | 응답 | 권한 |
 |--------|------|------|------|------|
-| POST | /api/boards/{boardId}/drafts | {title?,content?,categoryId?,isAnonymous?} | {draftId} | 로그인 |
-| PUT | /api/boards/{boardId}/drafts/{draftId} | 위와 동일 | message | 본인 |
-| GET | /api/boards/{boardId}/drafts | - | {count, drafts:[{draftId,title,updatedAt}]} | 본인 |
-| GET | /api/boards/{boardId}/drafts/{draftId} | - | 초안 전체(이어쓰기용) | 본인 |
-| DELETE | /api/boards/{boardId}/drafts/{draftId} | - | message | 본인 |
-| POST(수정) | /api/boards/{boardId}/posts | form-data에 draftId? 추가 | 기존과 동일 | 기존과 동일 |
+| POST | /api/user/boards/{boardId}/drafts | {title?,content?,categoryId?,isAnonymous?} | {draftId} | 로그인 |
+| PUT | /api/user/boards/{boardId}/drafts/{draftId} | 위와 동일 | message | 본인 |
+| GET | /api/user/boards/{boardId}/drafts | - | {count, drafts:[{draftId,title,updatedAt}]} | 본인 |
+| GET | /api/user/boards/{boardId}/drafts/{draftId} | - | 초안 전체(이어쓰기용) | 본인 |
+| DELETE | /api/user/boards/{boardId}/drafts/{draftId} | - | message | 본인 |
+| POST(수정) | /api/user/boards/{boardId}/posts | form-data에 draftId? 추가 | 기존과 동일 | 기존과 동일 |
 
 - posts.state 재사용 금지 → **별도 drafts 테이블**(목록/조회수/신고/제재 쿼리 오염 방지).
 - drafts는 소프트삭제 대전제의 **예외**(세션성 데이터) → state 컬럼 없이 물리 삭제.
@@ -85,15 +85,15 @@
 ### C-1. 🔴 프로필/활동 요약
 | 메서드 | 경로 | 응답 | 권한 |
 |--------|------|------|------|
-| GET | /api/mypage | {loginId, name, joinedAt, postCount, commentCount, likedCount, semester:{posts,comments,receivedLikes}} | 본인 |
+| GET | /api/user/mypage | {loginId, name, joinedAt, postCount, commentCount, likedCount, semester:{posts,comments,receivedLikes}} | 본인 |
 - "이번 학기" 기준일(3/1, 9/1) 상수화. 삭제(state != normal) 글 포함 여부 🔵 확정 필요.
 
 ### C-2. 🔴 내가 쓴 글 / 내가 쓴 댓글 / 좋아요 누른 글 목록
 | 메서드 | 경로 | 요청 | 응답 |
 |--------|------|------|------|
-| GET | /api/mypage/posts | ?page&size&sort&categoryId&keyword | 목록(제목/좋아요/조회수/작성일) |
-| GET | /api/mypage/comments | ?page&size&sort&keyword | 목록(제목=원글, 내용, 작성일) |
-| GET | /api/mypage/likes | ?page&size&sort&categoryId&keyword | 목록(제목/좋아요/조회수/작성일) |
+| GET | /api/user/mypage/posts | ?page&size&sort&categoryId&keyword | 목록(제목/좋아요/조회수/작성일) |
+| GET | /api/user/mypage/comments | ?page&size&sort&keyword | 목록(제목=원글, 내용, 작성일) |
+| GET | /api/user/mypage/likes | ?page&size&sort&categoryId&keyword | 목록(제목/좋아요/조회수/작성일) |
 
 ### C-3. 🔴 내 정보 수정 — "정보 수정" 버튼. 수정 가능 범위(비밀번호? 전화? 전공?) 🔵 기획 확정 필요.
 
@@ -132,7 +132,7 @@
 
 ## H. 기타
 
-- H-1. ✅ **완료(2026-08-14)** 알림(헤더 종 아이콘) — notifications 테이블 + `/api/mypage/notifications` (목록/미읽음수/읽음/전체읽음/삭제).
+- H-1. ✅ **완료(2026-08-14)** 알림(헤더 종 아이콘) — notifications 테이블 + `/api/user/mypage/notifications` (목록/미읽음수/읽음/전체읽음/삭제).
   현재 발행 이벤트: 댓글·답글. 신고 처리·제재 알림은 발행 지점만 연결하면 되는 상태(NotificationService.notifyReportResolved/notifySanction).
 - H-2. ⚪ 아이디 저장(로그인 체크박스) — FE 로컬스토리지 처리로 충분, 백엔드 불필요.
 - H-3. 🔵 재학생 인증 절차(회원가입 승인 플로우) — 현재 가입 즉시 활성. 승인 대기 개념 유무 기획 확인.

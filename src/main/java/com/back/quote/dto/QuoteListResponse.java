@@ -12,5 +12,5 @@ import java.util.List;
 @AllArgsConstructor
 public class QuoteListResponse {
     private String message;
-    private List<QuoteDataResponse> quotes;
+    private List<QuoteListItemResponse> quotes;
 }

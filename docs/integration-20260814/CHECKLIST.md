@@ -102,6 +102,28 @@ SET `read_scope` = 'MEMBER',
 WHERE `board_id` IN (1,2,3);
 -- (원본 SQL의 'STUDENTS' 표기는 users.member_type('STUDENT')과 맞추기 위해 'STUDENT'로 통일해 주석 반영)
 
+-- [2026-08-15] read_scope 에서 전체공개(ALL) 폐지 — 게시판은 최소 로그인 회원만 열람 가능
+-- (기존 데이터에 ALL 사용 게시판 0건이라 값 마이그레이션 없이 코멘트만 정정)
+ALTER TABLE `boards`
+  MODIFY COLUMN `read_scope` varchar(20) NOT NULL DEFAULT 'MEMBER'
+    COMMENT '열람 대상: MEMBER(재학+졸업) / STUDENT(재학생만) / ALUMNI(졸업생만) — 전체공개(ALL) 없음';
+
+-- [2026-08-16] 일정 카테고리 정본 테이블 신설 (events.category 자유 입력 폐지 — PM 지시)
+CREATE TABLE `event_categories` (
+  `event_category_id` bigint NOT NULL AUTO_INCREMENT COMMENT '일정 카테고리 고유 번호',
+  `name` varchar(50) NOT NULL COMMENT '카테고리명 (화면 노출 한글명)',
+  `display_order` int NOT NULL DEFAULT 0 COMMENT '노출 순서',
+  `is_active` tinyint(1) NOT NULL DEFAULT 1 COMMENT '사용 여부 (0=숨김, 물리삭제 없음)',
+  PRIMARY KEY (`event_category_id`),
+  UNIQUE KEY `uq_event_categories_name` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='일정 카테고리 (events.category 값의 정본)';
+INSERT INTO `event_categories` (name, display_order)
+VALUES ('정기모임', 1), ('MT', 2), ('행사', 3), ('스터디', 4), ('기타', 99);
+
+-- [2026-08-16] 임시저장 보관 상한 5개 확정 (PM 지시 — 코드는 하드코딩 대신 이 값을 로드할 것)
+INSERT INTO `policy_settings` (code, setting_value, description)
+VALUES ('draft_max_count', '5', '임시저장 보관 상한 (회원당 게시판별)');
+
 ```
 - [x] events DDL 적용 (2026-08-14, location 값 전부 NULL 확인 후 제거)
 - [x] boards 권한 컬럼 DDL 적용 (#61 §1)
@@ -167,6 +189,6 @@ WHERE `board_id` IN (1,2,3);
 1. ~~`/api/stu/**`에 ALUMNI 허용~~ → **폐기**: 신분별 URL 분기 제거. 열람 대상은 `boards.read_scope` 데이터로 판정 (REVIEW-NOTES §6).
 2. ~~일반 회원 isPinned 설정 가능~~ → **해결**: 모든 게시판에서 관리자(레벨 1~3)만 설정 가능 (`resolvePinned`, 실측 검증).
 3. ~~ban_log 수동/자동 혼재~~ → **해결**: `source`(auto/manual) 컬럼 + `warning_no` nullable — 수동 조치가 경고로 집계되지 않음.
-4. ~~신고 접수 경로 /api/stu/reports ALUMNI 연동~~ → **폐기**: 최종 경로 `POST /api/reports` (신분·관리자 무관 공통).
+4. ~~신고 접수 경로 /api/stu/reports ALUMNI 연동~~ → **폐기**: 최종 경로 `POST /api/user/reports` (신분·관리자 무관 공통).
 
 > §5 테스트 표의 경로들은 **병합 당시(1차) 경로**다. 이후 URL 재설계로 전부 변경됨 — 현행 경로는 `API-MIGRATION.md` 참조.

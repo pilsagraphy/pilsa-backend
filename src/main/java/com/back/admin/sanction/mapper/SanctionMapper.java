@@ -1,7 +1,8 @@
 package com.back.admin.sanction.mapper;
 
 import com.back.admin.sanction.dto.BanPolicyDto;
-import com.back.admin.sanction.dto.ReportedContentResponse;
+import com.back.admin.sanction.dto.ReportedCommentResponse;
+import com.back.admin.sanction.dto.ReportedPostResponse;
 import com.back.admin.sanction.dto.SanctionedUserResponse;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -52,7 +53,9 @@ public interface SanctionMapper {
     List<Long> findExpiredTemporaryBanUserIds();
 
     // 특정 회원이 작성한 게시글/댓글이 받은 신고 내역 전체 (제재회원 관리 화면)
-    List<ReportedContentResponse> findReportsByTargetAuthor(@Param("userId") Long userId);
+    List<ReportedPostResponse> findReportedPostsByAuthor(@Param("userId") Long userId);
+
+    List<ReportedCommentResponse> findReportedCommentsByAuthor(@Param("userId") Long userId);
 
     // 신고가 수락(삭제 처리)된 건수 - 제재회원 현황 화면용
     int countResolvedDeletionsByUser(@Param("userId") Long userId);

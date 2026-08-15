@@ -1,6 +1,8 @@
 package com.back.board.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -14,7 +16,9 @@ import lombok.Setter;
 @Setter
 public class CommentRequest {
 
-    @Schema(description = "댓글 내용", example = "좋은 글이네요!")
+    @Schema(description = "댓글 내용 (필수)", example = "좋은 글이네요!")
+    @NotBlank(message = "댓글 내용은 필수입니다.")
+    @Size(max = 1000, message = "댓글은 1000자를 넘을 수 없습니다.")
     private String content;
 
     @Schema(description = "대댓글(답글)일 경우 부모 댓글 ID. 최상위 댓글이면 미입력. 답글의 답글도 가능(무제한 깊이)",
