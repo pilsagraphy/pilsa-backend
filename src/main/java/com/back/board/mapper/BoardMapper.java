@@ -19,23 +19,8 @@ public interface BoardMapper {
     // 게시판 1건의 정책 조회 (삭제된 게시판은 null)
     BoardPolicy findBoardPolicy(@Param("boardId") Long boardId);
 
-    // 게시판 목록 (관리자 화면 / 사이드바). 삭제된 게시판 제외, display_order 순
+    // 게시판 목록 (사이드바 / 관리자 화면 공용). 삭제된 게시판 제외, display_order 순
     List<BoardPolicy> findBoardPolicies();
-
-    // 게시판별 게시글 수 (관리자 게시판 관리 화면)
-    int countPostsByBoard(@Param("boardId") Long boardId);
-
-    // 게시판 생성
-    void insertBoard(@Param("board") BoardPolicy board);
-
-    // 게시판 수정 (전달된 필드만)
-    int updateBoard(@Param("boardId") Long boardId, @Param("board") BoardPolicy board);
-
-    // 게시판 소프트삭제
-    int deleteBoard(@Param("boardId") Long boardId);
-
-    // 게시판명 중복 확인 (본인 제외)
-    boolean existsBoardName(@Param("name") String name, @Param("excludeBoardId") Long excludeBoardId);
 
     /**
      * 게시판 카테고리 목록.
@@ -50,13 +35,9 @@ public interface BoardMapper {
     // 선택한 카테고리가 이 게시판의 '중요'(code=PINNED) 카테고리인가 → is_pinned 판정용
     boolean isPinnedCategory(@Param("categoryId") Long categoryId, @Param("boardId") Long boardId);
 
-    // 게시판 생성 시 '중요' 카테고리 자동 생성 (이미 있으면 무시 → 재실행 안전)
-    void insertPinnedCategory(@Param("boardId") Long boardId);
-
     // 이전글/다음글 상세 (카테고리 뱃지·제목·작성일 표시용)
     AdjacentPostResponse findAdjacentPost(@Param("postId") Long postId);
 
-    // 메인 화면용 상단 5개 조회 (공지사항은 is_pinned 우선 정렬)
     /** 상단 N개 (개수는 프론트 요청값). is_pinned 우선 정렬 */
     List<BoardTopPostResponse> findTopPosts(@Param("boardId") Long boardId, @Param("limit") int limit);
 

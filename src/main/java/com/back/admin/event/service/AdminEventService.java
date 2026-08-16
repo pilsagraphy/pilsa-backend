@@ -4,7 +4,7 @@ import com.back.event.dto.EventRequest;
 import com.back.event.dto.EventResponse;
 import com.back.event.dto.EventUpdateRequest;
 import com.back.event.exception.EventException;
-import com.back.event.mapper.EventMapper;
+import com.back.admin.event.mapper.AdminEventMapper;
 import com.back.global.security.AuthUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -19,14 +19,14 @@ import java.util.Map;
  * 일정 관리(관리자) — 등록/수정/삭제.
  *
  * 회원 달력 조회·캘린더 구독 피드는 com.back.event 가 담당하고, 여기는 관리자 화면 전용이다.
- * 매퍼는 event 도메인의 {@link EventMapper} 를 공유한다 (admin.board 가 BoardMapper 를 쓰는 것과 동일 패턴).
+ * 매퍼도 이 패키지에서 직접 관리한다({@link AdminEventMapper}) — 관리자 쿼리와 회원 조회 쿼리는 겹치지 않는다.
  */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class AdminEventService {
 
-    private final EventMapper eventMapper;
+    private final AdminEventMapper adminEventMapper;
 
     // 관리자 권한 확인 (공통 유틸 사용)
     private void checkAdminRole() {
@@ -45,7 +45,7 @@ public class AdminEventService {
         // 등록 시에는 ERD 구조상 누가 등록했는지(user_id)가 필요하므로 가져옴
         Long userId = AuthUtils.currentUserId();
 
-        eventMapper.insertEvent(request, userId);
+        adminEventMapper.insertEvent(request, userId);
 
         Map<String, Object> data = new HashMap<>();
         data.put("eventId", request.getEventId());
@@ -69,7 +69,7 @@ public class AdminEventService {
     public EventResponse updateEvent(Long eventId, EventUpdateRequest request) {
         checkAdminRole(); // 권한만 확인
 
-        int updated = eventMapper.updateEvent(eventId, request);
+        int updated = adminEventMapper.updateEvent(eventId, request);
         if (updated == 0) {
             throw new EventException("해당 일정을 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
         }
@@ -85,7 +85,7 @@ public class AdminEventService {
     public EventResponse deleteEvent(Long eventId) {
         checkAdminRole(); // 권한만 확인
 
-        int deleted = eventMapper.deleteEvent(eventId);
+        int deleted = adminEventMapper.deleteEvent(eventId);
         if (deleted == 0) {
             throw new EventException("삭제할 일정을 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
         }
