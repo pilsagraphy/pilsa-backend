@@ -147,6 +147,12 @@ public class AuthServicempl implements AuthService {
     @Transactional
     public void signup(SignupRequest request) {
 
+        // 이메일 인증을 실제로 통과했는지 서버에서 확인 — 프론트 화면 검증은 API 직접 호출로 우회된다.
+        // (인증 성공 시 MailServiceImpl 이 30분짜리 통과 플래그를 남긴다)
+        if (redisTemplate.opsForValue().get("auth:mail:verified:" + request.getEmail()) == null) {
+            throw new AuthException("이메일 인증이 완료되지 않았습니다.", HttpStatus.FORBIDDEN);
+        }
+
         // 중복 아이디 확인
         if (authMapper.existsByLoginId(request.getLoginId())) {
             throw new AuthException("이미 존재하는 아이디입니다.", HttpStatus.CONFLICT);
@@ -172,7 +178,9 @@ public class AuthServicempl implements AuthService {
         // 재가입 대조 — 탈퇴 시 학번은 복원 불가능한 해시로 보관된다(부정 이용 방지, 개인정보처리방침 명시).
         // 같은 학번으로 탈퇴한 계정 중 제재 상태가 남아 있으면 가입을 거부해 "제재 → 탈퇴 → 재가입" 우회를 차단한다.
         String studentNoHash = WithdrawService.hashStudentNo(request.getStudentNo());
-        for (WithdrawnBanInfo ban : withdrawMapper.findWithdrawnBanByHash(studentNoHash)) {
+        java.util.List<WithdrawnBanInfo> withdrawnRows = withdrawMapper.findWithdrawnBanByHash(studentNoHash);
+        java.time.LocalDateTime latestWithdrawnAt = null;
+        for (WithdrawnBanInfo ban : withdrawnRows) {
             if ("permanent".equals(ban.getBanStatus())) {
                 throw new AuthException("가입이 제한된 학번입니다.", HttpStatus.FORBIDDEN);
             }
@@ -181,6 +189,19 @@ public class AuthServicempl implements AuthService {
                     && ban.getBannedUntil().isAfter(java.time.LocalDateTime.now())) {
                 throw new AuthException("가입이 제한된 학번입니다. ("
                         + ban.getBannedUntil().toLocalDate() + " 이후 가입 가능)", HttpStatus.FORBIDDEN);
+            }
+            if (ban.getWithdrawnAt() != null
+                    && (latestWithdrawnAt == null || ban.getWithdrawnAt().isAfter(latestWithdrawnAt))) {
+                latestWithdrawnAt = ban.getWithdrawnAt();
+            }
+        }
+        // 재가입 쿨다운 — 탈퇴/재가입 반복으로 계정 행을 양산하는 어뷰징 차단 (기간은 policy_settings 로 조정)
+        if (latestWithdrawnAt != null) {
+            int cooldownDays = parseCooldownDays(withdrawMapper.findPolicySetting("rejoin_cooldown_days"));
+            java.time.LocalDateTime rejoinableAt = latestWithdrawnAt.plusDays(cooldownDays);
+            if (rejoinableAt.isAfter(java.time.LocalDateTime.now())) {
+                throw new AuthException("탈퇴 후 " + cooldownDays + "일 동안 재가입할 수 없습니다. ("
+                        + rejoinableAt.toLocalDate() + " 이후 가능)", HttpStatus.FORBIDDEN);
             }
         }
 
@@ -208,6 +229,9 @@ public class AuthServicempl implements AuthService {
         user.setIsDeleted(Boolean.FALSE);
 
         authMapper.insertUser(user);
+
+        // 인증 통과 플래그는 1회용 — 같은 인증으로 계정을 반복 생성하지 못하게 소진시킨다
+        redisTemplate.delete("auth:mail:verified:" + request.getEmail());
     }
 
     // 회원가입 - 아이디 중복
@@ -289,12 +313,27 @@ public class AuthServicempl implements AuthService {
         return expireTime;
     }
 
+    // 재가입 쿨다운 일수 (policy_settings.rejoin_cooldown_days, 기본 30)
+    private int parseCooldownDays(String settingValue) {
+        try {
+            return Integer.parseInt(settingValue);
+        } catch (Exception e) {
+            return 30;
+        }
+    }
+
     // 비밀번호 재설정
     @Override
     public void resetPassword(PasswordResetRequest request) {
         UserDto user = authMapper.findByLoginId(request.getLoginId());
         if (user == null) {
             throw new AuthException("해당 아이디는 존재하지 않습니다.", HttpStatus.NOT_FOUND);
+        }
+
+        // 이메일 인증(인증번호) 통과 여부를 서버에서 확인 — 없으면 아이디만 알면 남의 비밀번호를 바꿀 수 있다 (계정 탈취 구멍)
+        String verifiedKey = "auth:mail:verified:" + user.getEmail();
+        if (redisTemplate.opsForValue().get(verifiedKey) == null) {
+            throw new AuthException("이메일 인증이 완료되지 않았습니다.", HttpStatus.UNAUTHORIZED);
         }
 
 //        // 승인 Y / 대기 N / 탈퇴 X
@@ -305,6 +344,7 @@ public class AuthServicempl implements AuthService {
         // 비밀번호 암호화 후 저장
         String encodedNewPassword = passwordEncoder.encode(request.getNewPassword());
         authMapper.updatePassword(user.getLoginId(), encodedNewPassword);
+        redisTemplate.delete(verifiedKey); // 1회용 소진
     }
 
     // 이메일 찾기 - 학번+이름 일치 시 마스킹된 이메일 반환

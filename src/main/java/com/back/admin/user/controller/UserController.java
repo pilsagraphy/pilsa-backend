@@ -6,6 +6,7 @@ import com.back.admin.user.dto.UserResponse;
 import com.back.admin.user.dto.UserSuspendRequest;
 import com.back.admin.user.dto.UserUpdateRequest;
 import com.back.admin.user.service.UserService;
+import com.back.auth.service.WithdrawService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class UserController {
 
     private final UserService userService;
+    private final WithdrawService withdrawService;
 
     // 회원 전체 목록 조회 (검색, 정렬, 페이지네이션) - 관리자 전용
     @Operation(summary = "회원 목록 (관리자)",
@@ -146,5 +148,35 @@ public class UserController {
     public ResponseEntity<UserResponse> banUsers(@RequestBody UserBanRequest request) {
         log.info("회원 영구차단 요청 - 데이터: {}", request);
         return ResponseEntity.ok(userService.banUsers(request));
+    }
+
+    @Operation(summary = "회원 강제 탈퇴 (관리자)",
+            description = """
+                    회원 목록에서 부원이 아니거나 문제가 있는 계정을 운영진이 직접 탈퇴 처리한다.
+                    (가입 승인제 대신 "가입은 열어두고 운영진이 사후 정리"하는 운영 방식)
+
+                    처리 내용은 본인 탈퇴와 동일: 개인정보 즉시 파기(이름 "탈퇴한 회원"), 학번은 해시 보관,
+                    알림 기기 해제. 재가입 쿨다운·제재 대조도 똑같이 적용된다.
+                    관리자 계정(admin_level>=1)은 강제 탈퇴할 수 없다 — 권한을 0으로 내린 뒤 진행.
+
+                    ### 요청 예시
+                    ```
+                    PATCH /api/admin/users/105/withdraw
+                    ```
+                    (본문 없음)
+
+                    ### 응답 예시
+                    ```json
+                    {"message":"강제 탈퇴 처리되었습니다.","userId":105}
+                    ```
+                    실패: 404 {"message":"존재하지 않거나 이미 탈퇴한 회원입니다."}
+                    실패: 400 {"message":"관리자 계정은 강제 탈퇴할 수 없습니다. 관리 권한을 해제한 뒤 진행해주세요."}
+                    """)
+    @PatchMapping("/api/admin/users/{userId}/withdraw")
+    public ResponseEntity<UserResponse> forceWithdraw(
+            @Parameter(description = "강제 탈퇴할 회원 id", example = "105") @PathVariable Long userId) {
+        log.info("[관리자] 회원 강제 탈퇴 요청 - userId: {}", userId);
+        withdrawService.forceWithdraw(userId);
+        return ResponseEntity.ok(new UserResponse("강제 탈퇴 처리되었습니다.", userId));
     }
 }

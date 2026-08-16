@@ -115,6 +115,10 @@ ALTER TABLE `boards`
 INSERT INTO `policy_settings` (code, setting_value, description)
 VALUES ('draft_max_count', '5', '임시저장 보관 상한 (회원당 게시판별)');
 
+-- [2026-08-16] 탈퇴 후 재가입 쿨다운 (계정 양산 어뷰징 방지)
+INSERT INTO `policy_settings` (code, setting_value, description)
+VALUES ('rejoin_cooldown_days', '30', '탈퇴 후 재가입 대기 일수 (계정 양산 어뷰징 방지)');
+
 -- [2026-08-16] api_endpoints 에 스웨거 실테스트 확정일 컬럼 추가 (PM 수동 기록용)
 ALTER TABLE `api_endpoints`
   ADD COLUMN `confirmed_at` date DEFAULT NULL

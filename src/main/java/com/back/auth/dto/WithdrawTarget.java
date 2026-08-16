@@ -10,4 +10,5 @@ public class WithdrawTarget {
     private String passwordHash;
     private String email;
     private String studentNo;
+    private Integer adminLevel;
 }

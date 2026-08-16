@@ -55,6 +55,9 @@ public class MailServiceImpl implements MailService {
 
         if (saved != null && saved.split(":")[0].equals(code)) {
             redisTemplate.delete(key);
+            // 인증 통과 흔적을 남긴다 — 회원가입/비밀번호 초기화가 "인증을 실제로 통과했는지" 서버에서 확인하는 근거.
+            // (프론트 화면 검증만으로는 API 직접 호출을 못 막는다)
+            redisTemplate.opsForValue().set("auth:mail:verified:" + email, "1", 30, java.util.concurrent.TimeUnit.MINUTES);
             return true;
         }
         return false;

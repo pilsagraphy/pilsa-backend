@@ -57,6 +57,34 @@ public class WithdrawService {
             throw new AuthException("비밀번호가 일치하지 않습니다.", HttpStatus.BAD_REQUEST);
         }
 
+        anonymizeAndCleanup(userId, target);
+        log.info("회원 탈퇴 처리 완료 - userId: {}", userId);
+    }
+
+    /**
+     * 관리자 강제 탈퇴 (회원 목록 화면).
+     * 가입 승인제 대신 "가입은 열어두고, 부원이 아닌 계정은 운영진이 정리"하는 운영 방식 (PM 확정 2026-08-16).
+     * 처리 내용은 본인 탈퇴와 동일 — 재가입 쿨다운·제재 대조도 똑같이 적용된다.
+     */
+    @Transactional
+    public void forceWithdraw(Long targetUserId) {
+        AuthUtils.requireAdmin();
+
+        WithdrawTarget target = withdrawMapper.findWithdrawTarget(targetUserId);
+        if (target == null) {
+            throw new AuthException("존재하지 않거나 이미 탈퇴한 회원입니다.", HttpStatus.NOT_FOUND);
+        }
+        // 관리자 계정은 강제 탈퇴 불가 — 운영 사고(관리자끼리 삭제) 방지. 권한을 0으로 내린 뒤 진행해야 한다
+        if (target.getAdminLevel() != null && target.getAdminLevel() >= 1) {
+            throw new AuthException("관리자 계정은 강제 탈퇴할 수 없습니다. 관리 권한을 해제한 뒤 진행해주세요.", HttpStatus.BAD_REQUEST);
+        }
+
+        anonymizeAndCleanup(targetUserId, target);
+        log.info("관리자 강제 탈퇴 처리 - targetUserId: {}, by: {}", targetUserId, AuthUtils.currentUserId());
+    }
+
+    // 본인 탈퇴/강제 탈퇴 공통 처리 — 개인정보 파기 + 부수 데이터 정리
+    private void anonymizeAndCleanup(Long userId, WithdrawTarget target) {
         // 개인정보 파기 + 소프트삭제 (학번은 재가입 대조용 해시로 치환)
         withdrawMapper.anonymizeUser(userId, hashStudentNo(target.getStudentNo()));
 
@@ -64,15 +92,14 @@ public class WithdrawService {
         notificationDeviceMapper.deleteByUserId(userId);
         notificationMapper.softDeleteAllByUser(userId);
 
-        // 잔여 인증 상태 정리 (인증번호·아이디찾기 통과 플래그) — 실패해도 탈퇴는 성공
+        // 잔여 인증 상태 정리 (인증번호·인증 통과 플래그) — 실패해도 탈퇴는 성공
         try {
             redisTemplate.delete("auth:code:" + target.getEmail());
             redisTemplate.delete("auth:findid:verified:" + target.getEmail());
+            redisTemplate.delete("auth:mail:verified:" + target.getEmail());
         } catch (Exception e) {
             log.warn("탈퇴 시 Redis 정리 실패 - userId: {}, {}", userId, e.getMessage());
         }
-
-        log.info("회원 탈퇴 처리 완료 - userId: {}", userId);
     }
 
     /**

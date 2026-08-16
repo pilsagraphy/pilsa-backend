@@ -11,4 +11,5 @@ import java.time.LocalDateTime;
 public class WithdrawnBanInfo {
     private String banStatus;          // none / temporary / permanent
     private LocalDateTime bannedUntil; // temporary 의 만료 시각
+    private LocalDateTime withdrawnAt; // 탈퇴 처리 시각 — 재가입 쿨다운 판정용
 }

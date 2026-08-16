@@ -27,6 +27,9 @@ public interface WithdrawMapper {
      */
     int anonymizeUser(@Param("userId") Long userId, @Param("studentNoHash") String studentNoHash);
 
-    /** 같은 학번(해시)으로 탈퇴한 계정들의 제재 상태 — 재가입 허용 판정용 */
+    /** 같은 학번(해시)으로 탈퇴한 계정들의 제재 상태·탈퇴 시각 — 재가입 허용 판정용 */
     List<WithdrawnBanInfo> findWithdrawnBanByHash(@Param("studentNoHash") String studentNoHash);
+
+    /** policy_settings 값 조회 (rejoin_cooldown_days 등) */
+    String findPolicySetting(@Param("code") String code);
 }
