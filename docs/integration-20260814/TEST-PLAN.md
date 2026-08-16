@@ -390,8 +390,8 @@ END:VCALENDAR
 #### 14) `POST /api/auth/register` — 회원가입 페이지 - 회원가입  (id 128)
 **입력**
 ```
-{"name":"홍길동","phone":"010-1234-5678","major":"컴퓨터공학과","studentNo":"20201234",
- "email":"hong@pilsa.co.kr","loginId":"hong","password":"pw1234","memberType":"STUDENT"}
+{"name":"홍길동","phone":"010-1234-5678","major":"컴퓨터공학과","studentNo":"2020123456",
+ "email":"hong@pilsa.co.kr","loginId":"hong1234","password":"pw1234!@#","memberType":"STUDENT"}
 
 ※ memberType 미지정 시 STUDENT. ADMIN 등 임의 문자열은 400
 ```
@@ -400,9 +400,13 @@ END:VCALENDAR
 {"message":"회원가입이 완료되었습니다."}
 
 실패: 409 {"message":"이미 존재하는 아이디입니다."}
-     409 {"message":"이미 존재하는 이메일입니다."}
+     409 {"message":"이미 존재하는 이메일입니다."} (학번/전화 중복도 409)
      400 {"message":"유효하지 않은 회원 구분입니다. (STUDENT/ALUMNI)"}
+     400 형식 위반 — 이름 2자+한글/영문, 학번 숫자 10자리, 아이디 영숫자 8자+,
+         비밀번호 문자·숫자·특수문자 8~20, 전화 010-0000-0000, 이메일 형식 (필드별 message)
+     403 {"message":"이메일 인증이 완료되지 않았거나 만료되었습니다. 이메일 인증을 다시 진행해주세요."}
 ```
+> 형식 검증 규칙은 프론트 zod(schemas/auth.js)와 동일하며 policy_settings(signup_*_regex)로 관리
 > 관리 권한(admin_level)은 가입으로 못 얻는다 — 항상 0으로 저장되고 승격은 관리자만
 
 #### 15) `POST /api/auth/token/access/refresh` — 액세스 토큰 발급/재발급 (+ 리프레시 토큰 회전)  (id 130)

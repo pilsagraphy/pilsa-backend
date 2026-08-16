@@ -127,6 +127,16 @@ VALUES ('withdrawn_purge_days', '90', '활동·제재 이력 없는 탈퇴 행 �
 INSERT INTO `policy_settings` (code, setting_value, description)
 VALUES ('mail_verified_ttl_minutes', '30', '이메일 인증 통과 플래그 유효시간(분) — 만료 후 가입/비밀번호 초기화 시도 시 재인증 안내');
 
+-- [2026-08-16] 회원가입 입력 형식 정책 — 프론트(pilsa-frontend schemas/auth.js zod)와 동일 규칙.
+-- 백슬래시 이스케이프 사고 방지를 위해 \d 대신 [0-9] 표기 사용. 코드 기본값과 동일(AuthServicempl.validateSignupFormat)
+INSERT INTO `policy_settings` (code, setting_value, description) VALUES
+('signup_name_regex',       '^[a-zA-Zㄱ-ㅎ가-힣]{2,50}$',                          '가입 이름 형식 (2자 이상, 한글/영문)'),
+('signup_student_no_regex', '^[0-9]{10}$',                                        '가입 학번 형식 (숫자 10자리)'),
+('signup_login_id_regex',   '^[a-zA-Z0-9]{8,50}$',                                '가입 아이디 형식 (8자 이상, 영문+숫자)'),
+('signup_password_regex',   '^(?=.*[A-Za-z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,20}$','가입 비밀번호 형식 (문자+숫자+특수문자 8~20자)'),
+('signup_phone_regex',      '^010-[0-9]{4}-[0-9]{4}$',                            '가입 전화번호 형식 (010-0000-0000)'),
+('signup_email_regex',      '^[^@ ]+@[^@ ]+[.][^@ ]+$',                           '가입 이메일 형식');
+
 -- [2026-08-16] api_endpoints 에 스웨거 실테스트 확정일 컬럼 추가 (PM 수동 기록용)
 ALTER TABLE `api_endpoints`
   ADD COLUMN `confirmed_at` date DEFAULT NULL

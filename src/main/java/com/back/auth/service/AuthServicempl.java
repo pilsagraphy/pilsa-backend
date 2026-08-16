@@ -148,6 +148,10 @@ public class AuthServicempl implements AuthService {
     @Transactional
     public void signup(SignupRequest request) {
 
+        // 입력 형식 검증 — 규칙은 프론트(pilsa-frontend schemas/auth.js zod)와 동일하며,
+        // 정규식은 policy_settings(signup_*_regex)에서 로드한다. 프론트 검증만으로는 API 직접 호출을 못 막는다.
+        validateSignupFormat(request);
+
         // 이메일 인증을 실제로 통과했는지 서버에서 확인 — 프론트 화면 검증은 API 직접 호출로 우회된다.
         // (인증 성공 시 MailServiceImpl 이 30분짜리 통과 플래그를 남긴다)
         if (redisTemplate.opsForValue().get("auth:mail:verified:" + request.getEmail()) == null) {
@@ -312,6 +316,51 @@ public class AuthServicempl implements AuthService {
         }
 
         return expireTime;
+    }
+
+    // 회원가입 입력 형식 검증 — 프론트 zod 스키마(schemas/auth.js)와 규칙·문구를 맞춘다.
+    // 정규식은 policy_settings 로 조정 가능하며, 행이 없거나 잘못된 정규식이면 코드 기본값을 쓴다.
+    // 길이 상한(이름·아이디 50, 이메일 150)은 DB 컬럼 초과로 500이 터지는 것을 막는 가드.
+    private void validateSignupFormat(SignupRequest request) {
+        requireMatch(request.getName(), "signup_name_regex",
+                "^[a-zA-Zㄱ-ㅎ가-힣]{2,50}$",
+                "이름은 2글자 이상, 한글/영문만 입력할 수 있습니다.");
+        if (request.getMajor() == null || request.getMajor().isBlank() || request.getMajor().length() > 150) {
+            throw new AuthException("학과를 입력해주세요.", HttpStatus.BAD_REQUEST);
+        }
+        requireMatch(request.getStudentNo(), "signup_student_no_regex",
+                "^[0-9]{10}$",
+                "학번은 숫자 10자리를 정확히 입력해주세요.");
+        requireMatch(request.getEmail(), "signup_email_regex",
+                "^[^@ ]+@[^@ ]+[.][^@ ]+$",
+                "올바른 이메일 형식이 아닙니다.");
+        if (request.getEmail().length() > 150) {
+            throw new AuthException("올바른 이메일 형식이 아닙니다.", HttpStatus.BAD_REQUEST);
+        }
+        requireMatch(request.getPhone(), "signup_phone_regex",
+                "^010-[0-9]{4}-[0-9]{4}$",
+                "전화번호는 010-0000-0000 형식으로 입력해주세요.");
+        requireMatch(request.getLoginId(), "signup_login_id_regex",
+                "^[a-zA-Z0-9]{8,50}$",
+                "아이디는 8자 이상, 영문과 숫자만 입력할 수 있습니다.");
+        requireMatch(request.getPassword(), "signup_password_regex",
+                "^(?=.*[A-Za-z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,20}$",
+                "비밀번호는 문자, 숫자, 특수문자를 포함한 8~20자여야 합니다.");
+    }
+
+    // 정책 정규식 검사 — 값이 null 이거나 불일치면 400. 정책 행이 없거나 컴파일 불가면 기본 정규식 사용
+    private void requireMatch(String value, String policyCode, String defaultRegex, String message) {
+        String regex = authMapper.findPolicySetting(policyCode);
+        java.util.regex.Pattern pattern;
+        try {
+            pattern = java.util.regex.Pattern.compile(
+                    (regex == null || regex.isBlank()) ? defaultRegex : regex);
+        } catch (Exception e) {
+            pattern = java.util.regex.Pattern.compile(defaultRegex);
+        }
+        if (value == null || !pattern.matcher(value).matches()) {
+            throw new AuthException(message, HttpStatus.BAD_REQUEST);
+        }
     }
 
     // 재가입 쿨다운 일수 (policy_settings.rejoin_cooldown_days, 기본 30)
