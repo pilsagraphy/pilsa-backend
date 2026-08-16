@@ -10,7 +10,7 @@
 ```
 - DB: `application.properties`의 qa_pilsa (원격 MySQL). Flyway/Liquibase **없음** — DDL은 DB에 수동 적용하며,
   **.sql 파일을 레포에 커밋하지 않는 것이 팀 컨벤션**. 적용한 DDL은 `docs/integration-*/CHECKLIST.md`에 기록.
-- Redis: 리프레시 토큰. Swagger: `/swagger-ui/index.html`.
+- Redis: 이메일 인증번호·아이디찾기 인증 상태. (리프레시 토큰은 무상태 JWT 쿠키 — Redis 미사용). Swagger: `/swagger-ui/index.html`.
 
 ## 패키지 구조 — **UI 페이지 단위 또는 DB 테이블 단위**로 맞춘다
 ```
@@ -75,6 +75,10 @@ com.back
   → 경고 횟수별 `ban_policy`(1주/1달/영구, **3단계 확정**). 수치는 policy_settings에서 로드.
 - `ban_log.source`: `auto`(경고 누적) / `manual`(관리자 직접, warning_no=NULL). 수동 조치가 경고로 집계되지 않게 구분.
 - users.ban_status/banned_until은 캐시 — 판정은 항상 banned_until 실시간 비교, 스케줄러(일 1회 04시)는 캐시 정리만.
+- **회원 탈퇴**(PATCH /api/user/mypage/withdraw): 제재 여부 무관 항상 허용. 개인정보(이름/이메일/아이디/전화/비밀번호) 즉시 파기,
+  이름은 '탈퇴한 회원'(글·댓글 작성자 표기가 users 조인이라 즉시 반영), **학번만 복원 불가 해시로 보관** — 재가입 시 signup 이 대조해
+  영구차단자는 영구 거부, 정지자는 종료일까지 거부. ban_status/banned_until 은 그 판정 근거이므로 탈퇴 시 리셋 금지.
+  관리자 화면(제재 목록/상세)은 탈퇴자 미노출. 글/댓글은 유지(커뮤니티 맥락 보존).
 
 ## 주의사항
 - `users.role`/`status` 컬럼은 **DB에서 제거됨** — 참조 시 런타임 SQL 오류.

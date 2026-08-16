@@ -17,6 +17,10 @@ public interface AuthMapper {
     void insertUser(UserSignupDto user);
     // 회원가입 - 아이디 & 이메일 중복 확인
     boolean existsByLoginId(@Param("loginId") String loginId);
+    boolean existsByStudentNo(@Param("studentNo") String studentNo);
+
+    boolean existsByPhone(@Param("phone") String phone);
+
     boolean existsByEmail(@Param("email") String email);
 
     // 아이디 찾기 전용 - 인증 완료된 이메일에 한해 loginId 반환

@@ -116,6 +116,7 @@ UPDATE api_endpoints SET confirmed_at = CURDATE() WHERE endpoint_id IN (…);
 | 40 | 26 | `PATCH /api/user/mypage/toast/{toastId}/delete` | 알림 삭제 (소프트) | ☐ |
 | 41 | 27 | `PATCH /api/user/mypage/toast/{toastId}/read` | 알림 읽음 처리 (단건) | ☐ |
 | 42 | 20 | `POST /api/user/reports` | 공통게시판/댓글 신고 페이지 - 게시글/댓글 신고 접수 | ☐ |
+| 42-1 | 139 | `PATCH /api/user/mypage/withdraw` | 회원 탈퇴 (개인정보 파기 — **맨 마지막에, 버릴 계정으로**) | ☐ |
 
 ### STEP 6. 관리자 조회 (t_adm3 토큰) — 11건
 | # | id | API | 제목 | ✔ |
@@ -1374,6 +1375,7 @@ files:        아무 이미지/PDF 2개 (한글 파일명으로 하나 넣어볼
 - [ ] 관리자 수정/정지/차단/삭제가 **PATCH**
 - [ ] 게시판 생성 시 `readScope:"ALL"` → 400
 - [ ] 댓글/대댓글 시 **상대방에게만** 알림(본인 행동은 알림 없음)
+- [ ] 탈퇴(139): 새 계정 하나 가입→탈퇴 후 ①그 계정 글 작성자가 "탈퇴한 회원"으로 표시 ②같은 학번으로 재가입 성공 ③관리자 제재 목록에 미노출. 영구차단 후 탈퇴한 학번으로 재가입 → 403 "가입이 제한된 학번입니다"
 
 ## 5. 실패 시 기록
 `confirmed_at` 을 채우지 말고, 실패 내용을 이 문서 아래에 추가하거나 바로 알려줄 것.

@@ -44,6 +44,13 @@
     <select id="existsByEmail" resultType="boolean">
         SELECT COUNT(*) > 0 FROM users WHERE email = #{email}
     </select>
+    <!-- 학번/전화도 UNIQUE 인데 사전 검사가 없으면 INSERT 에서 1062 → 500 으로 터진다 -->
+    <select id="existsByStudentNo" resultType="boolean">
+        SELECT COUNT(*) > 0 FROM users WHERE student_no = #{studentNo}
+    </select>
+    <select id="existsByPhone" resultType="boolean">
+        SELECT COUNT(*) > 0 FROM users WHERE phone = #{phone}
+    </select>
 
     <!-- 아이디 찾기 - 이메일로 login_id 조회 -->
     <select id="findLoginIdByEmail" resultType="string">

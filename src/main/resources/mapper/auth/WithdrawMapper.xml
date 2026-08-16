@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.auth.mapper.WithdrawMapper">
+
+    <select id="findWithdrawTarget" resultType="com.back.auth.dto.WithdrawTarget">
+        SELECT password_hash AS passwordHash,
+               email,
+               student_no    AS studentNo
+        FROM users
+        WHERE user_id = #{userId}
+          AND is_deleted = 0
+    </select>
+
+    <!-- 개인정보 파기 + 소프트삭제.
+         이름은 화면 표기용('탈퇴한 회원' — 글/댓글의 authorName 이 users 조인이라 즉시 반영됨),
+         이메일/아이디는 UNIQUE 충돌을 피해 user_id 기반 더미, 비밀번호는 무효값(BCrypt 형식이 아니라 matches 항상 실패).
+         ban_status/banned_until 은 재가입 대조 근거이므로 보존한다. -->
+    <update id="anonymizeUser">
+        UPDATE users
+        SET is_deleted    = 1,
+            name          = '탈퇴한 회원',
+            login_id      = CONCAT('deleted_', user_id),
+            email         = CONCAT('deleted_', user_id, '@removed.local'),
+            phone         = NULL,
+            major         = 'NONE',
+            student_no    = #{studentNoHash},
+            password_hash = CONCAT('withdrawn:', UUID()),
+            social_id     = NULL,
+            last_login_at = NULL
+        WHERE user_id = #{userId}
+          AND is_deleted = 0
+    </update>
+
+    <select id="findWithdrawnBanByHash" resultType="com.back.auth.dto.WithdrawnBanInfo">
+        SELECT ban_status   AS banStatus,
+               banned_until AS bannedUntil
+        FROM users
+        WHERE student_no = #{studentNoHash}
+          AND is_deleted = 1
+    </select>
+
+</mapper>

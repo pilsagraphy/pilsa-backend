@@ -32,4 +32,9 @@
         DELETE FROM notification_devices WHERE device_id = #{deviceId}
     </delete>
 
+    <!-- 탈퇴 시 회원의 모든 기기 해제. endpoint 는 개인 식별 주소라 남기면 안 된다 -->
+    <delete id="deleteByUserId">
+        DELETE FROM notification_devices WHERE user_id = #{userId}
+    </delete>
+
 </mapper>

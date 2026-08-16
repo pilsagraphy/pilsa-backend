@@ -41,4 +41,7 @@ public interface NotificationMapper {
 
     // 알림 삭제 (소프트)
     int deleteNotification(@Param("notificationId") Long notificationId, @Param("userId") Long userId);
+
+    /** 탈퇴 시 본인 알림 일괄 정리 (수신자 본인만 보는 데이터라 증적 가치 없음) */
+    int softDeleteAllByUser(@Param("userId") Long userId);
 }

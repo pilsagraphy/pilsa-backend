@@ -2,7 +2,9 @@ package com.back.auth.service;
 
 import com.back.auth.dto.*;
 import com.back.auth.mapper.AuthMapper;
+import com.back.auth.dto.WithdrawnBanInfo;
 import com.back.auth.exception.AuthException;
+import com.back.auth.mapper.WithdrawMapper;
 import com.back.auth.exception.BannedException;
 import com.back.global.security.JwtUtil;
 import io.jsonwebtoken.ExpiredJwtException;
@@ -32,6 +34,7 @@ import java.util.concurrent.TimeUnit;
 public class AuthServicempl implements AuthService {
 
     private final AuthMapper authMapper;
+    private final WithdrawMapper withdrawMapper;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final MailService mailService;
@@ -152,6 +155,33 @@ public class AuthServicempl implements AuthService {
         // 중복 이메일 확인
         if (authMapper.existsByEmail(request.getEmail())) {
             throw new AuthException("이미 존재하는 이메일입니다.", HttpStatus.CONFLICT);
+        }
+
+        // 학번/전화 중복 확인 — UNIQUE 컬럼인데 사전 검사가 없으면 INSERT 에서 1062 → 500 으로 터진다
+        if (request.getStudentNo() == null || request.getStudentNo().isBlank()) {
+            throw new AuthException("학번은 필수입니다.", HttpStatus.BAD_REQUEST);
+        }
+        if (authMapper.existsByStudentNo(request.getStudentNo())) {
+            throw new AuthException("이미 가입된 학번입니다.", HttpStatus.CONFLICT);
+        }
+        if (request.getPhone() != null && !request.getPhone().isBlank()
+                && authMapper.existsByPhone(request.getPhone())) {
+            throw new AuthException("이미 등록된 전화번호입니다.", HttpStatus.CONFLICT);
+        }
+
+        // 재가입 대조 — 탈퇴 시 학번은 복원 불가능한 해시로 보관된다(부정 이용 방지, 개인정보처리방침 명시).
+        // 같은 학번으로 탈퇴한 계정 중 제재 상태가 남아 있으면 가입을 거부해 "제재 → 탈퇴 → 재가입" 우회를 차단한다.
+        String studentNoHash = WithdrawService.hashStudentNo(request.getStudentNo());
+        for (WithdrawnBanInfo ban : withdrawMapper.findWithdrawnBanByHash(studentNoHash)) {
+            if ("permanent".equals(ban.getBanStatus())) {
+                throw new AuthException("가입이 제한된 학번입니다.", HttpStatus.FORBIDDEN);
+            }
+            if ("temporary".equals(ban.getBanStatus())
+                    && ban.getBannedUntil() != null
+                    && ban.getBannedUntil().isAfter(java.time.LocalDateTime.now())) {
+                throw new AuthException("가입이 제한된 학번입니다. ("
+                        + ban.getBannedUntil().toLocalDate() + " 이후 가입 가능)", HttpStatus.FORBIDDEN);
+            }
         }
 
         // 비밀번호 암호화
