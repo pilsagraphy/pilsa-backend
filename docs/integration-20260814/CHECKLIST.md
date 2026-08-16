@@ -137,6 +137,12 @@ INSERT INTO `policy_settings` (code, setting_value, description) VALUES
 ('signup_phone_regex',      '^010-[0-9]{4}-[0-9]{4}$',                            '가입 전화번호 형식 (010-0000-0000)'),
 ('signup_email_regex',      '^[^@ ]+@[^@ ]+[.][^@ ]+$',                           '가입 이메일 형식');
 
+-- [2026-08-16] 신고 사유에 아동 안전 추가 (Google Play 아동 안전 표준 — 신고 경로 명시 요건)
+-- 음란(ADULT) 바로 뒤에 배치. ETC 는 항상 마지막 유지
+UPDATE `reasons` SET display_order = display_order + 1 WHERE display_order >= 4;
+INSERT INTO `reasons` (code, label, display_order, is_active)
+VALUES ('CHILD_SAFETY', '아동 안전 위반 · 아동 성착취물', 4, 1);
+
 -- [2026-08-16] api_endpoints 에 스웨거 실테스트 확정일 컬럼 추가 (PM 수동 기록용)
 ALTER TABLE `api_endpoints`
   ADD COLUMN `confirmed_at` date DEFAULT NULL
