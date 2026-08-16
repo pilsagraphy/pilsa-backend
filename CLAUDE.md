@@ -81,6 +81,7 @@ com.back
   관리자 화면(제재 목록/상세)은 탈퇴자 미노출. 글/댓글은 유지(커뮤니티 맥락 보존).
   일반 탈퇴자 재가입은 **30일 쿨다운**(policy_settings.rejoin_cooldown_days — 계정 양산 어뷰징 차단).
   관리자 강제 탈퇴(PATCH /api/admin/users/{userId}/withdraw)도 동일 처리 — 가입 승인제 대신 사후 정리 방식.
+  **강제 탈퇴만 admin_level 3 전용**(되돌릴 수 없는 유일한 조치라서). 블라인드·삭제·제재는 소프트삭제+로그라 Lv1부터 가능.
   회원가입·비밀번호 초기화는 **서버가 이메일 인증 통과 플래그(policy_settings.mail_verified_ttl_minutes, 기본 30분, 1회용)를 직접 검증**한다 — 프론트 검증만으로는 API 직접 호출을 못 막는다.
   활동·제재 이력이 전혀 없는 탈퇴 행은 **90일 후 새벽 배치(04:30)가 물리 삭제**(policy_settings.withdrawn_purge_days) —
   글 있는 탈퇴자 행은 작성자 표기('탈퇴한 회원') 조인 때문에, 제재 이력 행은 재가입 차단 근거라서 남긴다.

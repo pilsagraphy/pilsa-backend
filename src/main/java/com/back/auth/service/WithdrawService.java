@@ -68,7 +68,9 @@ public class WithdrawService {
      */
     @Transactional
     public void forceWithdraw(Long targetUserId) {
-        AuthUtils.requireAdmin();
+        // 관리 조치 중 **유일하게 되돌릴 수 없는** 처리(개인정보 즉시 파기)라 최고 레벨만 허용한다.
+        // 블라인드/삭제/제재는 전부 소프트삭제 + 로그라 복구 가능하므로 Lv1 부터 가능.
+        AuthUtils.requireAdminLevel(3);
 
         WithdrawTarget target = withdrawMapper.findWithdrawTarget(targetUserId);
         if (target == null) {
