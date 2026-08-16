@@ -44,7 +44,7 @@ FROM api_endpoints WHERE status='active' GROUP BY domain ORDER BY domain;
 | `t_exp` | 정지 만료 (banned_until 과거) | 로그인 **성공**해야 정상 (판정은 실시간 비교) |
 | `t_del` | 탈퇴 (is_deleted=1) | 로그인 거부 확인 |
 
-※ 기존 test_* 계정(74~80)은 벌점·신고 이력 시나리오용으로 그대로 있음 (비밀번호 별도).
+※ 기존 test_* 계정(74~80)은 **로그인하지 않는다** — 관리자 화면(제재·신고 목록)에 표시될 이력 데이터 픽스처. 역할은 §2-1 참고.
 
 ---
 
@@ -154,87 +154,793 @@ UPDATE api_endpoints SET confirmed_at = CURDATE() WHERE endpoint_id IN (…);
 
 ---
 
-## 2-1. 상세 시나리오 (위 표를 진행할 때 참고)
+## 2-1. 상세 시나리오 — API 별 입력과 기대 출력
 
-### STEP 1. 회원가입·계정찾기 (인증 도메인 15건)
+> 아래 입력/기대 출력은 명세 정본(api_endpoints)의 request_example / response_example 그대로다.
+> **이대로 넣었는데 이대로 안 나오면 실패**이고, 실패 응답(400/403/404/409)도 명시된 형태로 나와야 한다.
 
-| # | API | 요청 예시 | 기대 |
-|---|---|---|---|
-| 1 | `POST /api/mail/verification-code` | `{"email":"본인메일@test.com"}` | `{message, expireTime:300}` — **실제 메일 수신 확인** |
-| 2 | `GET /api/mail/verification-code/ttl` | `?email=본인메일@test.com` | 남은 초(Long 단독 — 1기 형식) |
-| 3 | `POST /api/mail/verification-code/verify` | `{"email":"...","code":"메일의 6자리"}` | `{message, verified:true}` / 틀리면 400 |
-| 4 | `GET /api/auth/check` | `?loginId=testuser01` | 200 빈 본문(사용 가능) → 이미 있으면 400 문자열 |
-| 5 | `POST /api/auth/register` | 아래 §3-A | `{"message":"회원가입이 완료되었습니다."}` |
-| 6 | `POST /api/auth/login` | `{"loginId":"testuser01","password":"Test1234!"}` | `{accessToken, userId, memberType:"STUDENT", adminLevel:0, refreshExp}` |
-| 7 | `POST /api/auth/login` (정지) | `{"loginId":"test_susp1w", ...}` | **403 + `banType`,`bannedUntil`** ← 이번에 고친 핵심 |
-| 8 | `POST /api/auth/token/refresh/validate` | 본문 없음 | 200(쿠키 있음) / 204(없음) — 1기 형식 |
-| 9 | `POST /api/auth/token/access/refresh` | 본문 없음(쿠키) | 새 accessToken, 쿠키도 회전 |
-| 10 | `POST /api/auth/token/refresh/extend` | 본문 없음(쿠키) | 새 accessToken |
-| 11 | `POST /api/auth/email/find` | `{"studentNo":"20201234","name":"테스트유저"}` | `{message, email:"te****@test.com"}` 마스킹 |
-| 12 | `POST /api/auth/id/verify` | `{"email":"...","code":"..."}` | 인증번호 재발송(#1) 후 검증 |
-| 13 | `GET /api/auth/id/find` | `?email=본인메일@test.com` | `{message, loginId}` — #12 통과 후에만 |
-| 14 | `GET /api/auth/verification` | `?loginId=testuser01&email=본인메일@test.com` | `{message, expireTime}` + 메일 발송 |
-| 15 | `PUT /api/auth/password/reset` | `{"loginId":"testuser01","newPassword":"NewPass1234!"}` | 200 빈 본문 → **바뀐 비번으로 재로그인 확인** |
-| 16 | `POST /api/auth/token/logout` | 본문 없음 | 200 빈 본문(쿠키 삭제) |
+### 경로변수에 넣을 값
 
-> ⚠️ 마이페이지 비밀번호 변경(`PATCH /api/user/mypage/password/reset`)은 **planned(미구현)** 이라 이번 대상 아님.
-
-### STEP 2. 공개 API (로그인 없이, 4건)
-`GET /api/donations` / `GET /api/quotes/current` / `GET /api/event?from=2026-01&to=2026-12` / `GET /api/event/calendar.ics`
-→ 마지막 것은 브라우저 새 탭으로 열어 `BEGIN:VCALENDAR` 텍스트 확인.
-
-### STEP 3. 로그인 회원 기본 (일반 계정 `purpletree0210` 토큰)
-
-1. `GET /api/role` → `{memberType, adminLevel}`
-2. `GET /api/user/boards` → 열람 가능 게시판 목록(canWrite 포함)
-3. `GET /api/user/boards/2/categories` → 자랑/정보/질문/일상/모임 (**'중요' 안 보이면 정상**)
-4. `GET /api/user/boards/2/posts?page=1&size=10` → 목록(created만 있고 updated 없음 확인)
-5. `GET /api/user/boards/2/posts/top/3` → **3건만** 오는지 (top/50 초과 시 400도 확인)
-6. `GET /api/user/boards/2/posts/{postId}` → 상세(**commentCount만 있고 comments 배열 없음**), 조회수 +1
-7. `GET /api/user/boards/2/posts/{postId}/comments` → 댓글 목록(별도 API)
-8. `GET /api/user/mypage/toast` / `/unread-count` → 알림함·뱃지
-
-### STEP 4. 게시판 쓰기 (핵심 — 이번 변경 집중)
-
-| 순서 | API | 확인 포인트 |
+| 변수 | 값 | 비고 |
 |---|---|---|
-| 1 | `POST /api/user/boards/2/posts` (multipart) | 응답에 **`postId` 포함**(신규) / 파일 2개 첨부 |
-| 2 | 첨부 확인 | 상세의 `fileUrl` 을 새 탭으로 열기 → **원본 파일명으로 저장되는지**(UUID 아님) |
-| 3 | `POST` 검증 실패 | title 빈값 → **400 "제목은 필수입니다."** (500 아님) |
-| 4 | `PUT .../posts/{postId}` (multipart) | 응답이 **`{message}` 만**(상세 객체 아님) |
-| 5 | 첨부 증분 | `deleteAttachmentIds=[기존id]` + 새 `files` → 지운 건 사라지고 새 건 추가 |
-| 6 | `PUT` 검증 실패 | content 빈 문자열 → **400**(예전엔 빈 값이 그대로 저장됐음) |
-| 7 | `POST .../comments` | 댓글 등록 → 다른 계정으로 로그인해 **알림 도착 확인**(`GET /api/user/mypage/toast`) |
-| 8 | 대댓글 | `parentCommentId` 지정 → 부모 댓글 작성자에게 알림 |
-| 9 | `PATCH .../posts/{postId}/like` | 토글 2회 → "좋아요를 눌렀습니다/취소했습니다" |
-| 10 | `PATCH .../posts/{postId}/delete` | **PATCH** 경로(DELETE 아님) — 소프트삭제 |
-| 11 | 공지 쓰기 차단 | 일반 계정으로 `POST /api/user/boards/1/posts` → **403** (공지 write_level=1) |
-| 12 | `POST /api/user/reports` | 다른 사람 글 신고 → 성공 / 같은 글 재신고 → **409** / 본인 글 → **400** |
+| `{boardId}` | `2` | 자유게시판 (익명·댓글·첨부·카테고리 전부 허용) |
+| `{postId}` | STEP 5-①(게시글 등록) 응답의 `postId` | 조회 계열은 기존 글 id 아무거나 가능 |
+| `{commentId}` | STEP 5(댓글 등록) 후 댓글 목록에서 확인 | |
+| `{num}` | `3` | 상단 N개 — 3건만 오는지 |
+| `{toastId}` | `GET /api/user/mypage/toast` 목록의 `notificationId` | |
+| `{userId}` | 정지=**75**(test_susp1w), 차단=**77**(test_banned), 상세조회=**79**(test_reported_author) | 제재 화면용 |
+| `{quoteId}` | STEP 7(문장 등록) 응답의 id | |
+| `{eventId}` | STEP 7(일정 등록) 응답의 `eventId` | |
+| `categoryId` | `4` (자유게시판 '일상') | 관리자 토큰이면 `12`('중요') 선택 시 상단 고정 |
+| `reasonId` | `2` (욕설·비방) / 기타는 `8` + detail 필수 | |
 
-### STEP 5. 알림 기기 등록 (신규 3건)
-1. `GET /api/user/mypage/toast/vapid-key` → publicKey 확인
-2. `POST /api/user/mypage/toast/devices` → 아래 §3-D 더미로 등록 → `{message}` (실제 발송은 브라우저 필요)
-3. `DELETE /api/user/mypage/toast/devices` → `{"endpoint":"같은 값"}` → 해제
+### 기존 test_* 계정(74~80)의 역할 — 로그인하지 않는다 (비밀번호 별도)
 
-### STEP 6. 관리자 API (관리자 계정으로 Authorize 교체)
+이들은 **관리자 화면에 표시될 이력 데이터가 미리 걸려 있는 픽스처**다. 지우면 STEP 6 화면들이 빈 목록이 된다.
 
-1. **회원**: `GET /api/admin/users` → `PATCH /api/admin/users/{userId}` → `PATCH .../suspend`(정지) → `PATCH /api/admin/users/ban`
-   ⚠️ 정지/차단은 **테스트 계정(test_*)에만** 적용할 것
-2. **게시판**: `GET /api/admin/boards` → `POST`(생성) → `PATCH /{boardId}`(수정) → `PATCH /{boardId}/delete`(삭제)
-   - 생성한 게시판이 즉시 `GET /api/user/boards` 에 뜨는지 확인 (데이터 기반 동적 게시판)
-   - `readScope:"ALL"` 넣어보기 → **400** (ALL 폐지 확인)
-   - 글 있는 게시판 삭제 → **409**
-3. **게시글**: `GET /api/admin/posts` → `GET /api/admin/posts/{postId}` (블라인드 글도 열람, 익명글 실작성자 노출)
-4. **신고**: `GET /api/admin/reports/posts` / `comments` → 선택 조치 3종
-   - `PATCH /api/admin/reports/select-blind` → 대상이 학생 화면에서 사라지는지
-   - `PATCH /api/admin/reports/select-restore` → 복원 + 신고 rejected
-   - `PATCH /api/admin/reports/select-delete` → 삭제 + **작성자 주의 +2**
-   - 없는 id 섞어 보내기 → `{successCount:1, failCount:1, failures:[...]}` **부분 성공** 확인
-5. **제재**: `GET /api/admin/sanctions/users` → `/{userId}` → `/{userId}/reports/posts` · `/reports/comments` → `POST /{userId}/lift`
-6. **문장**: `GET /api/admin/quotes` → `POST` → `PUT /{quoteId}` → `PATCH /{quoteId}/delete`
-   - 등록 후 `GET /api/quotes/current` 에 노출되는지(노출기간 내)
-7. **일정**: `POST /api/admin/event` → `PUT /{eventId}` → `DELETE /{eventId}`
-   - 등록 후 `GET /api/event` 와 `calendar.ics` 에 반영되는지
+| 계정 | 걸려 있는 데이터 | 어느 테스트에서 보이나 |
+|---|---|---|
+| test_caution(74) | 주의 1건 + 글 2건 | 제재 목록의 caution 태그 |
+| test_susp1w(75) / test_susp1m(76) | 주의+경고+ban_log (1주/1달 정지) | 제재 목록 temporary / 제재 해제(lift) 대상 |
+| test_banned(77) | 경고 3회 + 영구 ban_log | 제재 목록 permanent |
+| test_expired(78) | 만료된 정지 이력 | 제재 목록에서 빠지는지(만료 판정) |
+| test_reported_author(79) | 글 3·댓글 1 + 신고당한 이력 | 회원별 신고 내역(/reports/posts·comments) |
+| test_reporter(80) | 신고 4건 (pending 3 / rejected 1 / resolved 1) | 신고 관리 목록 + select-* 조치 대상 |
+
+### STEP 1. 공개 조회 (비로그인) — 계정: 없음 (Authorize 해제 상태로)
+
+#### 1) `GET /api/donations` — 명예의전당 페이지 - 후원자 전체 목록  (id 133)
+**입력**
+```
+없음 (쿼리 없음)
+```
+**기대 출력**
+```
+[\n  {"donationId":1,"amount":100000,"displayName":"홍길동","affiliation":"13기",\n   "major":"컴퓨터공학과","message":"응원합니다","donatedAt":"2026-02-20T10:00:00",\n   "isAnonymous":false,"photoUrl":"/uploads/honor/uuid.png"}\n]
+```
+> 비로그인 열람 가능(SecurityConfig permitAll). 익명 후원이면 displayName이 '익명후원자'로 치환되어 내려간다. 구 /api/public/honor/
+
+#### 2) `GET /api/event` — 일정(캘린더) 페이지 - 기간별 일정 목록 조회  (id 69)
+**입력**
+```
+쿼리: ?from=2026-03&to=2026-03  (from·to 둘 다 필수)\n\nYYYY-MM / YYYY-MM-DD 둘 다 허용:\n  7자리로 오면 from은 해당 월 1일, to는 해당 월 말일로 서버가 자동 변환\n  (예: from=2026-02 -> 2026-02-01, to=2026-02 -> 2026-02-28)
+```
+**기대 출력**
+```
+{\n  "message": "일정 목록을 성공적으로 불러왔습니다.",\n  "data": [\n    {"eventId":1,"title":"3월 정기모임","category":"정기모임",\n     "description":"3월 정기모임 안내","startDate":"2026-03-01","endDate":"2026-03-01"}\n  ]\n}\n\n실패: 400 {"message":"..."} (from 또는 to 누락 시)
+```
+> SecurityConfig permitAll (비로그인 열람 가능). state=normal만 조회. 기간이 걸치기만 하면 포함(start_at<=to AND end_at>=from), start_at 오름차순. 날짜는 DATE_FORMAT으로 YYYY-MM-DD만 반환(시각 미반환)
+
+#### 3) `GET /api/event/calendar.ics` — 일정(캘린더) 페이지 - 구글 캘린더 구독 피드 (ICS)  (id 67)
+**입력**
+```
+없음 (쿼리 없음)\n\n프론트 [구독하기] 버튼:\nwindow.open(\n  'https://calendar.google.com/calendar/render?cid='\n  + encodeURIComponent('https://{서비스 도메인}/api/event/calendar.ics')\n)
+```
+**기대 출력**
+```
+Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사그래피 일정\nBEGIN:VEVENT\nUID:pilsa-event-12@pilsagraphy\nDTSTART;VALUE=DATE:20261020\nDTEND;VALUE=DATE:20261022\nSUMMARY:가을 MT\nCATEGORIES:정기모임\nDESCRIPTION:일시/장소/준비물 ...\nEND:VEVENT\nEND:VCALENDAR
+```
+> 한 번 구독하면 이후 등록/수정/삭제되는 모든 일정이 구독자 구글 캘린더에 자동 반영(구글이 수 시간~하루 주기로 재조회). OAuth·구글 API 불필요 — 표준 iCalendar 피드라 애플/아웃룩 캘린더도 같은 URL 로 구독 가능. 구글 서버가 인증 없이 가져가야 하므로 PUBLIC(SecurityConfig permitAll). state=normal 일정만 포함, 종일 일정(VALUE=DATE) 규격
+
+#### 4) `GET /api/quotes/current` — 메인페이지 이주의문장 - 이 주의 문장 (노출기간 내 랜덤 1건)  (id 31)
+**입력**
+```
+없음
+```
+**기대 출력**
+```
+{"content":"바다는 비에 젖지 않는다."}\n※ 노출기간(start~end) 내 문장 중 랜덤 1건
+```
+> 구 /api/public/quotes/random
+
+### STEP 2. 이메일 인증번호 — 계정: 없음 (비로그인)
+
+#### 5) `POST /api/mail/verification-code` — 이메일 인증번호 발송  (id 131)
+**입력**
+```
+{"email":"hong@pilsa.co.kr"}
+```
+**기대 출력**
+```
+{"message":"인증번호를 발송했습니다.","expireTime":300}\n\n실패: 400 {"message":"이메일을 입력해주세요."}\n     500 {"message":"인증번호 발송에 실패했습니다. 잠시 후 다시 시도해주세요."}
+```
+> 회원가입·아이디찾기 공용. 구 버전은 Long 원시값 반환 + 무본문 400/404였음
+
+#### 6) `GET /api/mail/verification-code/ttl` — 이메일인증 - 인증번호 남은 유효시간 조회 (타이머)  (id 87)
+**입력**
+```
+쿼리: ?email=hong@pilsa.co.kr (선택)
+```
+**기대 출력**
+```
+245  (남은 초, Long 단독 반환)
+```
+> 1기(2026-02~03) 개발
+
+#### 7) `POST /api/mail/verification-code/verify` — 이메일 인증번호 검증  (id 132)
+**입력**
+```
+{"email":"hong@pilsa.co.kr","code":"123456"}
+```
+**기대 출력**
+```
+{"message":"인증이 완료되었습니다.","verified":true}\n\n실패: 400 {"message":"이메일과 인증번호를 모두 입력해주세요."}\n     400 {"message":"인증번호가 일치하지 않거나 만료되었습니다."}
+```
+> 구 버전은 불일치도 200 + false 라서 프론트가 사유를 표시할 수 없었음 → 실패는 400 + message
+
+### STEP 3. 인증 — 계정: 없음 (비로그인 — 로그인 후 발급된 토큰/쿠키는 이어서 사용)
+
+#### 8) `GET /api/auth/check` — 회원가입 페이지 - 아이디/이메일 중복 확인  (id 77)
+**입력**
+```
+쿼리: ?email=hong@pilsa.co.kr 또는 ?loginId=hong (둘 중 하나만)
+```
+**기대 출력**
+```
+200 (본문 없음, 사용 가능)\n\n실패: 400 "이미 가입된 이메일 주소입니다." / "이미 사용 중인 아이디입니다."
+```
+> 1기(2026-02~03) 개발. 파라미터를 둘 다 안 주면 400
+
+#### 9) `POST /api/auth/email/find` — 이메일찾기 페이지 - 이메일 찾기 (학번+이름, 마스킹 반환)  (id 32)
+**입력**
+```
+{"studentNo":"2026010101","name":"홍길동"}
+```
+**기대 출력**
+```
+{"email":"ho**@pilsa.co.kr"}  // 마스킹된 이메일
+```
+> PR #67
+
+#### 10) `GET /api/auth/id/find` — 아이디찾기 페이지 - 인증 완료된 이메일로 아이디 조회  (id 82)
+**입력**
+```
+쿼리: ?email=hong@pilsa.co.kr
+```
+**기대 출력**
+```
+{"message":"아이디 조회 성공","loginId":"hong"}
+```
+> 1기(2026-02~03) 개발. 2기 POST /api/auth/email/find(이메일 찾기)와 방향이 반대인 API
+
+#### 11) `POST /api/auth/id/verify` — 아이디찾기 페이지 - 이메일+인증번호 검증  (id 81)
+**입력**
+```
+{"email":"hong@pilsa.co.kr","code":"123456"}
+```
+**기대 출력**
+```
+{"message":"이메일 인증이 완료되었습니다."}
+```
+> 1기(2026-02~03) 개발. 검증 통과 후에만 /api/auth/id/find 호출 가능
+
+#### 12) `POST /api/auth/login` — 로그인 페이지 - 로그인 (accessToken 반환 + refreshToken 쿠키)  (id 127)
+**입력**
+```
+{"loginId":"hong","password":"pw1234"}
+```
+**기대 출력**
+```
+{"accessToken":"eyJhbGciOi...","userId":80,"memberType":"STUDENT","adminLevel":0,"refreshExp":1740000000}\n\n실패: 401 {"message":"아이디 또는 비밀번호가 올바르지 않습니다."}\n     401 {"message":"승인되지 않은 계정입니다."}\n정지: 403 {"message":"정지된 계정입니다.","banType":"temporary","bannedUntil":"2026-03-30T00:00:00"}\n차단: 403 {"message":"영구적으로 차단된 계정입니다.","banType":"permanent","bannedUntil":null}
+```
+> 정지/차단 사유는 message로, 해제 일시는 bannedUntil 필드로 내려간다 — 프론트가 "2026.03.30 00:00 부터 다시 로그인 할 수 있습니다"를 그릴 수 있다. 실패 응답은 모두 JSON 객체(구 버전은 문자열이라 banType/bannedUntil이 유실됐음)
+
+#### 13) `PUT /api/auth/password/reset` — 비밀번호찾기 페이지 - 비밀번호 초기화  (id 84)
+**입력**
+```
+{"loginId":"hong","newPassword":"newpw1234"}
+```
+**기대 출력**
+```
+200 (본문 없음)
+```
+> 1기(2026-02~03) 개발. 로그인 상태의 비밀번호 변경(PATCH /api/user/mypage/password/reset)과 별개
+
+#### 14) `POST /api/auth/register` — 회원가입 페이지 - 회원가입  (id 128)
+**입력**
+```
+{"name":"홍길동","phone":"010-1234-5678","major":"컴퓨터공학과","studentNo":"20201234",\n "email":"hong@pilsa.co.kr","loginId":"hong","password":"pw1234","memberType":"STUDENT"}\n\n※ memberType 미지정 시 STUDENT. ADMIN 등 임의 문자열은 400
+```
+**기대 출력**
+```
+{"message":"회원가입이 완료되었습니다."}\n\n실패: 409 {"message":"이미 존재하는 아이디입니다."}\n     409 {"message":"이미 존재하는 이메일입니다."}\n     400 {"message":"유효하지 않은 회원 구분입니다. (STUDENT/ALUMNI)"}
+```
+> 관리 권한(admin_level)은 가입으로 못 얻는다 — 항상 0으로 저장되고 승격은 관리자만
+
+#### 15) `POST /api/auth/token/access/refresh` — 액세스 토큰 발급/재발급 (+ 리프레시 토큰 회전)  (id 130)
+**입력**
+```
+본문 없음 (refreshToken 쿠키)
+```
+**기대 출력**
+```
+{"accessToken":"eyJ...","userId":80,"memberType":"STUDENT","adminLevel":0,"refreshExp":1740000000}\n\n실패: 401 {"message":"로그인 정보가 없습니다. 다시 로그인해주세요."}\n정지/차단 계정은 403 + banType/bannedUntil
+```
+> 재발급 때마다 refreshToken 쿠키도 새로 교체된다(sliding). 매번 DB에서 회원 상태를 다시 확인하므로 정지된 계정은 즉시 막힌다
+
+#### 16) `POST /api/auth/token/logout` — 로그인/로그아웃 - 로그아웃 (리프레시 토큰 삭제)  (id 75)
+**입력**
+```
+본문 없음 (refreshToken 쿠키 사용)
+```
+**기대 출력**
+```
+200 (본문 없음)
+```
+> 1기(2026-02~03) 개발
+
+#### 17) `POST /api/auth/token/refresh/extend` — 리프레시 토큰 연장(재발급) - 로그인 유지 수동 연장  (id 129)
+**입력**
+```
+본문 없음 (refreshToken 쿠키)
+```
+**기대 출력**
+```
+{"accessToken":"eyJ...","userId":80,"memberType":"STUDENT","adminLevel":0,"refreshExp":1740000000}\n\n실패: 401 {"message":"로그인 정보가 없습니다. 다시 로그인해주세요."}\n     401 {"message":"Refresh token (로그인을 다시 해주세요.)"}\n정지/차단 계정은 로그인과 동일하게 403 + banType/bannedUntil
+```
+> 구 버전은 쿠키가 없으면 무본문 401이라 프론트가 사유를 알 수 없었음
+
+#### 18) `POST /api/auth/token/refresh/validate` — 로그인/로그아웃 - 리프레시 토큰 쿠키 존재 확인  (id 78)
+**입력**
+```
+본문 없음 (refreshToken 쿠키)
+```
+**기대 출력**
+```
+200 (쿠키 있음) / 204 (쿠키 없음)
+```
+> 1기(2026-02~03) 개발. 자동 로그인 판정용
+
+#### 19) `GET /api/auth/verification` — 비밀번호찾기 페이지 - 아이디+이메일 검증 후 인증번호 발송  (id 83)
+**입력**
+```
+쿼리: ?loginId=hong&email=hong@pilsa.co.kr
+```
+**기대 출력**
+```
+{"message":"인증번호를 발송했습니다.","expireTime":300}
+```
+> 1기(2026-02~03) 개발. expireTime은 인증번호 만료까지 남은 초
+
+### STEP 4. 회원 조회 — 계정: `t_stu` 토큰
+
+#### 20) `GET /api/role` — 로그인 사용자 신분·관리권한 조회  (id 134)
+**입력**
+```
+없음 (쿼리 없음)
+```
+**기대 출력**
+```
+{"memberType":"STUDENT","adminLevel":0}\n\n※ memberType: STUDENT(재학생) / ALUMNI(졸업생)\n※ adminLevel: 0=일반회원, 1~3=관리자
+```
+> 1기 응답은 {"role":"STUDENTS"} 하나였다. users.role 컬럼이 제거되고 member_type + admin_level 2축으로 갈리면서 두 값을 함께 내려준다. 경로는 1기와 동일하게 /api/role 유지
+
+#### 21) `GET /api/user/boards` — 사이드바 게시판 목록 - 현재 로그인한 사람이 열람 가능한 게시판 목록  (id 1)
+**입력**
+```
+없음 (쿼리 없음)
+```
+**기대 출력**
+```
+[\n  {"boardId":1,"boardName":"공지사항","displayOrder":1}\n]
+```
+> FE 메뉴는 이 API로 그린다 (하드코딩 금지)
+
+#### 22) `GET /api/user/boards/{boardId}/categories` — 공통게시판 페이지 - 게시판 카테고리 목록  (id 3)
+**입력**
+```
+없음
+```
+**기대 출력**
+```
+[{"categoryId":4,"name":"일상"},{"categoryId":5,"name":"질문"}]
+```
+> 구 /api/stu/{boardId}/categories
+
+#### 23) `GET /api/user/boards/{boardId}/posts` — 공통게시판 페이지 - 게시글 목록 (페이징/검색/정렬/카테고리)  (id 4)
+**입력**
+```
+쿼리: ?page=1&size=10&categoryId=4&keyword=검색어&sort=created|viewCount
+```
+**기대 출력**
+```
+{\n  "totalPages":3, "totalCount":27,\n  "posts":[{"postId":171,"title":"제목","authorName":"홍길동","likeCount":2,\n    "viewCount":15,"commentCount":4,"categoryName":"일상","isPinned":false,\n    "isAnonymous":false,"hasAttachment":true,"created":"2026-08-14T10:12:30"}]\n}\n※ isAnonymous=true면 authorName은 서버가 "익명"으로 마스킹
+```
+> 구 /api/stu/{boardId}/posts. 익명글 authorName 서버 마스킹
+
+#### 24) `GET /api/user/boards/{boardId}/posts/top/{num}` — 공통게시판 페이지 - 상단 N개 (is_pinned 우선)  (id 14)
+**입력**
+```
+경로변수: num = 가져올 글 개수 (1~50)\n예) /posts/top/5 → 5건, /posts/top/3 → 3건
+```
+**기대 출력**
+```
+[{"postId":140,"title":"중요 공지","isPinned":true},\n {"postId":139,"title":"최근 글","isPinned":false}]\n\n실패: 400 {"message":"조회 개수는 1 이상 50 이하여야 합니다."}
+```
+> 구 /api/stu/{boardId}/top5 (5건 고정) → 프론트가 요청한 num 만큼 반환. 중요(is_pinned) 글 우선, 그다음 최신순. state=normal 만
+
+#### 25) `GET /api/user/boards/{boardId}/posts/{postId}` — 공통게시판 페이지 - 게시글 상세 (첨부·좋아요·이전다음). 댓글은 별도 API  (id 6)
+**입력**
+```
+쿼리: ?sort=created|viewCount
+```
+**기대 출력**
+```
+{\n  "postId":171,"boardId":2,"title":"제목","content":"본문",\n  "userId":85,"authorName":"홍길동","categoryName":"일상",\n  "isAnonymous":false,"isPinned":false,\n  "viewCount":15,"likeCount":2,"isLiked":true,\n  "commentCount":3,\n  "created":"2026-08-14T10:12:30","updated":"2026-08-14T11:02:11",\n  "prevPost":{"postId":159,"title":"이전 글 제목","categoryName":"질문","created":"2026-08-13T09:20:00"},\n  "nextPost":{"postId":172,"title":"다음 글 제목","categoryName":"일상","created":"2026-08-14T15:40:00"},\n  "attachments":[{"attachmentId":18,"originName":"파일.pdf","fileUrl":"uploads/board-2/uuid.pdf","fileSize":12345}],\n  "attachmentCount":1\n}\n\n※ 댓글 본문은 내려가지 않는다 → GET .../posts/{postId}/comments 로 따로 조회\n※ 익명글: authorName="익명", userId=null (관리자·작성자 본인 제외)\n※ prevPost/nextPost: 첫 글·마지막 글이면 null
+```
+> 상세 응답은 created(생성일) + updated(수정일) 둘 다 내려간다(목록은 created만). 댓글 분리로 comments 배열은 제거되고 commentCount(노출 대상 댓글 수)만 남는다. 자기 글 조회 시에도 조회수는 증가한다
+
+#### 26) `GET /api/user/boards/{boardId}/posts/{postId}/comments` — 공통게시판 페이지 - 댓글/대댓글 목록  (id 123)
+**입력**
+```
+없음 (쿼리 없음)
+```
+**기대 출력**
+```
+[\n  {"commentId":200,"parentCommentId":null,"content":"댓글","authorName":"관리자","userId":84,\n   "isAnonymous":false,"isPrivate":false,\n   "created":"2026-08-14T10:30:00","updated":null}\n]\n\n※ 익명댓글: authorName="익명", userId=null (관리자·댓글작성자 제외)\n※ 비밀댓글: content="비밀댓글입니다." (관리자·댓글작성자·원글작성자 제외)\n※ 대댓글은 parentCommentId로 표현 (무제한 깊이)
+```
+> state=normal 댓글만 내려간다 — 관리자가 블라인드(blind)했거나 삭제(deleted)한 댓글, 작성자가 지운 댓글은 목록에 포함되지 않는다. 마스킹은 전부 서버 책임
+
+#### 27) `GET /api/user/mypage/toast` — 알림 목록 (unreadOnly 필터)  (id 25)
+**입력**
+```
+쿼리: ?page=1&size=20&unreadOnly=false
+```
+**기대 출력**
+```
+{\n  "totalPages":1,"totalCount":3,"unreadCount":1,\n  "notifications":[{"notificationId":12,"type":"COMMENT",\n    "title":"새 댓글이 달렸습니다.","message":null,\n    "linkUrl":"/api/user/boards/2/posts/171","targetType":"post","targetId":171,\n    "isRead":false,"createdAt":"2026-08-14T10:20:00"}]\n}\n※ type: COMMENT|REPLY|REPORT_RESOLVED|SANCTION|NOTICE
+```
+> 헤더 종 아이콘. 발행 범위 확정(2026-08-16): 내가 작성한 글에 달린 댓글(COMMENT), 내가 작성한 댓글에 달린 대댓글(REPLY) 만 발행한다. REPORT_RESOLVED/SANCTION/NOTICE 타입은 정의만 있고 발행하지 않음(확정). 웹앱(TWA) 푸시는 별개 전달 채널로 증축 가능(docs/integration-20260814/PUSH-NOTIFICATION-GUIDE.md)
+
+#### 28) `GET /api/user/mypage/toast/unread-count` — 미읽음 알림 수 (뱃지)  (id 29)
+**입력**
+```
+없음
+```
+**기대 출력**
+```
+{"unreadCount":3}
+```
+
+#### 29) `GET /api/user/mypage/toast/vapid-key` — 알림 발송 서버 공개키 (VAPID)  (id 138)
+**입력**
+```
+없음
+```
+**기대 출력**
+```
+{"publicKey":"BKdQZg..."}
+```
+> 기기 등록 시 pushManager.subscribe 의 applicationServerKey 로 사용. 값 불변 — 프론트 상수 보관 가능
+
+### STEP 5. 회원 쓰기 — 계정: `t_stu` 토큰 (알림 발생 확인은 `t_stu2` 가 t_stu 글에 댓글)
+
+#### 30) `POST /api/user/boards/{boardId}/posts` — 게시글 등록 (multipart)  (id 5)
+**입력**
+```
+요청 (multipart/form-data):\n{\n  "title": "제목",              ← 필수, 200자 이내\n  "content": "본문(마크다운)",      ← 필수\n  "categoryId": 12,\n  "isAnonymous": false,\n  "files": ["자료.pdf", "사진.png"],\n  "draftId": 7                  ← 선택. 임시저장을 발행할 때만\n}
+```
+**기대 출력**
+```
+{ "message": "게시글이 성공적으로 등록되었습니다.", "postId": 185 }\n\n실패: 400 {"message":"제목은 필수입니다."}\n     400 {"message":"제목은 200자를 넘을 수 없습니다."}\n     400 {"message":"내용은 필수입니다."}\n     403 {"message":"이 게시판에 글을 등록할 권한이 없습니다."}
+```
+> write_level 판정. 상단 고정은 isPinned 요청이 아니라 카테고리 '중요'(code=PINNED) 선택으로 서버가 결정(카테고리 목록에 관리자만 노출). draftId 가 오면 발행 성공과 같은 트랜잭션에서 해당 초안 삭제 — 없는/남의 draftId 는 무시하고 발행은 성공 (draftId 처리는 A-5 구현 시 추가)
+
+#### 31) `PUT /api/user/boards/{boardId}/posts/{postId}` — 게시글 수정 (작성자/관리자)  (id 7)
+**입력**
+```
+요청 (multipart/form-data):\n{\n  "title": "수정 제목",          ← 필수, 200자 이내\n  "content": "수정 본문(마크다운)",  ← 필수\n  "categoryId": 4,\n  "isAnonymous": false,\n  "deleteAttachmentIds": [18, 19],  ← 삭제할 기존 첨부만\n  "files": ["새파일.pdf"]           ← 새로 추가할 첨부만\n}\n※ 유지할 기존 첨부는 아무것도 보내지 않는다 (증분 방식)
+```
+**기대 출력**
+```
+{"message":"게시글이 성공적으로 수정되었습니다."}\n\n실패: 400 {"message":"제목은 필수입니다."} 등 검증 3종(등록과 동일)\n     403 {"message":"수정 권한이 없습니다."}\n     404 {"message":"수정할 수 없는 게시글입니다."} (블라인드/삭제 글)
+```
+> 응답은 message 만 — 수정 후 프론트가 상세로 이동하며 GET 을 다시 하므로 상세 객체 반환은 낭비(합의). 첨부 삭제는 소프트삭제(attachments.state=deleted). 중요 → 일반 카테고리로 바꾸면 상단 고정 자동 해제. 블라인드·삭제 글은 작성자도 수정 불가(증적 보호)
+
+#### 32) `POST /api/user/boards/{boardId}/posts/{postId}/comments` — 공통게시판 페이지 - 댓글/대댓글 등록  (id 9)
+**입력**
+```
+{"content":"댓글 내용","parentCommentId":null,\n "isAnonymous":false,"isPrivate":false}\n※ parentCommentId 있으면 대댓글(무제한 깊이)
+```
+**기대 출력**
+```
+{"message":"댓글이 성공적으로 등록되었습니다."}\n\n실패: 400 {"message":"답글을 달 부모 댓글이 존재하지 않습니다."}\n     403 {"message":"이 게시판은 댓글을 사용하지 않습니다."}
+```
+> parentCommentId 무제한 깊이. 원글/부모 작성자에게 알림 발행
+
+#### 33) `PUT /api/user/boards/{boardId}/posts/{postId}/comments/{commentId}` — 공통게시판 페이지 - 댓글/대댓글 수정  (id 10)
+**입력**
+```
+{"content":"수정된 댓글","isAnonymous":false,"isPrivate":false}
+```
+**기대 출력**
+```
+{"message":"댓글이 성공적으로 수정되었습니다."}
+```
+
+#### 34) `PATCH /api/user/boards/{boardId}/posts/{postId}/comments/{commentId}/delete` — 공통게시판 페이지 - 댓글/대댓글 삭제 (소프트, 본인만)  (id 11)
+**입력**
+```
+없음
+```
+**기대 출력**
+```
+{"message":"댓글이 성공적으로 삭제되었습니다."}\n\n실패: 403 {"message":"본인 댓글만 삭제할 수 있습니다. (관리자 조치는 관리자 화면에서)"}
+```
+
+#### 35) `PATCH /api/user/boards/{boardId}/posts/{postId}/delete` — 공통게시판 페이지 - 게시글 삭제 (소프트, 작성자 본인만)  (id 8)
+**입력**
+```
+없음
+```
+**기대 출력**
+```
+{"message":"게시글이 성공적으로 삭제되었습니다."}\n\n실패: 403 {"message":"본인 글만 삭제할 수 있습니다. (관리자 조치는 관리자 게시글 관리에서)"}\n     404 {"message":"존재하지 않는 게시글입니다."} (타 게시판 글·블라인드 글)
+```
+> 관리자 조치는 /api/admin/posts/{id} 사용(로그·벌점 연동)
+
+#### 36) `PATCH /api/user/boards/{boardId}/posts/{postId}/like` — 공통게시판 페이지 - 좋아요 토글  (id 12)
+**입력**
+```
+없음
+```
+**기대 출력**
+```
+{"message":"좋아요 +1"}  또는  {"message":"좋아요 취소"}
+```
+
+#### 37) `POST /api/user/mypage/toast/devices` — 알림 수신 기기 등록 (웹 푸시)  (id 136)
+**입력**
+```
+{\n  "endpoint": "https://fcm.googleapis.com/fcm/send/abc...",\n  "keys": { "p256dh": "BNc...", "auth": "k8J..." }\n}\n※ 브라우저 pushManager.subscribe() 결과의 toJSON() 을 그대로 전송
+```
+**기대 출력**
+```
+{"message":"알림 기기가 등록되었습니다."}\n\n실패: 400 {"message":"기기 등록 정보가 올바르지 않습니다."}
+```
+> 알림 켜기(권한 허용) 시 호출. 같은 기기 재등록은 갱신(UPSERT), 한 회원이 여러 기기 가능. 캘린더 구독과 무관한 웹 푸시 전달 채널 — 인앱 toast API 는 그대로 유지. 테이블 notification_devices(세션성 — 물리삭제 예외)
+
+#### 38) `DELETE /api/user/mypage/toast/devices` — 알림 수신 기기 해제  (id 137)
+**입력**
+```
+{"endpoint": "https://fcm.googleapis.com/fcm/send/abc..."}
+```
+**기대 출력**
+```
+{"message":"알림 기기가 해제되었습니다."}\n(이미 없는 기기여도 200)
+```
+> 알림 끄기·로그아웃 시 프론트가 pushManager 해제와 함께 호출. 본인 기기만 해제. 발송 응답 404/410 인 기기는 서버가 자동 정리
+
+#### 39) `PATCH /api/user/mypage/toast/read-all` — 알림 전체 읽음 처리  (id 28)
+**입력**
+```
+없음
+```
+**기대 출력**
+```
+{"message":"전체 읽음 처리되었습니다.","updatedCount":3}
+```
+
+#### 40) `PATCH /api/user/mypage/toast/{toastId}/delete` — 알림 삭제 (소프트)  (id 26)
+**입력**
+```
+없음
+```
+**기대 출력**
+```
+{"message":"삭제되었습니다."}
+```
+
+#### 41) `PATCH /api/user/mypage/toast/{toastId}/read` — 알림 읽음 처리 (단건)  (id 27)
+**입력**
+```
+없음
+```
+**기대 출력**
+```
+{"message":"읽음 처리되었습니다."}
+```
+
+#### 42) `POST /api/user/reports` — 공통게시판/댓글 신고 페이지 - 게시글/댓글 신고 접수  (id 20)
+**입력**
+```
+{"targetType":"post","targetId":171,"reasonId":1,\n "detail":"기타 사유일 때만 작성"}\n※ targetType: post | comment
+```
+**기대 출력**
+```
+{"message":"신고가 접수되었습니다."}\n\n실패: 400 {"message":"본인이 작성한 게시글/댓글은 신고할 수 없습니다."}\n     409 {"message":"이미 신고한 게시글/댓글입니다."}\n     409 {"message":"이미 삭제된 게시글/댓글입니다."}
+```
+> 구 /api/stu/reports. 중복 409, 본인 글 400, 삭제 대상 409
+
+### STEP 6. 관리자 조회 — 계정: `t_adm3` 토큰
+
+#### 43) `GET /api/admin/boards` — 게시판관리 페이지 - 게시판 목록 (게시글 수·권한 설정 포함)  (id 34)
+**입력**
+```
+없음
+```
+**기대 출력**
+```
+[{"boardId":2,"boardName":"자유게시판","postCount":27,\n  "readScope":"MEMBER","writeLevel":0,"displayOrder":2}]
+```
+
+#### 44) `GET /api/admin/posts` — 게시글관리 페이지 - 게시글 목록 (전 게시판, 검색)  (id 38)
+**입력**
+```
+쿼리: ?page=1&size=10&boardId=2&keyword=제목또는글쓴이
+```
+**기대 출력**
+```
+{\n  "totalPages":5,"totalCount":48,\n  "posts":[{"postId":171,"boardId":2,"boardName":"자유게시판","title":"제목",\n    "authorName":"홍길동","commentCount":4,"likeCount":2,"viewCount":15,\n    "created":"2026-08-14T10:12:30","state":"normal"}]\n}\n※ state: normal|blind (deleted 제외)
+```
+
+#### 45) `GET /api/admin/posts/{postId}` — 게시글관리 페이지 - 게시글 상세 (blind/deleted 열람, 실작성자)  (id 39)
+**입력**
+```
+없음
+```
+**기대 출력**
+```
+{\n  "postId":171,"boardId":2,"boardName":"자유게시판","categoryName":"일상",\n  "title":"제목","content":"본문","authorId":85,"authorName":"홍길동",\n  "isAnonymous":false,"isPinned":false,"viewCount":15,"likeCount":2,\n  "commentCount":4,"state":"blind",\n  "created":"2026-08-14T10:12:30","updated":"2026-08-14T11:00:00",\n  "attachments":[{"attachmentId":18,"originName":"파일1.png","fileSize":12345,"fileUrl":"/uploads/board-2/uuid.png"}],\n  "comments":[{"commentId":200,"content":"댓글","userId":84,"authorName":"관리자",\n    "isAnonymous":false,"isPrivate":false,"state":"normal",\n    "created":"...","updated":null}]\n}\n※ 익명글도 실작성자 노출, 모든 state 댓글 포함, 조회수 미증가
+```
+
+#### 46) `GET /api/admin/quotes` — 문장 목록  (id 63)
+**입력**
+```
+없음
+```
+**기대 출력**
+```
+{"quotes":[{"quoteId":6,"content":"문장","startDate":"2026-08-10",\n  "endDate":"2026-08-16","writerId":1,"createdAt":"...","updatedAt":"..."}]}
+```
+
+#### 47) `GET /api/admin/reports/comments` — 신고관리페이지 - 신고된 댓글 목록 (원글 postId 포함)  (id 48)
+**입력**
+```
+쿼리: ?page=1&size=10&state=blind&boardId=2&sort=&keyword=
+```
+**기대 출력**
+```
+{\n  "totalPages":1,"totalCount":2,\n  "items":[{"targetType":"comment","targetId":200,"postId":171,\n    "preview":"댓글 앞부분","boardId":2,"boardName":"자유게시판",\n    "authorName":"홍길동","reasonLabel":"광고/홍보",\n    "firstReportedAt":"2026-08-14T10:05:00","reportCount":1,\n    "state":"normal"}]\n}\n※ postId = 원문 이동용 게시글 id
+```
+
+#### 48) `GET /api/admin/reports/posts` — 신고관리페이지 - 신고된 게시글 목록 (대상별 그룹핑)  (id 49)
+**입력**
+```
+쿼리: ?page=1&size=10&state=blind&boardId=2&sort=&keyword=
+```
+**기대 출력**
+```
+{\n  "totalPages":1,"totalCount":4,\n  "items":[{"targetType":"post","targetId":171,"postId":171,\n    "preview":"본문 앞부분 30자","boardId":2,"boardName":"자유게시판",\n    "authorName":"홍길동","reasonLabel":"욕설/비방",\n    "firstReportedAt":"2026-08-14T10:00:00","reportCount":3,\n    "state":"normal"}]\n}\n※ 대상 단위 그룹핑(동일 대상 중복 신고는 reportCount로 합산)
+```
+
+#### 49) `GET /api/admin/sanctions/users` — 제재회원목록 페이지 - 제재 회원 목록 (permanent/temporary/caution 태그)  (id 55)
+**입력**
+```
+없음
+```
+**기대 출력**
+```
+[{"userId":75,"loginId":"user75","name":"홍길동","email":"a@b.c",\n  "banStatus":"temporary","bannedUntil":"2026-08-21T23:59:59",\n  "banStartedAt":"2026-08-14T10:00:00","tag":"temporary"}]\n※ tag: permanent|temporary|caution
+```
+
+#### 50) `GET /api/admin/sanctions/users/{userId}` — 제재회원목록 페이지 - 제재 회원 상세 (누적주의/경고/신고삭제수)  (id 56)
+**입력**
+```
+없음
+```
+**기대 출력**
+```
+{"tag":"temporary","banStatus":"temporary",\n "bannedUntil":"2026-08-21T23:59:59","banStartedAt":"2026-08-14T10:00:00",\n "cautionRemainder":2,"warningCount":1,"reportDeletedCount":3}\n※ cautionRemainder = 유효 주의 합계 %% 10 (경고까지 남은 진행도)\n※ warningCount 분모는 3 (ban_policy 3단계: 1주/1달/영구)
+```
+> 경고 단계는 3단계 확정 (시안 N/5는 오표기 → FE /3)
+
+#### 51) `GET /api/admin/sanctions/users/{userId}/reports/comments` — 제재회원목록 페이지 - 회원별 신고된 댓글 내역  (id 126)
+**입력**
+```
+없음 (쿼리 없음)
+```
+**기대 출력**
+```
+[\n  {"reportId":11,"commentId":200,"postId":171,"boardId":2,"boardName":"자유게시판",\n   "postTitle":"원글 제목","preview":"댓글 내용 앞 30자","state":"blind",\n   "reasonId":1,"reasonLabel":"욕설/비방","detail":null,\n   "status":"resolved","activeFlag":null,\n   "createdAt":"2026-08-14T10:00:00","resolvedAt":"2026-08-14T11:00:00"}\n]
+```
+> 게시글 신고와 분리(구 .../reports 통합 응답). 댓글은 제목이 없고 이동 경로가 소속 게시글이라 응답 형태가 다르다. state는 대상 댓글의 현재 표시 상태(normal/blind/deleted)
+
+#### 52) `GET /api/admin/sanctions/users/{userId}/reports/posts` — 제재회원목록 페이지 - 회원별 신고된 게시글 내역  (id 58)
+**입력**
+```
+없음
+```
+**기대 출력**
+```
+[\n  {"reportId":9,"postId":171,"boardId":2,"boardName":"자유게시판",\n   "title":"신고된 게시글 제목","preview":"본문 앞 30자","state":"normal",\n   "reasonId":1,"reasonLabel":"욕설/비방","detail":null,\n   "status":"resolved","activeFlag":null,\n   "createdAt":"2026-08-14T10:00:00","resolvedAt":"2026-08-14T11:00:00"}\n]
+```
+> 댓글 신고와 분리(구 .../reports 통합 응답에서 targetType 분기 제거). state는 대상 게시글의 현재 표시 상태(normal/blind/deleted)
+
+#### 53) `GET /api/admin/users` — 회원목록 페이지 - 회원 목록 (검색/정렬/페이징/활동수/정지기간)  (id 59)
+**입력**
+```
+쿼리: ?page=1&size=10&keyword=검색어&sort=
+```
+**기대 출력**
+```
+{\n  "totalPages":3,"totalCount":25,\n  "members":[{"userId":80,"loginId":"hong","name":"홍길동","phone":"010-1234-5678",\n    "studentNo":"2026010101","email":"hong@pilsa.co.kr","memberType":"STUDENT",\n    "adminLevel":0,"postCount":5,"commentCount":12,\n    "banStartAt":null,"banEndAt":null,"banStatus":"none"}]\n}
+```
+> 구 /api/admin/members
+
+### STEP 7. 관리자 쓰기 — 계정: `t_adm3` 토큰
+
+#### 54) `POST /api/admin/boards` — 게시판관리 페이지 - 새 게시판 생성 (read_scope/write_level 등)  (id 35)
+**입력**
+```
+{"name":"동문 게시판","readScope":"ALUMNI","writeLevel":0}\n※ readScope: MEMBER(재학생+졸업생)|STUDENT(재학생)|ALUMNI(졸업생), writeLevel: 0~3 (0은 일반회원을 의미)
+```
+**기대 출력**
+```
+201 Created\n{"boardId":4,"boardName":"동문 게시판","postCount":0,\n "readScope":"ALUMNI","writeLevel":0,"displayOrder":4}\n\n실패: 409 {"message":"이미 존재하는 게시판 이름입니다."}
+```
+> 생성 즉시 /api/boards/{id}/** 동작 (코드 수정 불필요)
+
+#### 55) `PATCH /api/admin/boards/{boardId}` — 게시판관리 페이지 - 게시판 수정 (전달 필드만)  (id 36)
+**입력**
+```
+{"name":"이름 변경","readScope":"MEMBER","writeLevel":1,"displayOrder":3}\n※ 전달한 필드만 수정
+```
+**기대 출력**
+```
+{\n  "boardId":4,"boardName":"동문 게시판","postCount":12,\n  "readScope":"ALUMNI","writeLevel":0,"displayOrder":4,\n  "allowComment":true,"allowAttachment":true,"categoryMode":false,\n  "defaultCategoryId":null,"allowAnonymous":false,"allowPrivateComment":false\n}\n\n실패: 404 {"message":"존재하지 않는 게시판입니다."}\n     409 {"message":"이미 존재하는 게시판 이름입니다."}\n     400 {"message":"열람 권한 값이 올바르지 않습니다. (MEMBER=재학+졸업 / STUDENT=재학 / ALUMNI=졸업)"}
+```
+> 전달한 필드만 수정된다. 수정 후 게시판 정보 전체를 반환하므로 프론트가 재조회할 필요 없다
+
+#### 56) `PATCH /api/admin/boards/{boardId}/delete` — 게시판관리 페이지 - 게시판 삭제 (소프트, 글 있으면 409)  (id 37)
+**입력**
+```
+없음
+```
+**기대 출력**
+```
+{"message":"게시판이 삭제되었습니다."}\n\n실패: 409 {"message":"게시글이 3건 남아 있어 삭제할 수 없습니다."}
+```
+
+#### 57) `POST /api/admin/event` — (관리자) 일정(캘린더) 페이지 - 일정 등록  (id 68)
+**입력**
+```
+{\n  "title": "3월 정기모임",\n  "category": "정기모임",\n  "description": "3월 정기모임 안내",\n  "startDate": "2026-03-01",\n  "endDate": "2026-03-01"\n}\n\n※ description은 DB NOT NULL, category는 관리자 자유 입력(varchar 50, NULL 허용)
+```
+**기대 출력**
+```
+201 Created\n{\n  "message": "새로운 일정이 등록되었습니다.",\n  "data": {"eventId": 12, "title": "3월 정기모임"}\n}\n\n실패: 400 {"message":"시작일과 종료일은 필수 입력 항목입니다."}\n     400 {"message":"시작일이 종료일보다 늦을 수 없습니다."}\n     403 {"message":"관리자 권한이 필요합니다."}
+```
+> 성공 코드가 200이 아니라 201. startDate/endDate는 YYYY-MM-DD 문자열을 그대로 datetime 컬럼에 저장하므로 시각은 00:00:00으로 들어감. 등록자 user_id는 AuthUtils.currentUserId()로 자동 기록
+
+#### 58) `PUT /api/admin/event/{eventId}` — (관리자) 일정(캘린더) 페이지 - 일정 수정 (부분 수정)  (id 71)
+**입력**
+```
+{\n  "title": "3월 정기모임(장소 변경)",\n  "category": "정기모임",\n  "description": "장소가 변경되었습니다.",\n  "startDate": "2026-03-02",\n  "endDate": "2026-03-02"\n}\n\n※ 전달한 필드만 반영(전부 선택)
+```
+**기대 출력**
+```
+{\n  "message": "일정 정보가 성공적으로 수정되었습니다.",\n  "data": {"eventId": 12, "updatedAt": "2026-08-15T15:20:00"}\n}\n\n실패: 404 {"message":"해당 일정을 찾을 수 없습니다."} (없거나 이미 삭제된 일정)\n     403 {"message":"관리자 권한이 필요합니다."}
+```
+> MyBatis <set><if>로 전달 필드만 UPDATE. WHERE에 state=normal이 있어 삭제된 일정은 404. 등록과 달리 수정에는 시작일<=종료일 검증이 없음(유의)
+
+#### 59) `DELETE /api/admin/event/{eventId}` — (관리자) 일정(캘린더) 페이지 - 일정 삭제 (소프트)  (id 122)
+**입력**
+```
+경로변수: eventId (본문 없음)
+```
+**기대 출력**
+```
+{\n  "message": "일정이 정상적으로 삭제되었습니다."\n}\n※ data는 null이라 응답 JSON에서 생략됨(@JsonInclude NON_NULL)\n\n실패: 404 {"message":"삭제할 일정을 찾을 수 없습니다."}\n     403 {"message":"관리자 권한이 필요합니다."}
+```
+> HTTP 메서드는 DELETE지만 실제 동작은 소프트삭제(events.state = deleted). 이미 삭제된 일정을 다시 지우면 404
+
+#### 60) `POST /api/admin/quotes` — 문장 등록 (노출기간)  (id 64)
+**입력**
+```
+{"content":"오늘 쓴 한 문장이 내일의 나를 만든다.",\n "startDate":"2026-08-17","endDate":"2026-08-23"}
+```
+**기대 출력**
+```
+201 Created\n{"message":"문장이 등록되었습니다.","data":{"quoteId":10}}
+```
+
+#### 61) `PUT /api/admin/quotes/{quoteId}` — 문장 수정  (id 65)
+**입력**
+```
+{"content":"수정된 문장","startDate":"2026-08-17","endDate":"2026-08-23"}
+```
+**기대 출력**
+```
+{"message":"문장이 수정되었습니다.","data":null}
+```
+
+#### 62) `PATCH /api/admin/quotes/{quoteId}/delete` — 문장 삭제 (소프트)  (id 66)
+**입력**
+```
+없음
+```
+**기대 출력**
+```
+{"message":"문장이 삭제되었습니다.","data":null}\n※ 소프트삭제(state=deleted)
+```
+> 2기: 물리삭제 → 소프트삭제 전환
+
+#### 63) `PATCH /api/admin/reports/select-blind` — 신고/게시글/댓글관리페이지 - 신고 선택 블라인드 (일괄)  (id 52)
+**입력**
+```
+{\n  "targetType": "post",\n  "targetIds": [171, 172],\n  "reasonId": 5,\n  "detail": "기타 사유일 때만"\n}\n\nor\n\n{\n  "targetType": "comment",\n  "targetIds": [200, 201],\n  "reasonId": 5,\n  "detail": "기타 사유일 때만"\n}
+```
+**기대 출력**
+```
+{"successCount":2,"failCount":0,"failures":[]}\n\n※ 항목마다 독립 트랜잭션 — 일부가 실패해도 나머지는 그대로 처리된다(부분 성공)\n※ 요청에 중복 id가 있으면 한 번만 처리된다
+```
+> 단건 조치용 API는 없다 — targetIds 에 1건만 담아 호출한다. state=blind 로 가리기만 하며 벌점은 부과하지 않는다(삭제와의 차이). 최종 판단 전 임시 조치이므로 신고는 pending 으로 남는다
+
+#### 64) `PATCH /api/admin/reports/select-delete` — 신고/게시글/댓글관리페이지 - 신고 선택 삭제 (일괄)  (id 51)
+**입력**
+```
+{\n  "targetType": "post",\n  "targetIds": [171, 172],\n  "reasonId": 1,\n  "detail": "기타 사유일 때만"\n}\n\nor \n\n{\n  "targetType": "comment",\n  "targetIds": [200, 201],\n  "reasonId": 1,\n  "detail": "기타 사유일 때만"\n}
+```
+**기대 출력**
+```
+{"successCount":1,"failCount":1,\n "failures":[{"id":172,"message":"이미 삭제된 게시글입니다."}]}\n\n※ 항목마다 독립 트랜잭션 — 일부가 실패해도 나머지는 그대로 처리된다(부분 성공)\n※ 요청에 중복 id가 있으면 한 번만 처리된다
+```
+> 단건 조치용 API는 없다 — targetIds 에 1건만 담아 호출한다. 소프트 삭제(state=deleted) + 작성자 주의 +2 + 경고/정지 에스컬레이션. 대상별 pending 신고를 resolved로 일괄 종료(중복 신고 이중 벌점 차단). reasonId 미전달 시 대표(최신) 신고 사유를 사용하므로 신고 없는 게시글도 이 API로 삭제 가능
+
+#### 65) `PATCH /api/admin/reports/select-restore` — 신고관리페이지 - 신고 선택 복원 (일괄)  (id 50)
+**입력**
+```
+{\n  "targetType": "post",\n  "targetIds": [171, 172]\n}\n\nor\n\n{\n  "targetType": "comment",\n  "targetIds": [200, 201]\n}\n\n※ 복원은 사유를 받지 않는다
+```
+**기대 출력**
+```
+{"successCount":1,"failCount":1,\n "failures":[{"id":172,"message":"존재하지 않는 게시글입니다."}]}\n\n※ 항목마다 독립 트랜잭션 — 일부가 실패해도 나머지는 그대로 처리된다(부분 성공)\n※ 요청에 중복 id가 있으면 한 번만 처리된다
+```
+> 단건 조치용 API는 없다 — targetIds 에 1건만 담아 호출한다. 신고관리/게시글관리/댓글관리 화면이 공유. 이미 삭제(deleted)된 대상은 되살리지 않는다(의도적 삭제·벌점 보호). 처리 결과는 대상별 pending 신고를 rejected로 종료
+
+#### 66) `POST /api/admin/sanctions/users/{userId}/lift` — (3기 진행 예정) 제재 수동 해제  (id 57)
+**입력**
+```
+없음
+```
+**기대 출력**
+```
+{"message":"제재가 해제되었습니다."}\n※ ban_status=none + 열린 ban_log 전부 해제(lifted_by 기록)
+```
+
+#### 67) `PATCH /api/admin/users/ban` — 회원목록 페이지 - 회원 영구차단 (단일/다중)  (id 62)
+**입력**
+```
+{"userIds":[80,81,82]}
+```
+**기대 출력**
+```
+{"message":"영구차단 처리되었습니다.","userId":null}\n\n실패: 404 (없는 id가 하나라도 있으면 전체 실패)
+```
+> all-or-nothing
+
+#### 68) `PATCH /api/admin/users/{userId}` — 회원목록 페이지 - 회원 정보 수정 (부분)  (id 60)
+**입력**
+```
+{"name":"홍길동","phone":"010-1234-5678","studentNo":"2026010101","memberType":"ALUMNI","adminLevel":1}\n※ 전달한 필드만 수정됨\n※ email 은 수정 불가
+```
+**기대 출력**
+```
+{"message":"회원 정보가 수정되었습니다.","userId":80}\n\n실패: 400 {"message":"유효하지 않은 회원 구분 값입니다. (STUDENT/ALUMNI)"}\n     409 {"message":"이미 사용 중인 이메일입니다."}
+```
+> memberType/adminLevel 검증, 중복 검사
+
+#### 69) `PATCH /api/admin/users/{userId}/suspend` — 회원목록 페이지 - 회원 정지 (temporary)  (id 61)
+**입력**
+```
+{"endDate":"2026-09-30"}\n※ 종료일 23:59:59까지 정지
+```
+**기대 출력**
+```
+{"message":"회원이 정지되었습니다.","userId":80}\n\n실패: 400 {"message":"정지 종료일은 현재보다 미래여야 합니다."}\n     409 {"message":"이미 영구차단된 회원입니다. 정지로 변경할 수 없습니다."}
+```
+> ban_log source=manual, warning_no=NULL
 
 ---
 
