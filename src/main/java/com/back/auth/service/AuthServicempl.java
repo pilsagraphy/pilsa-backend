@@ -380,6 +380,11 @@ public class AuthServicempl implements AuthService {
             throw new AuthException("해당 아이디는 존재하지 않습니다.", HttpStatus.NOT_FOUND);
         }
 
+        // 새 비밀번호 형식 검증 — 회원가입과 동일 규칙 재사용. 초기화 경로로 규칙 위반 비밀번호가 설정되는 구멍 봉쇄
+        requireMatch(request.getNewPassword(), "signup_password_regex",
+                "^(?=.*[A-Za-z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,20}$",
+                "비밀번호는 문자, 숫자, 특수문자를 포함한 8~20자여야 합니다.");
+
         // 이메일 인증(인증번호) 통과 여부를 서버에서 확인 — 없으면 아이디만 알면 남의 비밀번호를 바꿀 수 있다 (계정 탈취 구멍)
         String verifiedKey = "auth:mail:verified:" + user.getEmail();
         if (redisTemplate.opsForValue().get(verifiedKey) == null) {
