@@ -83,6 +83,13 @@
           AND is_deleted = false
         LIMIT 1
     </select>
+
+    <!-- 정책값 단건 조회 (이메일 인증 통과 플래그 유효시간 등) -->
+    <select id="findPolicySetting" resultType="string">
+        SELECT setting_value
+        FROM policy_settings
+        WHERE code = #{code}
+    </select>
 </mapper>
 
         <!--<mapper namespace="com.back.auth.mapper.AuthMapper">-->

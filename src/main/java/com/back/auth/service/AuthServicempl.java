@@ -2,13 +2,11 @@ package com.back.auth.service;
 
 import com.back.auth.dto.*;
 import com.back.auth.mapper.AuthMapper;
-import com.back.auth.dto.PasswordChangeRequest;
 import com.back.auth.dto.WithdrawTarget;
 import com.back.auth.dto.WithdrawnBanInfo;
 import com.back.auth.exception.AuthException;
 import com.back.auth.mapper.WithdrawMapper;
 import com.back.auth.exception.BannedException;
-import com.back.global.security.AuthUtils;
 import com.back.global.security.JwtUtil;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
@@ -314,30 +312,6 @@ public class AuthServicempl implements AuthService {
         }
 
         return expireTime;
-    }
-
-    // 마이페이지 비밀번호 변경 — 로그인 상태에서 현재 비밀번호를 재확인한다 (토큰 탈취만으로 변경 불가)
-    @Override
-    @Transactional
-    public void changePassword(PasswordChangeRequest request) {
-        Long userId = AuthUtils.currentUserId();
-        WithdrawTarget me = withdrawMapper.findWithdrawTarget(userId);
-        if (me == null) {
-            throw new AuthException("사용자 정보를 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
-        }
-        if (request.getCurrentPassword() == null
-                || !passwordEncoder.matches(request.getCurrentPassword(), me.getPasswordHash())) {
-            throw new AuthException("현재 비밀번호가 일치하지 않습니다.", HttpStatus.BAD_REQUEST);
-        }
-        String newPassword = request.getNewPassword();
-        if (newPassword == null
-                || !newPassword.matches("^(?=.*[A-Za-z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,20}$")) {
-            throw new AuthException("새 비밀번호는 문자, 숫자, 특수문자를 포함한 8~20자여야 합니다.", HttpStatus.BAD_REQUEST);
-        }
-        if (passwordEncoder.matches(newPassword, me.getPasswordHash())) {
-            throw new AuthException("새 비밀번호가 현재 비밀번호와 같습니다.", HttpStatus.BAD_REQUEST);
-        }
-        authMapper.updatePassword(me.getLoginId(), passwordEncoder.encode(newPassword));
     }
 
     // 재가입 쿨다운 일수 (policy_settings.rejoin_cooldown_days, 기본 30)

@@ -123,6 +123,10 @@ VALUES ('rejoin_cooldown_days', '30', '탈퇴 후 재가입 대기 일수 (계�
 INSERT INTO `policy_settings` (code, setting_value, description)
 VALUES ('withdrawn_purge_days', '90', '활동·제재 이력 없는 탈퇴 행 보존 일수 (경과 시 새벽 배치가 물리 삭제)');
 
+-- [2026-08-16] 이메일 인증 통과 플래그 유효시간을 정책으로 (MailServiceImpl 이 로드, 기본 30)
+INSERT INTO `policy_settings` (code, setting_value, description)
+VALUES ('mail_verified_ttl_minutes', '30', '이메일 인증 통과 플래그 유효시간(분) — 만료 후 가입/비밀번호 초기화 시도 시 재인증 안내');
+
 -- [2026-08-16] api_endpoints 에 스웨거 실테스트 확정일 컬럼 추가 (PM 수동 기록용)
 ALTER TABLE `api_endpoints`
   ADD COLUMN `confirmed_at` date DEFAULT NULL

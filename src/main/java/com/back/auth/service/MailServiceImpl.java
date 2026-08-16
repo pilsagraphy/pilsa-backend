@@ -1,5 +1,6 @@
 package com.back.auth.service;
 
+import com.back.auth.mapper.AuthMapper; // 정책값(policy_settings) 조회
 import com.back.auth.service.AsyncMailService; // 메일 보내는애
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,8 +17,10 @@ public class MailServiceImpl implements MailService {
     private final StringRedisTemplate redisTemplate;
     // 메일 발송을 담당하는 별도의 서비스가 있다면 주입받음
     private final AsyncMailService asyncMailService;
+    private final AuthMapper authMapper;
 
     private static final long CODE_TTL = 180; // 3분
+    private static final long DEFAULT_VERIFIED_TTL_MINUTES = 30; // 인증 통과 플래그 기본 유효시간
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Override
@@ -57,7 +60,8 @@ public class MailServiceImpl implements MailService {
             redisTemplate.delete(key);
             // 인증 통과 흔적을 남긴다 — 회원가입/비밀번호 초기화가 "인증을 실제로 통과했는지" 서버에서 확인하는 근거.
             // (프론트 화면 검증만으로는 API 직접 호출을 못 막는다)
-            redisTemplate.opsForValue().set("auth:mail:verified:" + email, "1", 30, java.util.concurrent.TimeUnit.MINUTES);
+            // 유효시간은 policy_settings.mail_verified_ttl_minutes (기본 30분) — 만료 후 시도하면 재인증 안내
+            redisTemplate.opsForValue().set("auth:mail:verified:" + email, "1", verifiedTtlMinutes(), TimeUnit.MINUTES);
             return true;
         }
         return false;
@@ -78,5 +82,14 @@ public class MailServiceImpl implements MailService {
     @Override
     public long getRemainingTime(String email) {
         return redisTemplate.getExpire("auth:code:" + email, TimeUnit.SECONDS);
+    }
+
+    // 인증 통과 플래그 유효시간(분) — policy_settings 에서 로드, 없거나 숫자가 아니면 기본 30
+    private long verifiedTtlMinutes() {
+        try {
+            return Long.parseLong(authMapper.findPolicySetting("mail_verified_ttl_minutes"));
+        } catch (Exception e) {
+            return DEFAULT_VERIFIED_TTL_MINUTES;
+        }
     }
 }

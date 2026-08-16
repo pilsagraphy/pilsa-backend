@@ -32,6 +32,9 @@ public interface AuthMapper {
 
     // 이메일 찾기 - 학번+이름이 모두 일치하는 사용자의 이메일 조회
     String findEmailByStudentNoAndName(@Param("studentNo") String studentNo, @Param("name") String name);
+
+    // 정책값 단건 조회 (mail_verified_ttl_minutes 등) — 없으면 null
+    String findPolicySetting(@Param("code") String code);
 }
 
 //@Mapper
