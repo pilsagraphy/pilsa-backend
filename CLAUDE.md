@@ -23,7 +23,7 @@ com.back
 ├── donation        # 명예의전당 (donations)
 ├── admin           # 관리자 화면 전용 도메인
 │   ├── common      # AdminServiceSupport, BulkResultResponse(부분 성공)
-│   ├── event       # 일정 등록/수정/삭제 (매퍼는 event 도메인의 EventMapper 공유)
+│   ├── event       # 일정 등록/수정/삭제 (AdminEventMapper — 관리 쿼리는 자기 패키지 소유)
 │   ├── board       # 게시판 관리 (생성/수정/권한 설정)
 │   ├── post        # 게시글 관리 (조회 전용 — 조치는 신고 관리 select-*)
 │   ├── moderation  # 게시글·댓글 공통 조치(blind/restore/softDelete) + moderation_log/penalty_log
