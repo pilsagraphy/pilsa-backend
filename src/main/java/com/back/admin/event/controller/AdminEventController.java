@@ -30,7 +30,10 @@ public class AdminEventController {
                     { "title": "3월 정기모임", "category": "정기모임",
                       "description": "3월 정기모임 안내", "startDate": "2026-03-01", "endDate": "2026-03-01" }
                     ```
-                    - category 는 관리자 자유 입력 (예: 정기모임)
+                    - category 는 **관리자 자유 입력**(events.category varchar(50), 예: 정기모임) — 선택지 목록 API 없음.
+                      카테고리 테이블(event_categories)은 2026-08-16 구현했다가 PM 지시로 당일 롤백(DB 드랍)했고,
+                      완성본은 git 브랜치 `archive/event-categories`(da6da1d, 원격 보관)에 있다. 되살릴 땐 체리픽할 것.
+                      (`categories` 테이블은 게시판 전용이라 일정과 무관 — 재사용 금지)
                     - description 은 필수(DB NOT NULL), 날짜는 YYYY-MM-DD
 
                     ### 응답 예시
