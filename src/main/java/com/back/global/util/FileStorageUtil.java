@@ -53,9 +53,27 @@ public class FileStorageUtil {
             }
             if (!target.delete() && target.exists()) {
                 log.warn("물리 파일 삭제 실패 - {}", fileUrl);
+                return;
             }
+            deleteEmptyParents(target.getParentFile(), base);
         } catch (IOException e) {
             log.warn("물리 파일 삭제 중 오류 - {}: {}", fileUrl, e.getMessage());
+        }
+    }
+
+    /**
+     * 파일을 지운 뒤 빈 폴더를 위로 올라가며 정리한다 (uploads 자체는 남긴다).
+     * 글 단위 폴더(uploads/board-2/185)를 쓰므로, 마지막 첨부가 지워지면 빈 폴더가 계속 쌓이기 때문.
+     */
+    private void deleteEmptyParents(File dir, File base) {
+        while (dir != null
+                && dir.getPath().startsWith(base.getPath())
+                && !dir.equals(base)) {
+            String[] children = dir.list();
+            if (children == null || children.length > 0 || !dir.delete()) {
+                break; // 파일이 남아 있거나 삭제 실패면 중단
+            }
+            dir = dir.getParentFile();
         }
     }
 
