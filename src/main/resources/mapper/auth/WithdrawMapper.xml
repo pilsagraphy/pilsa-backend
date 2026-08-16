@@ -3,7 +3,8 @@
 <mapper namespace="com.back.auth.mapper.WithdrawMapper">
 
     <select id="findWithdrawTarget" resultType="com.back.auth.dto.WithdrawTarget">
-        SELECT password_hash AS passwordHash,
+        SELECT login_id      AS loginId,
+               password_hash AS passwordHash,
                email,
                student_no    AS studentNo,
                admin_level   AS adminLevel
@@ -44,5 +45,39 @@
     <select id="findPolicySetting" resultType="string">
         SELECT setting_value FROM policy_settings WHERE code = #{code}
     </select>
+
+    <!-- 물리 삭제 후보: 보존기간 경과 + 활동/제재 이력 전무 (참조가 하나라도 있으면 제외 — FK 도 RESTRICT 라 2중 안전).
+         글/댓글이 있는 탈퇴자는 작성자 표기('탈퇴한 회원')가 users 조인이라 행을 남겨야 한다. -->
+    <select id="findPurgeableWithdrawnUserIds" resultType="long">
+        SELECT u.user_id
+        FROM users u
+        WHERE u.is_deleted = 1
+          AND u.ban_status = 'none'
+          AND u.updated_at &lt; DATE_SUB(NOW(), INTERVAL #{retentionDays} DAY)
+          AND NOT EXISTS (SELECT 1 FROM posts p        WHERE p.user_id = u.user_id)
+          AND NOT EXISTS (SELECT 1 FROM comments c     WHERE c.user_id = u.user_id)
+          AND NOT EXISTS (SELECT 1 FROM post_likes pl  WHERE pl.user_id = u.user_id)
+          AND NOT EXISTS (SELECT 1 FROM reports_log r  WHERE r.reporter_id = u.user_id)
+          AND NOT EXISTS (SELECT 1 FROM penalty_log pn WHERE pn.user_id = u.user_id)
+          AND NOT EXISTS (SELECT 1 FROM warning_log w  WHERE w.user_id = u.user_id)
+          AND NOT EXISTS (SELECT 1 FROM ban_log b      WHERE b.user_id = u.user_id OR b.lifted_by = u.user_id)
+          AND NOT EXISTS (SELECT 1 FROM moderation_log m WHERE m.acted_by = u.user_id)
+          AND NOT EXISTS (SELECT 1 FROM events e       WHERE e.user_id = u.user_id)
+          AND NOT EXISTS (SELECT 1 FROM quotes q       WHERE q.writer_id = u.user_id)
+          AND NOT EXISTS (SELECT 1 FROM donations d    WHERE d.user_id = u.user_id OR d.created_by = u.user_id)
+    </select>
+
+    <delete id="deleteNotificationsByUserIds">
+        DELETE FROM notifications
+        WHERE user_id IN
+        <foreach collection="userIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <delete id="deleteUsersByIds">
+        DELETE FROM users
+        WHERE is_deleted = 1
+          AND user_id IN
+        <foreach collection="userIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
 
 </mapper>

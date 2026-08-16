@@ -7,6 +7,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class WithdrawTarget {
+    private String loginId;
     private String passwordHash;
     private String email;
     private String studentNo;

@@ -3,6 +3,7 @@ package com.back.auth.service;
 import com.back.auth.dto.AuthResponse;
 import com.back.auth.dto.LoginRequest;
 //import com.back.auth.dto.SignupRequest;
+import com.back.auth.dto.PasswordChangeRequest;
 import com.back.auth.dto.PasswordResetRequest;
 import com.back.auth.dto.SignupRequest;
 import com.back.auth.dto.FindIdVerifyRequest;
@@ -28,6 +29,9 @@ public interface AuthService {
     long verifyLoginIdAndEmailAndSendCode(String loginId, String email);
     // 비밀번호 초기화
     void resetPassword(PasswordResetRequest request);
+
+    // 마이페이지 비밀번호 변경 — 현재 비밀번호 재확인 필수 (비로그인 초기화와 별개)
+    void changePassword(PasswordChangeRequest request);
 
     // 이메일 찾기 - 학번/이름 일치 시 마스킹된 이메일 반환
     String findMaskedEmail(String studentNo, String name);

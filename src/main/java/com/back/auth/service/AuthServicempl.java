@@ -2,10 +2,13 @@ package com.back.auth.service;
 
 import com.back.auth.dto.*;
 import com.back.auth.mapper.AuthMapper;
+import com.back.auth.dto.PasswordChangeRequest;
+import com.back.auth.dto.WithdrawTarget;
 import com.back.auth.dto.WithdrawnBanInfo;
 import com.back.auth.exception.AuthException;
 import com.back.auth.mapper.WithdrawMapper;
 import com.back.auth.exception.BannedException;
+import com.back.global.security.AuthUtils;
 import com.back.global.security.JwtUtil;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
@@ -150,7 +153,7 @@ public class AuthServicempl implements AuthService {
         // 이메일 인증을 실제로 통과했는지 서버에서 확인 — 프론트 화면 검증은 API 직접 호출로 우회된다.
         // (인증 성공 시 MailServiceImpl 이 30분짜리 통과 플래그를 남긴다)
         if (redisTemplate.opsForValue().get("auth:mail:verified:" + request.getEmail()) == null) {
-            throw new AuthException("이메일 인증이 완료되지 않았습니다.", HttpStatus.FORBIDDEN);
+            throw new AuthException("이메일 인증이 완료되지 않았거나 만료되었습니다. 이메일 인증을 다시 진행해주세요.", HttpStatus.FORBIDDEN);
         }
 
         // 중복 아이디 확인
@@ -281,7 +284,7 @@ public class AuthServicempl implements AuthService {
         String verified = redisTemplate.opsForValue().get(verifiedKey);
 
         if (!"true".equals(verified)) {
-            throw new AuthException("이메일 인증이 완료되지 않았습니다.", HttpStatus.UNAUTHORIZED);
+            throw new AuthException("이메일 인증이 완료되지 않았거나 만료되었습니다. 이메일 인증을 다시 진행해주세요.", HttpStatus.UNAUTHORIZED);
         }
 
         String loginId = authMapper.findLoginIdByEmail(email);
@@ -313,6 +316,30 @@ public class AuthServicempl implements AuthService {
         return expireTime;
     }
 
+    // 마이페이지 비밀번호 변경 — 로그인 상태에서 현재 비밀번호를 재확인한다 (토큰 탈취만으로 변경 불가)
+    @Override
+    @Transactional
+    public void changePassword(PasswordChangeRequest request) {
+        Long userId = AuthUtils.currentUserId();
+        WithdrawTarget me = withdrawMapper.findWithdrawTarget(userId);
+        if (me == null) {
+            throw new AuthException("사용자 정보를 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
+        }
+        if (request.getCurrentPassword() == null
+                || !passwordEncoder.matches(request.getCurrentPassword(), me.getPasswordHash())) {
+            throw new AuthException("현재 비밀번호가 일치하지 않습니다.", HttpStatus.BAD_REQUEST);
+        }
+        String newPassword = request.getNewPassword();
+        if (newPassword == null
+                || !newPassword.matches("^(?=.*[A-Za-z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,20}$")) {
+            throw new AuthException("새 비밀번호는 문자, 숫자, 특수문자를 포함한 8~20자여야 합니다.", HttpStatus.BAD_REQUEST);
+        }
+        if (passwordEncoder.matches(newPassword, me.getPasswordHash())) {
+            throw new AuthException("새 비밀번호가 현재 비밀번호와 같습니다.", HttpStatus.BAD_REQUEST);
+        }
+        authMapper.updatePassword(me.getLoginId(), passwordEncoder.encode(newPassword));
+    }
+
     // 재가입 쿨다운 일수 (policy_settings.rejoin_cooldown_days, 기본 30)
     private int parseCooldownDays(String settingValue) {
         try {
@@ -333,7 +360,7 @@ public class AuthServicempl implements AuthService {
         // 이메일 인증(인증번호) 통과 여부를 서버에서 확인 — 없으면 아이디만 알면 남의 비밀번호를 바꿀 수 있다 (계정 탈취 구멍)
         String verifiedKey = "auth:mail:verified:" + user.getEmail();
         if (redisTemplate.opsForValue().get(verifiedKey) == null) {
-            throw new AuthException("이메일 인증이 완료되지 않았습니다.", HttpStatus.UNAUTHORIZED);
+            throw new AuthException("이메일 인증이 완료되지 않았거나 만료되었습니다. 이메일 인증을 다시 진행해주세요.", HttpStatus.UNAUTHORIZED);
         }
 
 //        // 승인 Y / 대기 N / 탈퇴 X

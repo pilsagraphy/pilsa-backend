@@ -32,4 +32,13 @@ public interface WithdrawMapper {
 
     /** policy_settings 값 조회 (rejoin_cooldown_days 등) */
     String findPolicySetting(@Param("code") String code);
+
+    /** 보존기간이 지났고 활동·제재 이력이 전혀 없는 탈퇴 행 (물리 삭제 후보) */
+    List<Long> findPurgeableWithdrawnUserIds(@Param("retentionDays") int retentionDays);
+
+    /** 후보의 잔여 알림 행 물리 삭제 (users FK 해제용 — 알림은 증적 가치 없음) */
+    int deleteNotificationsByUserIds(@Param("userIds") List<Long> userIds);
+
+    /** 탈퇴 행 물리 삭제 — findPurgeableWithdrawnUserIds 로 걸러진 id 만 넣을 것 */
+    int deleteUsersByIds(@Param("userIds") List<Long> userIds);
 }
