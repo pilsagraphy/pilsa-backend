@@ -29,28 +29,132 @@ FROM api_endpoints WHERE status='active' GROUP BY domain ORDER BY domain;
 
 ---
 
-## 1. 준비 — 계정과 기본 데이터
+## 1. 테스트 계정 (2026-08-16 시드 완료 — **비밀번호는 전부 wm5256 과 동일**)
 
-DB에 이미 있는 계정 (비밀번호는 각자 설정값 사용):
+| loginId | 상황 | 확인 용도 |
+|---|---|---|
+| `t_stu` | 재학생 · 일반 | 회원 API 주 계정 |
+| `t_stu2` | 재학생 · 일반 | 상대역 — 댓글 달아 알림 발생, 신고 대상 글 작성 |
+| `t_alu` | 졸업생 · 일반 | 신분 분기 (STUDENT 전용 게시판 만들면 403 확인) |
+| `t_adm1` | 관리자 Lv1 | 공지(write_level=1) 작성 가능 / Lv2·3 게시판 불가 확인 |
+| `t_adm2` | 관리자 Lv2 | write_level 경계 확인 |
+| `t_adm3` | 관리자 Lv3 | 관리자 API 전체 |
+| `t_susp` | 정지 중 (~2026-09-30) | 로그인 → **403 + banType:temporary + bannedUntil** |
+| `t_ban` | 영구차단 | 로그인 → **403 + banType:permanent + bannedUntil:null** |
+| `t_exp` | 정지 만료 (banned_until 과거) | 로그인 **성공**해야 정상 (판정은 실시간 비교) |
+| `t_del` | 탈퇴 (is_deleted=1) | 로그인 거부 확인 |
 
-| 용도 | loginId | 신분 | 관리레벨 | 비고 |
-|---|---|---|---|---|
-| 관리자 | `admin_pilsa` | STUDENT | 3 | 관리자 API 전용 |
-| 관리자(본인) | `wm5256` | ALUMNI | 3 | |
-| 일반 재학생 | `purpletree0210` | STUDENT | 0 | 회원 API 주 계정 |
-| 일반 재학생2 | `ahnyejii` | STUDENT | 0 | 신고·댓글 상대역 |
-| 정지 계정 | `test_susp1w` | STUDENT | 0 | 로그인 403 확인용 |
-| 영구차단 계정 | `test_banned` | STUDENT | 0 | 로그인 403 확인용 |
-
-기본 데이터: 게시판 3개(1=공지사항 write_level=1, 2=자유게시판, 3=정보게시판), 신고 사유 8종,
-게시글 13건, 일정 1건, 문장 9건, 후원 3건.
-
-**스웨거에서 토큰 넣는 법**: 로그인 응답의 `accessToken` 복사 → 우측 상단 **Authorize** → `Bearer {토큰}` 입력.
-관리자 API 테스트 전에는 관리자 계정 토큰으로 다시 Authorize 할 것.
+※ 기존 test_* 계정(74~80)은 벌점·신고 이력 시나리오용으로 그대로 있음 (비밀번호 별도).
 
 ---
 
-## 2. 테스트 순서 (요청하신 흐름 → 쉬운 것 → 복잡한 것)
+## 2. 전수 체크리스트 — active 69건, 쉬운 순서 (성공 시 confirmed_at 직접 입력)
+
+```sql
+-- 성공 처리 (id 는 아래 표의 id 컬럼)
+UPDATE api_endpoints SET confirmed_at = CURDATE() WHERE endpoint_id IN (…);
+```
+
+### STEP 1. 공개 조회 (비로그인) — 4건
+| # | id | API | 제목 | ✔ |
+|---|----|-----|------|---|
+| 1 | 133 | `GET /api/donations` | 명예의전당 페이지 - 후원자 전체 목록 | ☐ |
+| 2 | 69 | `GET /api/event` | 일정(캘린더) 페이지 - 기간별 일정 목록 조회 | ☐ |
+| 3 | 67 | `GET /api/event/calendar.ics` | 일정(캘린더) 페이지 - 구글 캘린더 구독 피드 (ICS) | ☐ |
+| 4 | 31 | `GET /api/quotes/current` | 메인페이지 이주의문장 - 이 주의 문장 (노출기간 내 랜덤 1건) | ☐ |
+
+### STEP 2. 이메일 인증번호 — 3건
+| # | id | API | 제목 | ✔ |
+|---|----|-----|------|---|
+| 5 | 131 | `POST /api/mail/verification-code` | 이메일 인증번호 발송 | ☐ |
+| 6 | 87 | `GET /api/mail/verification-code/ttl` | 이메일인증 - 인증번호 남은 유효시간 조회 (타이머) | ☐ |
+| 7 | 132 | `POST /api/mail/verification-code/verify` | 이메일 인증번호 검증 | ☐ |
+
+### STEP 3. 인증 (회원가입→로그인→계정찾기→토큰) — 12건
+| # | id | API | 제목 | ✔ |
+|---|----|-----|------|---|
+| 8 | 77 | `GET /api/auth/check` | 회원가입 페이지 - 아이디/이메일 중복 확인 | ☐ |
+| 9 | 32 | `POST /api/auth/email/find` | 이메일찾기 페이지 - 이메일 찾기 (학번+이름, 마스킹 반환) | ☐ |
+| 10 | 82 | `GET /api/auth/id/find` | 아이디찾기 페이지 - 인증 완료된 이메일로 아이디 조회 | ☐ |
+| 11 | 81 | `POST /api/auth/id/verify` | 아이디찾기 페이지 - 이메일+인증번호 검증 | ☐ |
+| 12 | 127 | `POST /api/auth/login` | 로그인 페이지 - 로그인 (accessToken 반환 + refreshToken 쿠키) | ☐ |
+| 13 | 84 | `PUT /api/auth/password/reset` | 비밀번호찾기 페이지 - 비밀번호 초기화 | ☐ |
+| 14 | 128 | `POST /api/auth/register` | 회원가입 페이지 - 회원가입 | ☐ |
+| 15 | 130 | `POST /api/auth/token/access/refresh` | 액세스 토큰 발급/재발급 (+ 리프레시 토큰 회전) | ☐ |
+| 16 | 75 | `POST /api/auth/token/logout` | 로그인/로그아웃 - 로그아웃 (리프레시 토큰 삭제) | ☐ |
+| 17 | 129 | `POST /api/auth/token/refresh/extend` | 리프레시 토큰 연장(재발급) - 로그인 유지 수동 연장 | ☐ |
+| 18 | 78 | `POST /api/auth/token/refresh/validate` | 로그인/로그아웃 - 리프레시 토큰 쿠키 존재 확인 | ☐ |
+| 19 | 83 | `GET /api/auth/verification` | 비밀번호찾기 페이지 - 아이디+이메일 검증 후 인증번호 발송 | ☐ |
+
+### STEP 4. 회원 조회 (t_stu 토큰) — 10건
+| # | id | API | 제목 | ✔ |
+|---|----|-----|------|---|
+| 20 | 134 | `GET /api/role` | 로그인 사용자 신분·관리권한 조회 | ☐ |
+| 21 | 1 | `GET /api/user/boards` | 사이드바 게시판 목록 - 현재 로그인한 사람이 열람 가능한 게시판 목록 | ☐ |
+| 22 | 3 | `GET /api/user/boards/{boardId}/categories` | 공통게시판 페이지 - 게시판 카테고리 목록 | ☐ |
+| 23 | 4 | `GET /api/user/boards/{boardId}/posts` | 공통게시판 페이지 - 게시글 목록 (페이징/검색/정렬/카테고리) | ☐ |
+| 24 | 14 | `GET /api/user/boards/{boardId}/posts/top/{num}` | 공통게시판 페이지 - 상단 N개 (is_pinned 우선) | ☐ |
+| 25 | 6 | `GET /api/user/boards/{boardId}/posts/{postId}` | 공통게시판 페이지 - 게시글 상세 (첨부·좋아요·이전다음). 댓글은 별도 API | ☐ |
+| 26 | 123 | `GET /api/user/boards/{boardId}/posts/{postId}/comments` | 공통게시판 페이지 - 댓글/대댓글 목록 | ☐ |
+| 27 | 25 | `GET /api/user/mypage/toast` | 알림 목록 (unreadOnly 필터) | ☐ |
+| 28 | 29 | `GET /api/user/mypage/toast/unread-count` | 미읽음 알림 수 (뱃지) | ☐ |
+| 29 | 138 | `GET /api/user/mypage/toast/vapid-key` | 알림 발송 서버 공개키 (VAPID) | ☐ |
+
+### STEP 5. 회원 쓰기 (게시글·댓글·신고·알림·기기) — 13건
+| # | id | API | 제목 | ✔ |
+|---|----|-----|------|---|
+| 30 | 5 | `POST /api/user/boards/{boardId}/posts` | 게시글 등록 (multipart) | ☐ |
+| 31 | 7 | `PUT /api/user/boards/{boardId}/posts/{postId}` | 게시글 수정 (작성자/관리자) | ☐ |
+| 32 | 9 | `POST /api/user/boards/{boardId}/posts/{postId}/comments` | 공통게시판 페이지 - 댓글/대댓글 등록 | ☐ |
+| 33 | 10 | `PUT /api/user/boards/{boardId}/posts/{postId}/comments/{commentId}` | 공통게시판 페이지 - 댓글/대댓글 수정 | ☐ |
+| 34 | 11 | `PATCH /api/user/boards/{boardId}/posts/{postId}/comments/{commentId}/delete` | 공통게시판 페이지 - 댓글/대댓글 삭제 (소프트, 본인만) | ☐ |
+| 35 | 8 | `PATCH /api/user/boards/{boardId}/posts/{postId}/delete` | 공통게시판 페이지 - 게시글 삭제 (소프트, 작성자 본인만) | ☐ |
+| 36 | 12 | `PATCH /api/user/boards/{boardId}/posts/{postId}/like` | 공통게시판 페이지 - 좋아요 토글 | ☐ |
+| 37 | 136 | `POST /api/user/mypage/toast/devices` | 알림 수신 기기 등록 (웹 푸시) | ☐ |
+| 38 | 137 | `DELETE /api/user/mypage/toast/devices` | 알림 수신 기기 해제 | ☐ |
+| 39 | 28 | `PATCH /api/user/mypage/toast/read-all` | 알림 전체 읽음 처리 | ☐ |
+| 40 | 26 | `PATCH /api/user/mypage/toast/{toastId}/delete` | 알림 삭제 (소프트) | ☐ |
+| 41 | 27 | `PATCH /api/user/mypage/toast/{toastId}/read` | 알림 읽음 처리 (단건) | ☐ |
+| 42 | 20 | `POST /api/user/reports` | 공통게시판/댓글 신고 페이지 - 게시글/댓글 신고 접수 | ☐ |
+
+### STEP 6. 관리자 조회 (t_adm3 토큰) — 11건
+| # | id | API | 제목 | ✔ |
+|---|----|-----|------|---|
+| 43 | 34 | `GET /api/admin/boards` | 게시판관리 페이지 - 게시판 목록 (게시글 수·권한 설정 포함) | ☐ |
+| 44 | 38 | `GET /api/admin/posts` | 게시글관리 페이지 - 게시글 목록 (전 게시판, 검색) | ☐ |
+| 45 | 39 | `GET /api/admin/posts/{postId}` | 게시글관리 페이지 - 게시글 상세 (blind/deleted 열람, 실작성자) | ☐ |
+| 46 | 63 | `GET /api/admin/quotes` | 문장 목록 | ☐ |
+| 47 | 48 | `GET /api/admin/reports/comments` | 신고관리페이지 - 신고된 댓글 목록 (원글 postId 포함) | ☐ |
+| 48 | 49 | `GET /api/admin/reports/posts` | 신고관리페이지 - 신고된 게시글 목록 (대상별 그룹핑) | ☐ |
+| 49 | 55 | `GET /api/admin/sanctions/users` | 제재회원목록 페이지 - 제재 회원 목록 (permanent/temporary/caution 태그) | ☐ |
+| 50 | 56 | `GET /api/admin/sanctions/users/{userId}` | 제재회원목록 페이지 - 제재 회원 상세 (누적주의/경고/신고삭제수) | ☐ |
+| 51 | 126 | `GET /api/admin/sanctions/users/{userId}/reports/comments` | 제재회원목록 페이지 - 회원별 신고된 댓글 내역 | ☐ |
+| 52 | 58 | `GET /api/admin/sanctions/users/{userId}/reports/posts` | 제재회원목록 페이지 - 회원별 신고된 게시글 내역 | ☐ |
+| 53 | 59 | `GET /api/admin/users` | 회원목록 페이지 - 회원 목록 (검색/정렬/페이징/활동수/정지기간) | ☐ |
+
+### STEP 7. 관리자 쓰기 (게시판·회원·신고조치·문장·일정) — 16건
+| # | id | API | 제목 | ✔ |
+|---|----|-----|------|---|
+| 54 | 35 | `POST /api/admin/boards` | 게시판관리 페이지 - 새 게시판 생성 (read_scope/write_level 등) | ☐ |
+| 55 | 36 | `PATCH /api/admin/boards/{boardId}` | 게시판관리 페이지 - 게시판 수정 (전달 필드만) | ☐ |
+| 56 | 37 | `PATCH /api/admin/boards/{boardId}/delete` | 게시판관리 페이지 - 게시판 삭제 (소프트, 글 있으면 409) | ☐ |
+| 57 | 68 | `POST /api/admin/event` | (관리자) 일정(캘린더) 페이지 - 일정 등록 | ☐ |
+| 58 | 71 | `PUT /api/admin/event/{eventId}` | (관리자) 일정(캘린더) 페이지 - 일정 수정 (부분 수정) | ☐ |
+| 59 | 122 | `DELETE /api/admin/event/{eventId}` | (관리자) 일정(캘린더) 페이지 - 일정 삭제 (소프트) | ☐ |
+| 60 | 64 | `POST /api/admin/quotes` | 문장 등록 (노출기간) | ☐ |
+| 61 | 65 | `PUT /api/admin/quotes/{quoteId}` | 문장 수정 | ☐ |
+| 62 | 66 | `PATCH /api/admin/quotes/{quoteId}/delete` | 문장 삭제 (소프트) | ☐ |
+| 63 | 52 | `PATCH /api/admin/reports/select-blind` | 신고/게시글/댓글관리페이지 - 신고 선택 블라인드 (일괄) | ☐ |
+| 64 | 51 | `PATCH /api/admin/reports/select-delete` | 신고/게시글/댓글관리페이지 - 신고 선택 삭제 (일괄) | ☐ |
+| 65 | 50 | `PATCH /api/admin/reports/select-restore` | 신고관리페이지 - 신고 선택 복원 (일괄) | ☐ |
+| 66 | 57 | `POST /api/admin/sanctions/users/{userId}/lift` | (3기 진행 예정) 제재 수동 해제 | ☐ |
+| 67 | 62 | `PATCH /api/admin/users/ban` | 회원목록 페이지 - 회원 영구차단 (단일/다중) | ☐ |
+| 68 | 60 | `PATCH /api/admin/users/{userId}` | 회원목록 페이지 - 회원 정보 수정 (부분) | ☐ |
+| 69 | 61 | `PATCH /api/admin/users/{userId}/suspend` | 회원목록 페이지 - 회원 정지 (temporary) | ☐ |
+
+---
+
+## 2-1. 상세 시나리오 (위 표를 진행할 때 참고)
 
 ### STEP 1. 회원가입·계정찾기 (인증 도메인 15건)
 

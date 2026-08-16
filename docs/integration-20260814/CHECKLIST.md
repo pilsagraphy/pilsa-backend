@@ -115,6 +115,15 @@ ALTER TABLE `boards`
 INSERT INTO `policy_settings` (code, setting_value, description)
 VALUES ('draft_max_count', '5', '임시저장 보관 상한 (회원당 게시판별)');
 
+-- [2026-08-16] api_endpoints 에 스웨거 실테스트 확정일 컬럼 추가 (PM 수동 기록용)
+ALTER TABLE `api_endpoints`
+  ADD COLUMN `confirmed_at` date DEFAULT NULL
+    COMMENT '스웨거 실테스트 통과 확정일 (수동 입력). NULL 이거나 오늘 날짜가 아니면 미확인' AFTER `status`;
+
+-- [2026-08-16] 스웨거 전수 테스트용 계정 10개 시드 (t_stu ~ t_del, user_id 96~105)
+-- 비밀번호 해시는 wm5256 과 동일하게 복사 (동일 비밀번호로 로그인). 상황: 재학/졸업/관리자Lv1~3/정지중/영구차단/정지만료/탈퇴
+-- 상세는 docs/integration-20260814/TEST-PLAN.md §1
+
 -- [2026-08-16] 알림 수신 기기 등록부 (웹 푸시 채널 — PM 지시로 2기 개발). 세션성 데이터라 물리삭제 예외
 CREATE TABLE `notification_devices` (
   `device_id`   bigint       NOT NULL AUTO_INCREMENT COMMENT '알림 수신 기기 고유 번호',
