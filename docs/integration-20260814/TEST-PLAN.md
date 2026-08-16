@@ -196,29 +196,64 @@ UPDATE api_endpoints SET confirmed_at = CURDATE() WHERE endpoint_id IN (…);
 ```
 **기대 출력**
 ```
-[\n  {"donationId":1,"amount":100000,"displayName":"홍길동","affiliation":"13기",\n   "major":"컴퓨터공학과","message":"응원합니다","donatedAt":"2026-02-20T10:00:00",\n   "isAnonymous":false,"photoUrl":"/uploads/honor/uuid.png"}\n]
+[
+  {"donationId":1,"amount":100000,"displayName":"홍길동","affiliation":"13기",
+   "major":"컴퓨터공학과","message":"응원합니다","donatedAt":"2026-02-20T10:00:00",
+   "isAnonymous":false,"photoUrl":"/uploads/honor/uuid.png"}
+]
 ```
 > 비로그인 열람 가능(SecurityConfig permitAll). 익명 후원이면 displayName이 '익명후원자'로 치환되어 내려간다. 구 /api/public/honor/
 
 #### 2) `GET /api/event` — 일정(캘린더) 페이지 - 기간별 일정 목록 조회  (id 69)
 **입력**
 ```
-쿼리: ?from=2026-03&to=2026-03  (from·to 둘 다 필수)\n\nYYYY-MM / YYYY-MM-DD 둘 다 허용:\n  7자리로 오면 from은 해당 월 1일, to는 해당 월 말일로 서버가 자동 변환\n  (예: from=2026-02 -> 2026-02-01, to=2026-02 -> 2026-02-28)
+쿼리: ?from=2026-03&to=2026-03  (from·to 둘 다 필수)
+
+YYYY-MM / YYYY-MM-DD 둘 다 허용:
+  7자리로 오면 from은 해당 월 1일, to는 해당 월 말일로 서버가 자동 변환
+  (예: from=2026-02 -> 2026-02-01, to=2026-02 -> 2026-02-28)
 ```
 **기대 출력**
 ```
-{\n  "message": "일정 목록을 성공적으로 불러왔습니다.",\n  "data": [\n    {"eventId":1,"title":"3월 정기모임","category":"정기모임",\n     "description":"3월 정기모임 안내","startDate":"2026-03-01","endDate":"2026-03-01"}\n  ]\n}\n\n실패: 400 {"message":"..."} (from 또는 to 누락 시)
+{
+  "message": "일정 목록을 성공적으로 불러왔습니다.",
+  "data": [
+    {"eventId":1,"title":"3월 정기모임","category":"정기모임",
+     "description":"3월 정기모임 안내","startDate":"2026-03-01","endDate":"2026-03-01"}
+  ]
+}
+
+실패: 400 {"message":"..."} (from 또는 to 누락 시)
 ```
 > SecurityConfig permitAll (비로그인 열람 가능). state=normal만 조회. 기간이 걸치기만 하면 포함(start_at<=to AND end_at>=from), start_at 오름차순. 날짜는 DATE_FORMAT으로 YYYY-MM-DD만 반환(시각 미반환)
 
 #### 3) `GET /api/event/calendar.ics` — 일정(캘린더) 페이지 - 구글 캘린더 구독 피드 (ICS)  (id 67)
 **입력**
 ```
-없음 (쿼리 없음)\n\n프론트 [구독하기] 버튼:\nwindow.open(\n  'https://calendar.google.com/calendar/render?cid='\n  + encodeURIComponent('https://{서비스 도메인}/api/event/calendar.ics')\n)
+없음 (쿼리 없음)
+
+프론트 [구독하기] 버튼:
+window.open(
+  'https://calendar.google.com/calendar/render?cid='
+  + encodeURIComponent('https://{서비스 도메인}/api/event/calendar.ics')
+)
 ```
 **기대 출력**
 ```
-Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사그래피 일정\nBEGIN:VEVENT\nUID:pilsa-event-12@pilsagraphy\nDTSTART;VALUE=DATE:20261020\nDTEND;VALUE=DATE:20261022\nSUMMARY:가을 MT\nCATEGORIES:정기모임\nDESCRIPTION:일시/장소/준비물 ...\nEND:VEVENT\nEND:VCALENDAR
+Content-Type: text/calendar
+
+BEGIN:VCALENDAR
+VERSION:2.0
+X-WR-CALNAME:필사그래피 일정
+BEGIN:VEVENT
+UID:pilsa-event-12@pilsagraphy
+DTSTART;VALUE=DATE:20261020
+DTEND;VALUE=DATE:20261022
+SUMMARY:가을 MT
+CATEGORIES:정기모임
+DESCRIPTION:일시/장소/준비물 ...
+END:VEVENT
+END:VCALENDAR
 ```
 > 한 번 구독하면 이후 등록/수정/삭제되는 모든 일정이 구독자 구글 캘린더에 자동 반영(구글이 수 시간~하루 주기로 재조회). OAuth·구글 API 불필요 — 표준 iCalendar 피드라 애플/아웃룩 캘린더도 같은 URL 로 구독 가능. 구글 서버가 인증 없이 가져가야 하므로 PUBLIC(SecurityConfig permitAll). state=normal 일정만 포함, 종일 일정(VALUE=DATE) 규격
 
@@ -229,7 +264,8 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-{"content":"바다는 비에 젖지 않는다."}\n※ 노출기간(start~end) 내 문장 중 랜덤 1건
+{"content":"바다는 비에 젖지 않는다."}
+※ 노출기간(start~end) 내 문장 중 랜덤 1건
 ```
 > 구 /api/public/quotes/random
 
@@ -242,7 +278,10 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-{"message":"인증번호를 발송했습니다.","expireTime":300}\n\n실패: 400 {"message":"이메일을 입력해주세요."}\n     500 {"message":"인증번호 발송에 실패했습니다. 잠시 후 다시 시도해주세요."}
+{"message":"인증번호를 발송했습니다.","expireTime":300}
+
+실패: 400 {"message":"이메일을 입력해주세요."}
+     500 {"message":"인증번호 발송에 실패했습니다. 잠시 후 다시 시도해주세요."}
 ```
 > 회원가입·아이디찾기 공용. 구 버전은 Long 원시값 반환 + 무본문 400/404였음
 
@@ -264,7 +303,10 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-{"message":"인증이 완료되었습니다.","verified":true}\n\n실패: 400 {"message":"이메일과 인증번호를 모두 입력해주세요."}\n     400 {"message":"인증번호가 일치하지 않거나 만료되었습니다."}
+{"message":"인증이 완료되었습니다.","verified":true}
+
+실패: 400 {"message":"이메일과 인증번호를 모두 입력해주세요."}
+     400 {"message":"인증번호가 일치하지 않거나 만료되었습니다."}
 ```
 > 구 버전은 불일치도 200 + false 라서 프론트가 사유를 표시할 수 없었음 → 실패는 400 + message
 
@@ -277,7 +319,9 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-200 (본문 없음, 사용 가능)\n\n실패: 400 "이미 가입된 이메일 주소입니다." / "이미 사용 중인 아이디입니다."
+200 (본문 없음, 사용 가능)
+
+실패: 400 "이미 가입된 이메일 주소입니다." / "이미 사용 중인 아이디입니다."
 ```
 > 1기(2026-02~03) 개발. 파라미터를 둘 다 안 주면 400
 
@@ -321,7 +365,12 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-{"accessToken":"eyJhbGciOi...","userId":80,"memberType":"STUDENT","adminLevel":0,"refreshExp":1740000000}\n\n실패: 401 {"message":"아이디 또는 비밀번호가 올바르지 않습니다."}\n     401 {"message":"승인되지 않은 계정입니다."}\n정지: 403 {"message":"정지된 계정입니다.","banType":"temporary","bannedUntil":"2026-03-30T00:00:00"}\n차단: 403 {"message":"영구적으로 차단된 계정입니다.","banType":"permanent","bannedUntil":null}
+{"accessToken":"eyJhbGciOi...","userId":80,"memberType":"STUDENT","adminLevel":0,"refreshExp":1740000000}
+
+실패: 401 {"message":"아이디 또는 비밀번호가 올바르지 않습니다."}
+     401 {"message":"승인되지 않은 계정입니다."}
+정지: 403 {"message":"정지된 계정입니다.","banType":"temporary","bannedUntil":"2026-03-30T00:00:00"}
+차단: 403 {"message":"영구적으로 차단된 계정입니다.","banType":"permanent","bannedUntil":null}
 ```
 > 정지/차단 사유는 message로, 해제 일시는 bannedUntil 필드로 내려간다 — 프론트가 "2026.03.30 00:00 부터 다시 로그인 할 수 있습니다"를 그릴 수 있다. 실패 응답은 모두 JSON 객체(구 버전은 문자열이라 banType/bannedUntil이 유실됐음)
 
@@ -339,11 +388,18 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 #### 14) `POST /api/auth/register` — 회원가입 페이지 - 회원가입  (id 128)
 **입력**
 ```
-{"name":"홍길동","phone":"010-1234-5678","major":"컴퓨터공학과","studentNo":"20201234",\n "email":"hong@pilsa.co.kr","loginId":"hong","password":"pw1234","memberType":"STUDENT"}\n\n※ memberType 미지정 시 STUDENT. ADMIN 등 임의 문자열은 400
+{"name":"홍길동","phone":"010-1234-5678","major":"컴퓨터공학과","studentNo":"20201234",
+ "email":"hong@pilsa.co.kr","loginId":"hong","password":"pw1234","memberType":"STUDENT"}
+
+※ memberType 미지정 시 STUDENT. ADMIN 등 임의 문자열은 400
 ```
 **기대 출력**
 ```
-{"message":"회원가입이 완료되었습니다."}\n\n실패: 409 {"message":"이미 존재하는 아이디입니다."}\n     409 {"message":"이미 존재하는 이메일입니다."}\n     400 {"message":"유효하지 않은 회원 구분입니다. (STUDENT/ALUMNI)"}
+{"message":"회원가입이 완료되었습니다."}
+
+실패: 409 {"message":"이미 존재하는 아이디입니다."}
+     409 {"message":"이미 존재하는 이메일입니다."}
+     400 {"message":"유효하지 않은 회원 구분입니다. (STUDENT/ALUMNI)"}
 ```
 > 관리 권한(admin_level)은 가입으로 못 얻는다 — 항상 0으로 저장되고 승격은 관리자만
 
@@ -354,7 +410,10 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-{"accessToken":"eyJ...","userId":80,"memberType":"STUDENT","adminLevel":0,"refreshExp":1740000000}\n\n실패: 401 {"message":"로그인 정보가 없습니다. 다시 로그인해주세요."}\n정지/차단 계정은 403 + banType/bannedUntil
+{"accessToken":"eyJ...","userId":80,"memberType":"STUDENT","adminLevel":0,"refreshExp":1740000000}
+
+실패: 401 {"message":"로그인 정보가 없습니다. 다시 로그인해주세요."}
+정지/차단 계정은 403 + banType/bannedUntil
 ```
 > 재발급 때마다 refreshToken 쿠키도 새로 교체된다(sliding). 매번 DB에서 회원 상태를 다시 확인하므로 정지된 계정은 즉시 막힌다
 
@@ -376,7 +435,11 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-{"accessToken":"eyJ...","userId":80,"memberType":"STUDENT","adminLevel":0,"refreshExp":1740000000}\n\n실패: 401 {"message":"로그인 정보가 없습니다. 다시 로그인해주세요."}\n     401 {"message":"Refresh token (로그인을 다시 해주세요.)"}\n정지/차단 계정은 로그인과 동일하게 403 + banType/bannedUntil
+{"accessToken":"eyJ...","userId":80,"memberType":"STUDENT","adminLevel":0,"refreshExp":1740000000}
+
+실패: 401 {"message":"로그인 정보가 없습니다. 다시 로그인해주세요."}
+     401 {"message":"Refresh token (로그인을 다시 해주세요.)"}
+정지/차단 계정은 로그인과 동일하게 403 + banType/bannedUntil
 ```
 > 구 버전은 쿠키가 없으면 무본문 401이라 프론트가 사유를 알 수 없었음
 
@@ -411,7 +474,10 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-{"memberType":"STUDENT","adminLevel":0}\n\n※ memberType: STUDENT(재학생) / ALUMNI(졸업생)\n※ adminLevel: 0=일반회원, 1~3=관리자
+{"memberType":"STUDENT","adminLevel":0}
+
+※ memberType: STUDENT(재학생) / ALUMNI(졸업생)
+※ adminLevel: 0=일반회원, 1~3=관리자
 ```
 > 1기 응답은 {"role":"STUDENTS"} 하나였다. users.role 컬럼이 제거되고 member_type + admin_level 2축으로 갈리면서 두 값을 함께 내려준다. 경로는 1기와 동일하게 /api/role 유지
 
@@ -422,7 +488,9 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-[\n  {"boardId":1,"boardName":"공지사항","displayOrder":1}\n]
+[
+  {"boardId":1,"boardName":"공지사항","displayOrder":1}
+]
 ```
 > FE 메뉴는 이 API로 그린다 (하드코딩 금지)
 
@@ -444,18 +512,28 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-{\n  "totalPages":3, "totalCount":27,\n  "posts":[{"postId":171,"title":"제목","authorName":"홍길동","likeCount":2,\n    "viewCount":15,"commentCount":4,"categoryName":"일상","isPinned":false,\n    "isAnonymous":false,"hasAttachment":true,"created":"2026-08-14T10:12:30"}]\n}\n※ isAnonymous=true면 authorName은 서버가 "익명"으로 마스킹
+{
+  "totalPages":3, "totalCount":27,
+  "posts":[{"postId":171,"title":"제목","authorName":"홍길동","likeCount":2,
+    "viewCount":15,"commentCount":4,"categoryName":"일상","isPinned":false,
+    "isAnonymous":false,"hasAttachment":true,"created":"2026-08-14T10:12:30"}]
+}
+※ isAnonymous=true면 authorName은 서버가 "익명"으로 마스킹
 ```
 > 구 /api/stu/{boardId}/posts. 익명글 authorName 서버 마스킹
 
 #### 24) `GET /api/user/boards/{boardId}/posts/top/{num}` — 공통게시판 페이지 - 상단 N개 (is_pinned 우선)  (id 14)
 **입력**
 ```
-경로변수: num = 가져올 글 개수 (1~50)\n예) /posts/top/5 → 5건, /posts/top/3 → 3건
+경로변수: num = 가져올 글 개수 (1~50)
+예) /posts/top/5 → 5건, /posts/top/3 → 3건
 ```
 **기대 출력**
 ```
-[{"postId":140,"title":"중요 공지","isPinned":true},\n {"postId":139,"title":"최근 글","isPinned":false}]\n\n실패: 400 {"message":"조회 개수는 1 이상 50 이하여야 합니다."}
+[{"postId":140,"title":"중요 공지","isPinned":true},
+ {"postId":139,"title":"최근 글","isPinned":false}]
+
+실패: 400 {"message":"조회 개수는 1 이상 50 이하여야 합니다."}
 ```
 > 구 /api/stu/{boardId}/top5 (5건 고정) → 프론트가 요청한 num 만큼 반환. 중요(is_pinned) 글 우선, 그다음 최신순. state=normal 만
 
@@ -466,7 +544,22 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-{\n  "postId":171,"boardId":2,"title":"제목","content":"본문",\n  "userId":85,"authorName":"홍길동","categoryName":"일상",\n  "isAnonymous":false,"isPinned":false,\n  "viewCount":15,"likeCount":2,"isLiked":true,\n  "commentCount":3,\n  "created":"2026-08-14T10:12:30","updated":"2026-08-14T11:02:11",\n  "prevPost":{"postId":159,"title":"이전 글 제목","categoryName":"질문","created":"2026-08-13T09:20:00"},\n  "nextPost":{"postId":172,"title":"다음 글 제목","categoryName":"일상","created":"2026-08-14T15:40:00"},\n  "attachments":[{"attachmentId":18,"originName":"파일.pdf","fileUrl":"uploads/board-2/uuid.pdf","fileSize":12345}],\n  "attachmentCount":1\n}\n\n※ 댓글 본문은 내려가지 않는다 → GET .../posts/{postId}/comments 로 따로 조회\n※ 익명글: authorName="익명", userId=null (관리자·작성자 본인 제외)\n※ prevPost/nextPost: 첫 글·마지막 글이면 null
+{
+  "postId":171,"boardId":2,"title":"제목","content":"본문",
+  "userId":85,"authorName":"홍길동","categoryName":"일상",
+  "isAnonymous":false,"isPinned":false,
+  "viewCount":15,"likeCount":2,"isLiked":true,
+  "commentCount":3,
+  "created":"2026-08-14T10:12:30","updated":"2026-08-14T11:02:11",
+  "prevPost":{"postId":159,"title":"이전 글 제목","categoryName":"질문","created":"2026-08-13T09:20:00"},
+  "nextPost":{"postId":172,"title":"다음 글 제목","categoryName":"일상","created":"2026-08-14T15:40:00"},
+  "attachments":[{"attachmentId":18,"originName":"파일.pdf","fileUrl":"uploads/board-2/uuid.pdf","fileSize":12345}],
+  "attachmentCount":1
+}
+
+※ 댓글 본문은 내려가지 않는다 → GET .../posts/{postId}/comments 로 따로 조회
+※ 익명글: authorName="익명", userId=null (관리자·작성자 본인 제외)
+※ prevPost/nextPost: 첫 글·마지막 글이면 null
 ```
 > 상세 응답은 created(생성일) + updated(수정일) 둘 다 내려간다(목록은 created만). 댓글 분리로 comments 배열은 제거되고 commentCount(노출 대상 댓글 수)만 남는다. 자기 글 조회 시에도 조회수는 증가한다
 
@@ -477,7 +570,15 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-[\n  {"commentId":200,"parentCommentId":null,"content":"댓글","authorName":"관리자","userId":84,\n   "isAnonymous":false,"isPrivate":false,\n   "created":"2026-08-14T10:30:00","updated":null}\n]\n\n※ 익명댓글: authorName="익명", userId=null (관리자·댓글작성자 제외)\n※ 비밀댓글: content="비밀댓글입니다." (관리자·댓글작성자·원글작성자 제외)\n※ 대댓글은 parentCommentId로 표현 (무제한 깊이)
+[
+  {"commentId":200,"parentCommentId":null,"content":"댓글","authorName":"관리자","userId":84,
+   "isAnonymous":false,"isPrivate":false,
+   "created":"2026-08-14T10:30:00","updated":null}
+]
+
+※ 익명댓글: authorName="익명", userId=null (관리자·댓글작성자 제외)
+※ 비밀댓글: content="비밀댓글입니다." (관리자·댓글작성자·원글작성자 제외)
+※ 대댓글은 parentCommentId로 표현 (무제한 깊이)
 ```
 > state=normal 댓글만 내려간다 — 관리자가 블라인드(blind)했거나 삭제(deleted)한 댓글, 작성자가 지운 댓글은 목록에 포함되지 않는다. 마스킹은 전부 서버 책임
 
@@ -488,7 +589,14 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-{\n  "totalPages":1,"totalCount":3,"unreadCount":1,\n  "notifications":[{"notificationId":12,"type":"COMMENT",\n    "title":"새 댓글이 달렸습니다.","message":null,\n    "linkUrl":"/api/user/boards/2/posts/171","targetType":"post","targetId":171,\n    "isRead":false,"createdAt":"2026-08-14T10:20:00"}]\n}\n※ type: COMMENT|REPLY|REPORT_RESOLVED|SANCTION|NOTICE
+{
+  "totalPages":1,"totalCount":3,"unreadCount":1,
+  "notifications":[{"notificationId":12,"type":"COMMENT",
+    "title":"새 댓글이 달렸습니다.","message":null,
+    "linkUrl":"/api/user/boards/2/posts/171","targetType":"post","targetId":171,
+    "isRead":false,"createdAt":"2026-08-14T10:20:00"}]
+}
+※ type: COMMENT|REPLY|REPORT_RESOLVED|SANCTION|NOTICE
 ```
 > 헤더 종 아이콘. 발행 범위 확정(2026-08-16): 내가 작성한 글에 달린 댓글(COMMENT), 내가 작성한 댓글에 달린 대댓글(REPLY) 만 발행한다. REPORT_RESOLVED/SANCTION/NOTICE 타입은 정의만 있고 발행하지 않음(확정). 웹앱(TWA) 푸시는 별개 전달 채널로 증축 가능(docs/integration-20260814/PUSH-NOTIFICATION-GUIDE.md)
 
@@ -518,33 +626,64 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 #### 30) `POST /api/user/boards/{boardId}/posts` — 게시글 등록 (multipart)  (id 5)
 **입력**
 ```
-요청 (multipart/form-data):\n{\n  "title": "제목",              ← 필수, 200자 이내\n  "content": "본문(마크다운)",      ← 필수\n  "categoryId": 12,\n  "isAnonymous": false,\n  "files": ["자료.pdf", "사진.png"],\n  "draftId": 7                  ← 선택. 임시저장을 발행할 때만\n}
+요청 (multipart/form-data):
+{
+  "title": "제목",              ← 필수, 200자 이내
+  "content": "본문(마크다운)",      ← 필수
+  "categoryId": 12,
+  "isAnonymous": false,
+  "files": ["자료.pdf", "사진.png"],
+  "draftId": 7                  ← 선택. 임시저장을 발행할 때만
+}
 ```
 **기대 출력**
 ```
-{ "message": "게시글이 성공적으로 등록되었습니다.", "postId": 185 }\n\n실패: 400 {"message":"제목은 필수입니다."}\n     400 {"message":"제목은 200자를 넘을 수 없습니다."}\n     400 {"message":"내용은 필수입니다."}\n     403 {"message":"이 게시판에 글을 등록할 권한이 없습니다."}
+{ "message": "게시글이 성공적으로 등록되었습니다.", "postId": 185 }
+
+실패: 400 {"message":"제목은 필수입니다."}
+     400 {"message":"제목은 200자를 넘을 수 없습니다."}
+     400 {"message":"내용은 필수입니다."}
+     403 {"message":"이 게시판에 글을 등록할 권한이 없습니다."}
 ```
 > write_level 판정. 상단 고정은 isPinned 요청이 아니라 카테고리 '중요'(code=PINNED) 선택으로 서버가 결정(카테고리 목록에 관리자만 노출). draftId 가 오면 발행 성공과 같은 트랜잭션에서 해당 초안 삭제 — 없는/남의 draftId 는 무시하고 발행은 성공 (draftId 처리는 A-5 구현 시 추가)
 
 #### 31) `PUT /api/user/boards/{boardId}/posts/{postId}` — 게시글 수정 (작성자/관리자)  (id 7)
 **입력**
 ```
-요청 (multipart/form-data):\n{\n  "title": "수정 제목",          ← 필수, 200자 이내\n  "content": "수정 본문(마크다운)",  ← 필수\n  "categoryId": 4,\n  "isAnonymous": false,\n  "deleteAttachmentIds": [18, 19],  ← 삭제할 기존 첨부만\n  "files": ["새파일.pdf"]           ← 새로 추가할 첨부만\n}\n※ 유지할 기존 첨부는 아무것도 보내지 않는다 (증분 방식)
+요청 (multipart/form-data):
+{
+  "title": "수정 제목",          ← 필수, 200자 이내
+  "content": "수정 본문(마크다운)",  ← 필수
+  "categoryId": 4,
+  "isAnonymous": false,
+  "deleteAttachmentIds": [18, 19],  ← 삭제할 기존 첨부만
+  "files": ["새파일.pdf"]           ← 새로 추가할 첨부만
+}
+※ 유지할 기존 첨부는 아무것도 보내지 않는다 (증분 방식)
 ```
 **기대 출력**
 ```
-{"message":"게시글이 성공적으로 수정되었습니다."}\n\n실패: 400 {"message":"제목은 필수입니다."} 등 검증 3종(등록과 동일)\n     403 {"message":"수정 권한이 없습니다."}\n     404 {"message":"수정할 수 없는 게시글입니다."} (블라인드/삭제 글)
+{"message":"게시글이 성공적으로 수정되었습니다."}
+
+실패: 400 {"message":"제목은 필수입니다."} 등 검증 3종(등록과 동일)
+     403 {"message":"수정 권한이 없습니다."}
+     404 {"message":"수정할 수 없는 게시글입니다."} (블라인드/삭제 글)
 ```
 > 응답은 message 만 — 수정 후 프론트가 상세로 이동하며 GET 을 다시 하므로 상세 객체 반환은 낭비(합의). 첨부 삭제는 소프트삭제(attachments.state=deleted). 중요 → 일반 카테고리로 바꾸면 상단 고정 자동 해제. 블라인드·삭제 글은 작성자도 수정 불가(증적 보호)
 
 #### 32) `POST /api/user/boards/{boardId}/posts/{postId}/comments` — 공통게시판 페이지 - 댓글/대댓글 등록  (id 9)
 **입력**
 ```
-{"content":"댓글 내용","parentCommentId":null,\n "isAnonymous":false,"isPrivate":false}\n※ parentCommentId 있으면 대댓글(무제한 깊이)
+{"content":"댓글 내용","parentCommentId":null,
+ "isAnonymous":false,"isPrivate":false}
+※ parentCommentId 있으면 대댓글(무제한 깊이)
 ```
 **기대 출력**
 ```
-{"message":"댓글이 성공적으로 등록되었습니다."}\n\n실패: 400 {"message":"답글을 달 부모 댓글이 존재하지 않습니다."}\n     403 {"message":"이 게시판은 댓글을 사용하지 않습니다."}
+{"message":"댓글이 성공적으로 등록되었습니다."}
+
+실패: 400 {"message":"답글을 달 부모 댓글이 존재하지 않습니다."}
+     403 {"message":"이 게시판은 댓글을 사용하지 않습니다."}
 ```
 > parentCommentId 무제한 깊이. 원글/부모 작성자에게 알림 발행
 
@@ -565,7 +704,9 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-{"message":"댓글이 성공적으로 삭제되었습니다."}\n\n실패: 403 {"message":"본인 댓글만 삭제할 수 있습니다. (관리자 조치는 관리자 화면에서)"}
+{"message":"댓글이 성공적으로 삭제되었습니다."}
+
+실패: 403 {"message":"본인 댓글만 삭제할 수 있습니다. (관리자 조치는 관리자 화면에서)"}
 ```
 
 #### 35) `PATCH /api/user/boards/{boardId}/posts/{postId}/delete` — 공통게시판 페이지 - 게시글 삭제 (소프트, 작성자 본인만)  (id 8)
@@ -575,7 +716,10 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-{"message":"게시글이 성공적으로 삭제되었습니다."}\n\n실패: 403 {"message":"본인 글만 삭제할 수 있습니다. (관리자 조치는 관리자 게시글 관리에서)"}\n     404 {"message":"존재하지 않는 게시글입니다."} (타 게시판 글·블라인드 글)
+{"message":"게시글이 성공적으로 삭제되었습니다."}
+
+실패: 403 {"message":"본인 글만 삭제할 수 있습니다. (관리자 조치는 관리자 게시글 관리에서)"}
+     404 {"message":"존재하지 않는 게시글입니다."} (타 게시판 글·블라인드 글)
 ```
 > 관리자 조치는 /api/admin/posts/{id} 사용(로그·벌점 연동)
 
@@ -592,11 +736,17 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 #### 37) `POST /api/user/mypage/toast/devices` — 알림 수신 기기 등록 (웹 푸시)  (id 136)
 **입력**
 ```
-{\n  "endpoint": "https://fcm.googleapis.com/fcm/send/abc...",\n  "keys": { "p256dh": "BNc...", "auth": "k8J..." }\n}\n※ 브라우저 pushManager.subscribe() 결과의 toJSON() 을 그대로 전송
+{
+  "endpoint": "https://fcm.googleapis.com/fcm/send/abc...",
+  "keys": { "p256dh": "BNc...", "auth": "k8J..." }
+}
+※ 브라우저 pushManager.subscribe() 결과의 toJSON() 을 그대로 전송
 ```
 **기대 출력**
 ```
-{"message":"알림 기기가 등록되었습니다."}\n\n실패: 400 {"message":"기기 등록 정보가 올바르지 않습니다."}
+{"message":"알림 기기가 등록되었습니다."}
+
+실패: 400 {"message":"기기 등록 정보가 올바르지 않습니다."}
 ```
 > 알림 켜기(권한 허용) 시 호출. 같은 기기 재등록은 갱신(UPSERT), 한 회원이 여러 기기 가능. 캘린더 구독과 무관한 웹 푸시 전달 채널 — 인앱 toast API 는 그대로 유지. 테이블 notification_devices(세션성 — 물리삭제 예외)
 
@@ -607,7 +757,8 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-{"message":"알림 기기가 해제되었습니다."}\n(이미 없는 기기여도 200)
+{"message":"알림 기기가 해제되었습니다."}
+(이미 없는 기기여도 200)
 ```
 > 알림 끄기·로그아웃 시 프론트가 pushManager 해제와 함께 호출. 본인 기기만 해제. 발송 응답 404/410 인 기기는 서버가 자동 정리
 
@@ -644,11 +795,17 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 #### 42) `POST /api/user/reports` — 공통게시판/댓글 신고 페이지 - 게시글/댓글 신고 접수  (id 20)
 **입력**
 ```
-{"targetType":"post","targetId":171,"reasonId":1,\n "detail":"기타 사유일 때만 작성"}\n※ targetType: post | comment
+{"targetType":"post","targetId":171,"reasonId":1,
+ "detail":"기타 사유일 때만 작성"}
+※ targetType: post | comment
 ```
 **기대 출력**
 ```
-{"message":"신고가 접수되었습니다."}\n\n실패: 400 {"message":"본인이 작성한 게시글/댓글은 신고할 수 없습니다."}\n     409 {"message":"이미 신고한 게시글/댓글입니다."}\n     409 {"message":"이미 삭제된 게시글/댓글입니다."}
+{"message":"신고가 접수되었습니다."}
+
+실패: 400 {"message":"본인이 작성한 게시글/댓글은 신고할 수 없습니다."}
+     409 {"message":"이미 신고한 게시글/댓글입니다."}
+     409 {"message":"이미 삭제된 게시글/댓글입니다."}
 ```
 > 구 /api/stu/reports. 중복 409, 본인 글 400, 삭제 대상 409
 
@@ -661,7 +818,8 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-[{"boardId":2,"boardName":"자유게시판","postCount":27,\n  "readScope":"MEMBER","writeLevel":0,"displayOrder":2}]
+[{"boardId":2,"boardName":"자유게시판","postCount":27,
+  "readScope":"MEMBER","writeLevel":0,"displayOrder":2}]
 ```
 
 #### 44) `GET /api/admin/posts` — 게시글관리 페이지 - 게시글 목록 (전 게시판, 검색)  (id 38)
@@ -671,7 +829,13 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-{\n  "totalPages":5,"totalCount":48,\n  "posts":[{"postId":171,"boardId":2,"boardName":"자유게시판","title":"제목",\n    "authorName":"홍길동","commentCount":4,"likeCount":2,"viewCount":15,\n    "created":"2026-08-14T10:12:30","state":"normal"}]\n}\n※ state: normal|blind (deleted 제외)
+{
+  "totalPages":5,"totalCount":48,
+  "posts":[{"postId":171,"boardId":2,"boardName":"자유게시판","title":"제목",
+    "authorName":"홍길동","commentCount":4,"likeCount":2,"viewCount":15,
+    "created":"2026-08-14T10:12:30","state":"normal"}]
+}
+※ state: normal|blind (deleted 제외)
 ```
 
 #### 45) `GET /api/admin/posts/{postId}` — 게시글관리 페이지 - 게시글 상세 (blind/deleted 열람, 실작성자)  (id 39)
@@ -681,7 +845,18 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-{\n  "postId":171,"boardId":2,"boardName":"자유게시판","categoryName":"일상",\n  "title":"제목","content":"본문","authorId":85,"authorName":"홍길동",\n  "isAnonymous":false,"isPinned":false,"viewCount":15,"likeCount":2,\n  "commentCount":4,"state":"blind",\n  "created":"2026-08-14T10:12:30","updated":"2026-08-14T11:00:00",\n  "attachments":[{"attachmentId":18,"originName":"파일1.png","fileSize":12345,"fileUrl":"/uploads/board-2/uuid.png"}],\n  "comments":[{"commentId":200,"content":"댓글","userId":84,"authorName":"관리자",\n    "isAnonymous":false,"isPrivate":false,"state":"normal",\n    "created":"...","updated":null}]\n}\n※ 익명글도 실작성자 노출, 모든 state 댓글 포함, 조회수 미증가
+{
+  "postId":171,"boardId":2,"boardName":"자유게시판","categoryName":"일상",
+  "title":"제목","content":"본문","authorId":85,"authorName":"홍길동",
+  "isAnonymous":false,"isPinned":false,"viewCount":15,"likeCount":2,
+  "commentCount":4,"state":"blind",
+  "created":"2026-08-14T10:12:30","updated":"2026-08-14T11:00:00",
+  "attachments":[{"attachmentId":18,"originName":"파일1.png","fileSize":12345,"fileUrl":"/uploads/board-2/uuid.png"}],
+  "comments":[{"commentId":200,"content":"댓글","userId":84,"authorName":"관리자",
+    "isAnonymous":false,"isPrivate":false,"state":"normal",
+    "created":"...","updated":null}]
+}
+※ 익명글도 실작성자 노출, 모든 state 댓글 포함, 조회수 미증가
 ```
 
 #### 46) `GET /api/admin/quotes` — 문장 목록  (id 63)
@@ -691,7 +866,8 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-{"quotes":[{"quoteId":6,"content":"문장","startDate":"2026-08-10",\n  "endDate":"2026-08-16","writerId":1,"createdAt":"...","updatedAt":"..."}]}
+{"quotes":[{"quoteId":6,"content":"문장","startDate":"2026-08-10",
+  "endDate":"2026-08-16","writerId":1,"createdAt":"...","updatedAt":"..."}]}
 ```
 
 #### 47) `GET /api/admin/reports/comments` — 신고관리페이지 - 신고된 댓글 목록 (원글 postId 포함)  (id 48)
@@ -701,7 +877,15 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-{\n  "totalPages":1,"totalCount":2,\n  "items":[{"targetType":"comment","targetId":200,"postId":171,\n    "preview":"댓글 앞부분","boardId":2,"boardName":"자유게시판",\n    "authorName":"홍길동","reasonLabel":"광고/홍보",\n    "firstReportedAt":"2026-08-14T10:05:00","reportCount":1,\n    "state":"normal"}]\n}\n※ postId = 원문 이동용 게시글 id
+{
+  "totalPages":1,"totalCount":2,
+  "items":[{"targetType":"comment","targetId":200,"postId":171,
+    "preview":"댓글 앞부분","boardId":2,"boardName":"자유게시판",
+    "authorName":"홍길동","reasonLabel":"광고/홍보",
+    "firstReportedAt":"2026-08-14T10:05:00","reportCount":1,
+    "state":"normal"}]
+}
+※ postId = 원문 이동용 게시글 id
 ```
 
 #### 48) `GET /api/admin/reports/posts` — 신고관리페이지 - 신고된 게시글 목록 (대상별 그룹핑)  (id 49)
@@ -711,7 +895,15 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-{\n  "totalPages":1,"totalCount":4,\n  "items":[{"targetType":"post","targetId":171,"postId":171,\n    "preview":"본문 앞부분 30자","boardId":2,"boardName":"자유게시판",\n    "authorName":"홍길동","reasonLabel":"욕설/비방",\n    "firstReportedAt":"2026-08-14T10:00:00","reportCount":3,\n    "state":"normal"}]\n}\n※ 대상 단위 그룹핑(동일 대상 중복 신고는 reportCount로 합산)
+{
+  "totalPages":1,"totalCount":4,
+  "items":[{"targetType":"post","targetId":171,"postId":171,
+    "preview":"본문 앞부분 30자","boardId":2,"boardName":"자유게시판",
+    "authorName":"홍길동","reasonLabel":"욕설/비방",
+    "firstReportedAt":"2026-08-14T10:00:00","reportCount":3,
+    "state":"normal"}]
+}
+※ 대상 단위 그룹핑(동일 대상 중복 신고는 reportCount로 합산)
 ```
 
 #### 49) `GET /api/admin/sanctions/users` — 제재회원목록 페이지 - 제재 회원 목록 (permanent/temporary/caution 태그)  (id 55)
@@ -721,7 +913,10 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-[{"userId":75,"loginId":"user75","name":"홍길동","email":"a@b.c",\n  "banStatus":"temporary","bannedUntil":"2026-08-21T23:59:59",\n  "banStartedAt":"2026-08-14T10:00:00","tag":"temporary"}]\n※ tag: permanent|temporary|caution
+[{"userId":75,"loginId":"user75","name":"홍길동","email":"a@b.c",
+  "banStatus":"temporary","bannedUntil":"2026-08-21T23:59:59",
+  "banStartedAt":"2026-08-14T10:00:00","tag":"temporary"}]
+※ tag: permanent|temporary|caution
 ```
 
 #### 50) `GET /api/admin/sanctions/users/{userId}` — 제재회원목록 페이지 - 제재 회원 상세 (누적주의/경고/신고삭제수)  (id 56)
@@ -731,7 +926,11 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-{"tag":"temporary","banStatus":"temporary",\n "bannedUntil":"2026-08-21T23:59:59","banStartedAt":"2026-08-14T10:00:00",\n "cautionRemainder":2,"warningCount":1,"reportDeletedCount":3}\n※ cautionRemainder = 유효 주의 합계 %% 10 (경고까지 남은 진행도)\n※ warningCount 분모는 3 (ban_policy 3단계: 1주/1달/영구)
+{"tag":"temporary","banStatus":"temporary",
+ "bannedUntil":"2026-08-21T23:59:59","banStartedAt":"2026-08-14T10:00:00",
+ "cautionRemainder":2,"warningCount":1,"reportDeletedCount":3}
+※ cautionRemainder = 유효 주의 합계 %% 10 (경고까지 남은 진행도)
+※ warningCount 분모는 3 (ban_policy 3단계: 1주/1달/영구)
 ```
 > 경고 단계는 3단계 확정 (시안 N/5는 오표기 → FE /3)
 
@@ -742,7 +941,13 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-[\n  {"reportId":11,"commentId":200,"postId":171,"boardId":2,"boardName":"자유게시판",\n   "postTitle":"원글 제목","preview":"댓글 내용 앞 30자","state":"blind",\n   "reasonId":1,"reasonLabel":"욕설/비방","detail":null,\n   "status":"resolved","activeFlag":null,\n   "createdAt":"2026-08-14T10:00:00","resolvedAt":"2026-08-14T11:00:00"}\n]
+[
+  {"reportId":11,"commentId":200,"postId":171,"boardId":2,"boardName":"자유게시판",
+   "postTitle":"원글 제목","preview":"댓글 내용 앞 30자","state":"blind",
+   "reasonId":1,"reasonLabel":"욕설/비방","detail":null,
+   "status":"resolved","activeFlag":null,
+   "createdAt":"2026-08-14T10:00:00","resolvedAt":"2026-08-14T11:00:00"}
+]
 ```
 > 게시글 신고와 분리(구 .../reports 통합 응답). 댓글은 제목이 없고 이동 경로가 소속 게시글이라 응답 형태가 다르다. state는 대상 댓글의 현재 표시 상태(normal/blind/deleted)
 
@@ -753,7 +958,13 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-[\n  {"reportId":9,"postId":171,"boardId":2,"boardName":"자유게시판",\n   "title":"신고된 게시글 제목","preview":"본문 앞 30자","state":"normal",\n   "reasonId":1,"reasonLabel":"욕설/비방","detail":null,\n   "status":"resolved","activeFlag":null,\n   "createdAt":"2026-08-14T10:00:00","resolvedAt":"2026-08-14T11:00:00"}\n]
+[
+  {"reportId":9,"postId":171,"boardId":2,"boardName":"자유게시판",
+   "title":"신고된 게시글 제목","preview":"본문 앞 30자","state":"normal",
+   "reasonId":1,"reasonLabel":"욕설/비방","detail":null,
+   "status":"resolved","activeFlag":null,
+   "createdAt":"2026-08-14T10:00:00","resolvedAt":"2026-08-14T11:00:00"}
+]
 ```
 > 댓글 신고와 분리(구 .../reports 통합 응답에서 targetType 분기 제거). state는 대상 게시글의 현재 표시 상태(normal/blind/deleted)
 
@@ -764,7 +975,13 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-{\n  "totalPages":3,"totalCount":25,\n  "members":[{"userId":80,"loginId":"hong","name":"홍길동","phone":"010-1234-5678",\n    "studentNo":"2026010101","email":"hong@pilsa.co.kr","memberType":"STUDENT",\n    "adminLevel":0,"postCount":5,"commentCount":12,\n    "banStartAt":null,"banEndAt":null,"banStatus":"none"}]\n}
+{
+  "totalPages":3,"totalCount":25,
+  "members":[{"userId":80,"loginId":"hong","name":"홍길동","phone":"010-1234-5678",
+    "studentNo":"2026010101","email":"hong@pilsa.co.kr","memberType":"STUDENT",
+    "adminLevel":0,"postCount":5,"commentCount":12,
+    "banStartAt":null,"banEndAt":null,"banStatus":"none"}]
+}
 ```
 > 구 /api/admin/members
 
@@ -773,22 +990,37 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 #### 54) `POST /api/admin/boards` — 게시판관리 페이지 - 새 게시판 생성 (read_scope/write_level 등)  (id 35)
 **입력**
 ```
-{"name":"동문 게시판","readScope":"ALUMNI","writeLevel":0}\n※ readScope: MEMBER(재학생+졸업생)|STUDENT(재학생)|ALUMNI(졸업생), writeLevel: 0~3 (0은 일반회원을 의미)
+{"name":"동문 게시판","readScope":"ALUMNI","writeLevel":0}
+※ readScope: MEMBER(재학생+졸업생)|STUDENT(재학생)|ALUMNI(졸업생), writeLevel: 0~3 (0은 일반회원을 의미)
 ```
 **기대 출력**
 ```
-201 Created\n{"boardId":4,"boardName":"동문 게시판","postCount":0,\n "readScope":"ALUMNI","writeLevel":0,"displayOrder":4}\n\n실패: 409 {"message":"이미 존재하는 게시판 이름입니다."}
+201 Created
+{"boardId":4,"boardName":"동문 게시판","postCount":0,
+ "readScope":"ALUMNI","writeLevel":0,"displayOrder":4}
+
+실패: 409 {"message":"이미 존재하는 게시판 이름입니다."}
 ```
 > 생성 즉시 /api/boards/{id}/** 동작 (코드 수정 불필요)
 
 #### 55) `PATCH /api/admin/boards/{boardId}` — 게시판관리 페이지 - 게시판 수정 (전달 필드만)  (id 36)
 **입력**
 ```
-{"name":"이름 변경","readScope":"MEMBER","writeLevel":1,"displayOrder":3}\n※ 전달한 필드만 수정
+{"name":"이름 변경","readScope":"MEMBER","writeLevel":1,"displayOrder":3}
+※ 전달한 필드만 수정
 ```
 **기대 출력**
 ```
-{\n  "boardId":4,"boardName":"동문 게시판","postCount":12,\n  "readScope":"ALUMNI","writeLevel":0,"displayOrder":4,\n  "allowComment":true,"allowAttachment":true,"categoryMode":false,\n  "defaultCategoryId":null,"allowAnonymous":false,"allowPrivateComment":false\n}\n\n실패: 404 {"message":"존재하지 않는 게시판입니다."}\n     409 {"message":"이미 존재하는 게시판 이름입니다."}\n     400 {"message":"열람 권한 값이 올바르지 않습니다. (MEMBER=재학+졸업 / STUDENT=재학 / ALUMNI=졸업)"}
+{
+  "boardId":4,"boardName":"동문 게시판","postCount":12,
+  "readScope":"ALUMNI","writeLevel":0,"displayOrder":4,
+  "allowComment":true,"allowAttachment":true,"categoryMode":false,
+  "defaultCategoryId":null,"allowAnonymous":false,"allowPrivateComment":false
+}
+
+실패: 404 {"message":"존재하지 않는 게시판입니다."}
+     409 {"message":"이미 존재하는 게시판 이름입니다."}
+     400 {"message":"열람 권한 값이 올바르지 않습니다. (MEMBER=재학+졸업 / STUDENT=재학 / ALUMNI=졸업)"}
 ```
 > 전달한 필드만 수정된다. 수정 후 게시판 정보 전체를 반환하므로 프론트가 재조회할 필요 없다
 
@@ -799,28 +1031,60 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-{"message":"게시판이 삭제되었습니다."}\n\n실패: 409 {"message":"게시글이 3건 남아 있어 삭제할 수 없습니다."}
+{"message":"게시판이 삭제되었습니다."}
+
+실패: 409 {"message":"게시글이 3건 남아 있어 삭제할 수 없습니다."}
 ```
 
 #### 57) `POST /api/admin/event` — (관리자) 일정(캘린더) 페이지 - 일정 등록  (id 68)
 **입력**
 ```
-{\n  "title": "3월 정기모임",\n  "category": "정기모임",\n  "description": "3월 정기모임 안내",\n  "startDate": "2026-03-01",\n  "endDate": "2026-03-01"\n}\n\n※ description은 DB NOT NULL, category는 관리자 자유 입력(varchar 50, NULL 허용)
+{
+  "title": "3월 정기모임",
+  "category": "정기모임",
+  "description": "3월 정기모임 안내",
+  "startDate": "2026-03-01",
+  "endDate": "2026-03-01"
+}
+
+※ description은 DB NOT NULL, category는 관리자 자유 입력(varchar 50, NULL 허용)
 ```
 **기대 출력**
 ```
-201 Created\n{\n  "message": "새로운 일정이 등록되었습니다.",\n  "data": {"eventId": 12, "title": "3월 정기모임"}\n}\n\n실패: 400 {"message":"시작일과 종료일은 필수 입력 항목입니다."}\n     400 {"message":"시작일이 종료일보다 늦을 수 없습니다."}\n     403 {"message":"관리자 권한이 필요합니다."}
+201 Created
+{
+  "message": "새로운 일정이 등록되었습니다.",
+  "data": {"eventId": 12, "title": "3월 정기모임"}
+}
+
+실패: 400 {"message":"시작일과 종료일은 필수 입력 항목입니다."}
+     400 {"message":"시작일이 종료일보다 늦을 수 없습니다."}
+     403 {"message":"관리자 권한이 필요합니다."}
 ```
 > 성공 코드가 200이 아니라 201. startDate/endDate는 YYYY-MM-DD 문자열을 그대로 datetime 컬럼에 저장하므로 시각은 00:00:00으로 들어감. 등록자 user_id는 AuthUtils.currentUserId()로 자동 기록
 
 #### 58) `PUT /api/admin/event/{eventId}` — (관리자) 일정(캘린더) 페이지 - 일정 수정 (부분 수정)  (id 71)
 **입력**
 ```
-{\n  "title": "3월 정기모임(장소 변경)",\n  "category": "정기모임",\n  "description": "장소가 변경되었습니다.",\n  "startDate": "2026-03-02",\n  "endDate": "2026-03-02"\n}\n\n※ 전달한 필드만 반영(전부 선택)
+{
+  "title": "3월 정기모임(장소 변경)",
+  "category": "정기모임",
+  "description": "장소가 변경되었습니다.",
+  "startDate": "2026-03-02",
+  "endDate": "2026-03-02"
+}
+
+※ 전달한 필드만 반영(전부 선택)
 ```
 **기대 출력**
 ```
-{\n  "message": "일정 정보가 성공적으로 수정되었습니다.",\n  "data": {"eventId": 12, "updatedAt": "2026-08-15T15:20:00"}\n}\n\n실패: 404 {"message":"해당 일정을 찾을 수 없습니다."} (없거나 이미 삭제된 일정)\n     403 {"message":"관리자 권한이 필요합니다."}
+{
+  "message": "일정 정보가 성공적으로 수정되었습니다.",
+  "data": {"eventId": 12, "updatedAt": "2026-08-15T15:20:00"}
+}
+
+실패: 404 {"message":"해당 일정을 찾을 수 없습니다."} (없거나 이미 삭제된 일정)
+     403 {"message":"관리자 권한이 필요합니다."}
 ```
 > MyBatis <set><if>로 전달 필드만 UPDATE. WHERE에 state=normal이 있어 삭제된 일정은 404. 등록과 달리 수정에는 시작일<=종료일 검증이 없음(유의)
 
@@ -831,18 +1095,26 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-{\n  "message": "일정이 정상적으로 삭제되었습니다."\n}\n※ data는 null이라 응답 JSON에서 생략됨(@JsonInclude NON_NULL)\n\n실패: 404 {"message":"삭제할 일정을 찾을 수 없습니다."}\n     403 {"message":"관리자 권한이 필요합니다."}
+{
+  "message": "일정이 정상적으로 삭제되었습니다."
+}
+※ data는 null이라 응답 JSON에서 생략됨(@JsonInclude NON_NULL)
+
+실패: 404 {"message":"삭제할 일정을 찾을 수 없습니다."}
+     403 {"message":"관리자 권한이 필요합니다."}
 ```
 > HTTP 메서드는 DELETE지만 실제 동작은 소프트삭제(events.state = deleted). 이미 삭제된 일정을 다시 지우면 404
 
 #### 60) `POST /api/admin/quotes` — 문장 등록 (노출기간)  (id 64)
 **입력**
 ```
-{"content":"오늘 쓴 한 문장이 내일의 나를 만든다.",\n "startDate":"2026-08-17","endDate":"2026-08-23"}
+{"content":"오늘 쓴 한 문장이 내일의 나를 만든다.",
+ "startDate":"2026-08-17","endDate":"2026-08-23"}
 ```
 **기대 출력**
 ```
-201 Created\n{"message":"문장이 등록되었습니다.","data":{"quoteId":10}}
+201 Created
+{"message":"문장이 등록되었습니다.","data":{"quoteId":10}}
 ```
 
 #### 61) `PUT /api/admin/quotes/{quoteId}` — 문장 수정  (id 65)
@@ -862,40 +1134,92 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-{"message":"문장이 삭제되었습니다.","data":null}\n※ 소프트삭제(state=deleted)
+{"message":"문장이 삭제되었습니다.","data":null}
+※ 소프트삭제(state=deleted)
 ```
 > 2기: 물리삭제 → 소프트삭제 전환
 
 #### 63) `PATCH /api/admin/reports/select-blind` — 신고/게시글/댓글관리페이지 - 신고 선택 블라인드 (일괄)  (id 52)
 **입력**
 ```
-{\n  "targetType": "post",\n  "targetIds": [171, 172],\n  "reasonId": 5,\n  "detail": "기타 사유일 때만"\n}\n\nor\n\n{\n  "targetType": "comment",\n  "targetIds": [200, 201],\n  "reasonId": 5,\n  "detail": "기타 사유일 때만"\n}
+{
+  "targetType": "post",
+  "targetIds": [171, 172],
+  "reasonId": 5,
+  "detail": "기타 사유일 때만"
+}
+
+or
+
+{
+  "targetType": "comment",
+  "targetIds": [200, 201],
+  "reasonId": 5,
+  "detail": "기타 사유일 때만"
+}
 ```
 **기대 출력**
 ```
-{"successCount":2,"failCount":0,"failures":[]}\n\n※ 항목마다 독립 트랜잭션 — 일부가 실패해도 나머지는 그대로 처리된다(부분 성공)\n※ 요청에 중복 id가 있으면 한 번만 처리된다
+{"successCount":2,"failCount":0,"failures":[]}
+
+※ 항목마다 독립 트랜잭션 — 일부가 실패해도 나머지는 그대로 처리된다(부분 성공)
+※ 요청에 중복 id가 있으면 한 번만 처리된다
 ```
 > 단건 조치용 API는 없다 — targetIds 에 1건만 담아 호출한다. state=blind 로 가리기만 하며 벌점은 부과하지 않는다(삭제와의 차이). 최종 판단 전 임시 조치이므로 신고는 pending 으로 남는다
 
 #### 64) `PATCH /api/admin/reports/select-delete` — 신고/게시글/댓글관리페이지 - 신고 선택 삭제 (일괄)  (id 51)
 **입력**
 ```
-{\n  "targetType": "post",\n  "targetIds": [171, 172],\n  "reasonId": 1,\n  "detail": "기타 사유일 때만"\n}\n\nor \n\n{\n  "targetType": "comment",\n  "targetIds": [200, 201],\n  "reasonId": 1,\n  "detail": "기타 사유일 때만"\n}
+{
+  "targetType": "post",
+  "targetIds": [171, 172],
+  "reasonId": 1,
+  "detail": "기타 사유일 때만"
+}
+
+or 
+
+{
+  "targetType": "comment",
+  "targetIds": [200, 201],
+  "reasonId": 1,
+  "detail": "기타 사유일 때만"
+}
 ```
 **기대 출력**
 ```
-{"successCount":1,"failCount":1,\n "failures":[{"id":172,"message":"이미 삭제된 게시글입니다."}]}\n\n※ 항목마다 독립 트랜잭션 — 일부가 실패해도 나머지는 그대로 처리된다(부분 성공)\n※ 요청에 중복 id가 있으면 한 번만 처리된다
+{"successCount":1,"failCount":1,
+ "failures":[{"id":172,"message":"이미 삭제된 게시글입니다."}]}
+
+※ 항목마다 독립 트랜잭션 — 일부가 실패해도 나머지는 그대로 처리된다(부분 성공)
+※ 요청에 중복 id가 있으면 한 번만 처리된다
 ```
 > 단건 조치용 API는 없다 — targetIds 에 1건만 담아 호출한다. 소프트 삭제(state=deleted) + 작성자 주의 +2 + 경고/정지 에스컬레이션. 대상별 pending 신고를 resolved로 일괄 종료(중복 신고 이중 벌점 차단). reasonId 미전달 시 대표(최신) 신고 사유를 사용하므로 신고 없는 게시글도 이 API로 삭제 가능
 
 #### 65) `PATCH /api/admin/reports/select-restore` — 신고관리페이지 - 신고 선택 복원 (일괄)  (id 50)
 **입력**
 ```
-{\n  "targetType": "post",\n  "targetIds": [171, 172]\n}\n\nor\n\n{\n  "targetType": "comment",\n  "targetIds": [200, 201]\n}\n\n※ 복원은 사유를 받지 않는다
+{
+  "targetType": "post",
+  "targetIds": [171, 172]
+}
+
+or
+
+{
+  "targetType": "comment",
+  "targetIds": [200, 201]
+}
+
+※ 복원은 사유를 받지 않는다
 ```
 **기대 출력**
 ```
-{"successCount":1,"failCount":1,\n "failures":[{"id":172,"message":"존재하지 않는 게시글입니다."}]}\n\n※ 항목마다 독립 트랜잭션 — 일부가 실패해도 나머지는 그대로 처리된다(부분 성공)\n※ 요청에 중복 id가 있으면 한 번만 처리된다
+{"successCount":1,"failCount":1,
+ "failures":[{"id":172,"message":"존재하지 않는 게시글입니다."}]}
+
+※ 항목마다 독립 트랜잭션 — 일부가 실패해도 나머지는 그대로 처리된다(부분 성공)
+※ 요청에 중복 id가 있으면 한 번만 처리된다
 ```
 > 단건 조치용 API는 없다 — targetIds 에 1건만 담아 호출한다. 신고관리/게시글관리/댓글관리 화면이 공유. 이미 삭제(deleted)된 대상은 되살리지 않는다(의도적 삭제·벌점 보호). 처리 결과는 대상별 pending 신고를 rejected로 종료
 
@@ -906,7 +1230,8 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-{"message":"제재가 해제되었습니다."}\n※ ban_status=none + 열린 ban_log 전부 해제(lifted_by 기록)
+{"message":"제재가 해제되었습니다."}
+※ ban_status=none + 열린 ban_log 전부 해제(lifted_by 기록)
 ```
 
 #### 67) `PATCH /api/admin/users/ban` — 회원목록 페이지 - 회원 영구차단 (단일/다중)  (id 62)
@@ -916,29 +1241,40 @@ Content-Type: text/calendar\n\nBEGIN:VCALENDAR\nVERSION:2.0\nX-WR-CALNAME:필사
 ```
 **기대 출력**
 ```
-{"message":"영구차단 처리되었습니다.","userId":null}\n\n실패: 404 (없는 id가 하나라도 있으면 전체 실패)
+{"message":"영구차단 처리되었습니다.","userId":null}
+
+실패: 404 (없는 id가 하나라도 있으면 전체 실패)
 ```
 > all-or-nothing
 
 #### 68) `PATCH /api/admin/users/{userId}` — 회원목록 페이지 - 회원 정보 수정 (부분)  (id 60)
 **입력**
 ```
-{"name":"홍길동","phone":"010-1234-5678","studentNo":"2026010101","memberType":"ALUMNI","adminLevel":1}\n※ 전달한 필드만 수정됨\n※ email 은 수정 불가
+{"name":"홍길동","phone":"010-1234-5678","studentNo":"2026010101","memberType":"ALUMNI","adminLevel":1}
+※ 전달한 필드만 수정됨
+※ email 은 수정 불가
 ```
 **기대 출력**
 ```
-{"message":"회원 정보가 수정되었습니다.","userId":80}\n\n실패: 400 {"message":"유효하지 않은 회원 구분 값입니다. (STUDENT/ALUMNI)"}\n     409 {"message":"이미 사용 중인 이메일입니다."}
+{"message":"회원 정보가 수정되었습니다.","userId":80}
+
+실패: 400 {"message":"유효하지 않은 회원 구분 값입니다. (STUDENT/ALUMNI)"}
+     409 {"message":"이미 사용 중인 이메일입니다."}
 ```
 > memberType/adminLevel 검증, 중복 검사
 
 #### 69) `PATCH /api/admin/users/{userId}/suspend` — 회원목록 페이지 - 회원 정지 (temporary)  (id 61)
 **입력**
 ```
-{"endDate":"2026-09-30"}\n※ 종료일 23:59:59까지 정지
+{"endDate":"2026-09-30"}
+※ 종료일 23:59:59까지 정지
 ```
 **기대 출력**
 ```
-{"message":"회원이 정지되었습니다.","userId":80}\n\n실패: 400 {"message":"정지 종료일은 현재보다 미래여야 합니다."}\n     409 {"message":"이미 영구차단된 회원입니다. 정지로 변경할 수 없습니다."}
+{"message":"회원이 정지되었습니다.","userId":80}
+
+실패: 400 {"message":"정지 종료일은 현재보다 미래여야 합니다."}
+     409 {"message":"이미 영구차단된 회원입니다. 정지로 변경할 수 없습니다."}
 ```
 > ban_log source=manual, warning_no=NULL
 
