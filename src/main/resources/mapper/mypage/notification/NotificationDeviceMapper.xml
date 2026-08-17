@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.mypage.notification.mapper.NotificationDeviceMapper">
+
+    <!-- 같은 기기(endpoint)가 다시 등록되면 소유자·키만 갱신 (기기당 1행 유지).
+         로그아웃 후 다른 계정으로 로그인한 기기도 새 소유자로 넘어간다 -->
+    <insert id="upsertDevice">
+        INSERT INTO notification_devices (user_id, endpoint, p256dh, auth_secret)
+        VALUES (#{userId}, #{endpoint}, #{p256dh}, #{authSecret}) AS new
+        ON DUPLICATE KEY UPDATE
+            user_id = new.user_id,
+            p256dh = new.p256dh,
+            auth_secret = new.auth_secret
+    </insert>
+
+    <delete id="deleteByEndpoint">
+        DELETE FROM notification_devices
+        WHERE user_id = #{userId}
+          AND endpoint = #{endpoint}
+    </delete>
+
+    <select id="findByUserId" resultType="com.back.mypage.notification.dto.NotificationDevice">
+        SELECT device_id   AS deviceId,
+               endpoint,
+               p256dh,
+               auth_secret AS authSecret
+        FROM notification_devices
+        WHERE user_id = #{userId}
+    </select>
+
+    <delete id="deleteById">
+        DELETE FROM notification_devices WHERE device_id = #{deviceId}
+    </delete>
+
+    <!-- 탈퇴 시 회원의 모든 기기 해제. endpoint 는 개인 식별 주소라 남기면 안 된다 -->
+    <delete id="deleteByUserId">
+        DELETE FROM notification_devices WHERE user_id = #{userId}
+    </delete>
+
+</mapper>

@@ -17,6 +17,10 @@ public interface AuthMapper {
     void insertUser(UserSignupDto user);
     // 회원가입 - 아이디 & 이메일 중복 확인
     boolean existsByLoginId(@Param("loginId") String loginId);
+    boolean existsByStudentNo(@Param("studentNo") String studentNo);
+
+    boolean existsByPhone(@Param("phone") String phone);
+
     boolean existsByEmail(@Param("email") String email);
 
     // 아이디 찾기 전용 - 인증 완료된 이메일에 한해 loginId 반환
@@ -28,6 +32,9 @@ public interface AuthMapper {
 
     // 이메일 찾기 - 학번+이름이 모두 일치하는 사용자의 이메일 조회
     String findEmailByStudentNoAndName(@Param("studentNo") String studentNo, @Param("name") String name);
+
+    // 정책값 단건 조회 (mail_verified_ttl_minutes 등) — 없으면 null
+    String findPolicySetting(@Param("code") String code);
 }
 
 //@Mapper

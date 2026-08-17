@@ -62,4 +62,12 @@
         WHERE notification_id = #{notificationId} AND user_id = #{userId} AND state = 'normal'
     </update>
 
+    <!-- 탈퇴 시 본인 알림 일괄 소프트삭제 -->
+    <update id="softDeleteAllByUser">
+        UPDATE notifications
+        SET state = 'deleted'
+        WHERE user_id = #{userId}
+          AND state = 'normal'
+    </update>
+
 </mapper>

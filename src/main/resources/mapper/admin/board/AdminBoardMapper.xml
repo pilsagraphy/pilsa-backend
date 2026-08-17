@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.admin.board.mapper.AdminBoardMapper">
+
+    <select id="countPostsByBoard" resultType="int">
+        SELECT COUNT(*) FROM posts WHERE board_id = #{boardId} AND state &lt;&gt; 'deleted'
+    </select>
+    <select id="existsBoardName" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1 FROM boards
+            WHERE name = #{name} AND state = 'normal'
+            <if test="excludeBoardId != null">AND board_id != #{excludeBoardId}</if>
+        )
+    </select>
+    <insert id="insertBoard" useGeneratedKeys="true" keyProperty="board.boardId">
+        INSERT INTO boards (name, read_scope, write_level, display_order,
+                            allow_comment, allow_attachment, category_mode,
+                            default_category_id, allow_anonymous, allow_private_comment, state)
+        VALUES (#{board.name}, #{board.readScope}, #{board.writeLevel},
+                COALESCE(#{board.displayOrder}, (SELECT * FROM (SELECT COALESCE(MAX(display_order),0)+1 FROM boards) t)),
+                #{board.allowComment}, #{board.allowAttachment}, #{board.categoryMode},
+                #{board.defaultCategoryId}, #{board.allowAnonymous}, #{board.allowPrivateComment}, 'normal')
+    </insert>
+    <update id="updateBoard">
+        UPDATE boards
+        <set>
+            <if test="board.name != null">name = #{board.name},</if>
+            <if test="board.readScope != null">read_scope = #{board.readScope},</if>
+            <if test="board.writeLevel != null">write_level = #{board.writeLevel},</if>
+            <if test="board.displayOrder != null">display_order = #{board.displayOrder},</if>
+            <if test="board.allowComment != null">allow_comment = #{board.allowComment},</if>
+            <if test="board.allowAttachment != null">allow_attachment = #{board.allowAttachment},</if>
+            <if test="board.categoryMode != null">category_mode = #{board.categoryMode},</if>
+            <if test="board.defaultCategoryId != null">default_category_id = #{board.defaultCategoryId},</if>
+            <if test="board.allowAnonymous != null">allow_anonymous = #{board.allowAnonymous},</if>
+            <if test="board.allowPrivateComment != null">allow_private_comment = #{board.allowPrivateComment},</if>
+            board_id = board_id
+        </set>
+        WHERE board_id = #{boardId} AND state = 'normal'
+    </update>
+
+    <!-- 게시판도 소프트삭제 (글/댓글이 남아 있으므로 물리삭제하지 않는다) -->
+    <update id="deleteBoard">
+        UPDATE boards SET state = 'deleted' WHERE board_id = #{boardId} AND state = 'normal'
+    </update>
+
+    <!-- 게시판 생성 시 '중요' 카테고리 자동 생성.
+         INSERT IGNORE + uq_categories_board_code 로 재실행해도 중복이 생기지 않는다(멱등). -->
+    <insert id="insertPinnedCategory">
+        INSERT IGNORE INTO categories (name, code, display_order, is_active, board_id)
+        VALUES ('중요', 'PINNED', 99, 1, #{boardId})
+    </insert>
+
+</mapper>

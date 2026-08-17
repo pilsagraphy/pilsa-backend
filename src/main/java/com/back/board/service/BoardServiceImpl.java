@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -28,26 +29,37 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class BoardServiceImpl implements BoardService {
 
+    // 상단 N개 조회 상한 — 프론트가 큰 값을 보내 목록 API를 대체해버리는 것을 막는다
+    private static final int MAX_TOP_POSTS = 50;
+
     private final BoardMapper boardMapper;
     private final BoardPolicyService boardPolicyService;
     private final FileStorageUtil fileStorageUtil;
     private final NotificationService notificationService;
 
-    // 게시판 카테고리 목록 조회 (카테고리 미사용 게시판은 빈 목록)
+    /**
+     * 게시판 카테고리 목록 (카테고리 미사용 게시판은 빈 목록).
+     *
+     * 요청 파라미터를 받지 않는다 — 토큰의 사용자로 관리자 여부를 판정해
+     * 관리자에게만 '중요'(code=PINNED)를 포함시킨다. 프론트는 받은 목록을 그대로 그리면 된다.
+     */
     @Override
     public List<CategoryResponse> getCategoryList(Long boardId) {
         BoardPolicy policy = boardPolicyService.requireReadable(boardId);
         if (!policy.isCategoryUsed()) {
             return List.of();
         }
-        return boardMapper.findCategoriesByBoardId(boardId);
+        return boardMapper.findCategoriesByBoardId(boardId, AuthUtils.isAdmin());
     }
 
-    // 메인용 상단 5개 조회
+    // 메인용 상단 N개 조회 (개수는 프론트가 정한다)
     @Override
-    public List<BoardTop5Response> getTop5Posts(Long boardId) {
+    public List<BoardTopPostResponse> getTopPosts(Long boardId, int num) {
         boardPolicyService.requireReadable(boardId);
-        return boardMapper.findTop5Posts(boardId);
+        if (num < 1 || num > MAX_TOP_POSTS) {
+            throw new BoardException("조회 개수는 1 이상 " + MAX_TOP_POSTS + " 이하여야 합니다.", HttpStatus.BAD_REQUEST);
+        }
+        return boardMapper.findTopPosts(boardId, num);
     }
 
     // 게시판 전체 목록 조회
@@ -70,10 +82,15 @@ public class BoardServiceImpl implements BoardService {
         return response;
     }
 
-    // 게시글 단일 상세 조회 (조회수 증가 및 첨부/좋아요/댓글 포함)
+    // 게시글 단일 상세 조회 (조회수 증가, 첨부/좋아요/댓글 수 포함 — 댓글 본문은 getComments 별도 API)
     @Override
     @Transactional
     public BoardDetailResponse getPostDetail(Long boardId, Long postId, String sort) {
+        return buildDetail(boardId, postId, sort);
+    }
+
+    // 상세 응답 조립
+    private BoardDetailResponse buildDetail(Long boardId, Long postId, String sort) {
         boardPolicyService.requireReadable(boardId);
         Long currentUserId = AuthUtils.currentUserId();
 
@@ -82,23 +99,27 @@ public class BoardServiceImpl implements BoardService {
             throw new BoardException("존재하지 않는 게시글입니다.", HttpStatus.NOT_FOUND);
         }
 
-        // 이전글/다음글 API 경로 가공
-        String baseApi = "/api/boards/" + boardId + "/posts/";
-        if (detail.getPrevPostApi() != null) detail.setPrevPostApi(baseApi + detail.getPrevPostApi());
-        if (detail.getNextPostApi() != null) detail.setNextPostApi(baseApi + detail.getNextPostApi());
+        // 이전글/다음글: id만 뽑아온 뒤 제목·카테고리·작성일을 채운다 (하단 내비게이션용)
+        if (detail.getPrevPostId() != null) {
+            detail.setPrevPost(boardMapper.findAdjacentPost(detail.getPrevPostId()));
+        }
+        if (detail.getNextPostId() != null) {
+            detail.setNextPost(boardMapper.findAdjacentPost(detail.getNextPostId()));
+        }
 
         boardMapper.updateViewCount(postId);
+        detail.setViewCount(detail.getViewCount() + 1); // 방금 올린 값을 응답에 반영
 
         List<AttachmentFileResponse> attachments = boardMapper.findAttachmentsByPostId(postId);
         detail.setAttachments(attachments);
         detail.setAttachmentCount(attachments != null ? attachments.size() : 0);
         detail.setLikeCount(boardMapper.countLikesByPostId(postId));
-        detail.setComments(maskComments(boardMapper.findCommentsByPostId(postId), detail.getUserId(), currentUserId));
+        // 댓글 본문은 상세에 싣지 않는다 (별도 API). 화면 헤더용 개수만 채운다
+        detail.setCommentCount(boardMapper.countCommentsByPostId(postId));
         detail.setIsLiked(boardMapper.existsLikeByPostIdAndUserId(postId, currentUserId));
 
         // 익명 글 작성자 마스킹 — 마스킹은 서버 책임 (프론트 마스킹은 API 직접 호출로 우회된다)
-        // 관리자와 작성자 본인에게만 실작성자를 보여준다. 댓글 마스킹(maskComments)이 원글 작성자
-        // 판정에 원본 userId를 쓰므로 반드시 댓글 처리 후에 가린다.
+        // 관리자와 작성자 본인에게만 실작성자를 보여준다.
         if (Boolean.TRUE.equals(detail.getIsAnonymous())
                 && !AuthUtils.isAdmin() && !currentUserId.equals(detail.getUserId())) {
             detail.setAuthorName("익명");
@@ -106,6 +127,21 @@ public class BoardServiceImpl implements BoardService {
         }
 
         return detail;
+    }
+
+    /**
+     * 게시글의 댓글 목록 (상세와 분리된 API).
+     *
+     * 매퍼가 state='normal' 만 조회하므로 관리자가 블라인드했거나 삭제 처리한 댓글,
+     * 작성자가 지운 댓글은 학생 화면에 내려가지 않는다.
+     * 비밀댓글 열람 판정에 원글 작성자가 필요해 여기서 원글 작성자 id를 함께 조회한다.
+     */
+    @Override
+    public List<CommentDetailResponse> getComments(Long boardId, Long postId) {
+        boardPolicyService.requireReadable(boardId);
+        requirePostInBoard(postId, boardId); // 타 게시판 글·블라인드/삭제 글의 댓글 열람 차단
+        Long postAuthorId = boardMapper.findAuthorIdByPostId(postId);
+        return maskComments(boardMapper.findCommentsByPostId(postId), postAuthorId, AuthUtils.currentUserId());
     }
 
     /**
@@ -140,10 +176,10 @@ public class BoardServiceImpl implements BoardService {
 
         if (boardMapper.existsLikeByPostIdAndUserId(postId, userId)) {
             boardMapper.deleteLike(postId, userId);
-            return new BoardResponse("좋아요 취소");
+            return new BoardResponse("좋아요를 취소했습니다.");
         }
         boardMapper.insertLike(postId, userId);
-        return new BoardResponse("좋아요 +1");
+        return new BoardResponse("좋아요를 눌렀습니다.");
     }
 
     // 게시글 신규 등록 (파일 업로드 포함)
@@ -154,24 +190,30 @@ public class BoardServiceImpl implements BoardService {
         Long userId = AuthUtils.currentUserId();
 
         applyWritePolicy(policy, request);
+        boolean pinned = resolvePinned(policy, request.getCategoryId());
 
-        boardMapper.insertPost(request, userId, boardId);
+        boardMapper.insertPost(request, userId, boardId, pinned);
+        saveAttachments(policy, request.getPostId(), request.getFiles());
 
-        if (policy.isAttachmentAllowed() && request.getFiles() != null && !request.getFiles().isEmpty()) {
-            for (MultipartFile file : request.getFiles()) {
-                if (!file.isEmpty()) {
-                    String savedPath = fileStorageUtil.save(file, policy.uploadDir(), null);
-                    boardMapper.insertAttachment(
-                            request.getPostId(),
-                            file.getOriginalFilename(),
-                            savedPath,
-                            file.getSize(),
-                            file.getContentType()
-                    );
-                }
-            }
+        // 생성 PK 반환 — 프론트가 등록 직후 상세 페이지로 이동하는 데 필요
+        return new BoardResponse("게시글이 성공적으로 등록되었습니다.", request.getPostId());
+    }
+
+    // 첨부 저장 (등록·수정 공통). 첨부를 쓰지 않는 게시판이면 조용히 무시한다
+    // 저장 경로는 uploads/board-{boardId}/{postId}/원본파일명 — 글 단위 폴더라 글끼리 이름이 겹칠 일이 없다
+    private void saveAttachments(BoardPolicy policy, Long postId, List<MultipartFile> files) {
+        if (!policy.isAttachmentAllowed() || CollectionUtils.isEmpty(files)) {
+            return;
         }
-        return new BoardResponse("게시글이 성공적으로 등록되었습니다.");
+        String dir = policy.uploadDir() + "/" + postId;
+        for (MultipartFile file : files) {
+            if (file.isEmpty()) {
+                continue;
+            }
+            String savedPath = fileStorageUtil.save(file, dir);
+            boardMapper.insertAttachment(postId, file.getOriginalFilename(), savedPath,
+                    file.getSize(), file.getContentType());
+        }
     }
 
     // 게시글 수정: 관리자이거나 작성자 본인일 경우 가능
@@ -187,20 +229,31 @@ public class BoardServiceImpl implements BoardService {
             throw new BoardException("수정 권한이 없습니다.", HttpStatus.FORBIDDEN);
         }
 
-        // 카테고리/익명/중요표시도 등록과 동일한 정책으로 보정
-        if (request.getCategoryId() != null && !isValidCategory(policy, request.getCategoryId())) {
-            request.setCategoryId(policy.getDefaultCategoryId());
-        }
+        // 카테고리/익명은 등록과 동일한 정책으로 보정하고, 상단 고정은 카테고리에서 다시 판정한다
+        // (중요 → 일반 카테고리로 바꾸면 고정이 자동 해제된다)
+        request.setCategoryId(resolveCategoryId(policy, request.getCategoryId()));
         if (!policy.isAnonymousAllowed()) {
             request.setIsAnonymous(false);
         }
-        request.setIsPinned(resolvePinned(request.getIsPinned()));
+        boolean pinned = resolvePinned(policy, request.getCategoryId());
 
-        int updated = boardMapper.updatePost(postId, request);
+        int updated = boardMapper.updatePost(postId, request, pinned);
         if (updated == 0) {
             // state != normal (블라인드/삭제) 이거나 존재하지 않는 글
             throw new BoardException("수정할 수 없는 게시글입니다.", HttpStatus.NOT_FOUND);
         }
+
+        // 첨부는 증분 처리: 지운 것만 소프트삭제하고, 새로 올린 것만 추가한다
+        if (!CollectionUtils.isEmpty(request.getDeleteAttachmentIds())) {
+            // 물리 파일까지 지워 고아 파일이 디스크에 남지 않게 한다 (PM 결정 2026-08-16).
+            // 삭제할 경로를 먼저 확보한 뒤 행을 소프트삭제하고 파일을 지운다 —
+            // 대상 글 소속인 것만 조회/삭제되므로 남의 첨부 id가 섞여도 무해하다
+            List<String> fileUrls = boardMapper.findAttachmentUrls(postId, request.getDeleteAttachmentIds());
+            boardMapper.softDeleteAttachments(postId, request.getDeleteAttachmentIds());
+            fileUrls.forEach(fileStorageUtil::delete);
+        }
+        saveAttachments(policy, postId, request.getFiles());
+        // 응답은 message 만 — 어차피 프론트가 상세로 이동하며 GET 을 한 번 더 하므로 상세 객체 반환은 낭비 (PM 합의)
         return new BoardResponse("게시글이 성공적으로 수정되었습니다.");
     }
 
@@ -309,38 +362,50 @@ public class BoardServiceImpl implements BoardService {
         }
     }
 
-    // 등록 요청에 게시판 정책을 적용 (카테고리 보정, 익명 허용 여부, 중요표시 권한)
+    // 등록 요청에 게시판 정책을 적용 (카테고리 보정, 익명 허용 여부)
     private void applyWritePolicy(BoardPolicy policy, BoardRequest request) {
-        if (!policy.isCategoryUsed()) {
-            request.setCategoryId(null);
-        } else if (!isValidCategory(policy, request.getCategoryId())) {
-            // 미선택이거나 이 게시판에 없는 값이면 게시판 기본값으로 대체
-            request.setCategoryId(policy.getDefaultCategoryId());
-        }
+        request.setCategoryId(resolveCategoryId(policy, request.getCategoryId()));
         if (!policy.isAnonymousAllowed()) {
             request.setIsAnonymous(false);
         }
-        request.setIsPinned(resolvePinned(request.getIsPinned()));
     }
 
-    private boolean isValidCategory(BoardPolicy policy, Long categoryId) {
-        return categoryId != null && boardMapper.existsCategory(categoryId, policy.getBoardId());
-    }
-
-    // 중요표시(상단 고정)는 게시판 종류와 무관하게 관리자(레벨 1~3)만 설정할 수 있다
-    private Boolean resolvePinned(Boolean requested) {
-        if (Boolean.TRUE.equals(requested) && !AuthUtils.isAdmin()) {
-            log.debug("일반 회원의 isPinned 요청 무시 - userId: {}", AuthUtils.currentUserIdOrNull());
-            return false;
+    /**
+     * 카테고리 보정.
+     * 카테고리 미사용 게시판은 null, 이 게시판에 없는 값이면 게시판 기본값으로 대체한다.
+     * '중요'는 관리자만 고를 수 있으므로, 일반 회원이 강제로 보내면 기본값으로 되돌린다
+     * (자동으로 상단 고정도 풀린다 — isPinned 판정이 카테고리에서 파생되기 때문).
+     */
+    private Long resolveCategoryId(BoardPolicy policy, Long requestedCategoryId) {
+        if (!policy.isCategoryUsed()) {
+            return null;
         }
-        return Boolean.TRUE.equals(requested);
+        if (requestedCategoryId == null || !boardMapper.existsCategory(requestedCategoryId, policy.getBoardId())) {
+            return policy.getDefaultCategoryId();
+        }
+        if (!AuthUtils.isAdmin() && boardMapper.isPinnedCategory(requestedCategoryId, policy.getBoardId())) {
+            log.debug("일반 회원의 '중요' 카테고리 선택 무시 - userId: {}", AuthUtils.currentUserIdOrNull());
+            return policy.getDefaultCategoryId();
+        }
+        return requestedCategoryId;
+    }
+
+    /**
+     * 상단 고정 여부 판정.
+     * 요청 필드가 아니라 "선택한 카테고리가 이 게시판의 '중요'(code=PINNED)인가"로 결정한다.
+     * is_pinned 컬럼을 그대로 두는 이유는 목록 정렬(ORDER BY is_pinned DESC)에서 조인 없이 쓰기 위함.
+     */
+    private boolean resolvePinned(BoardPolicy policy, Long categoryId) {
+        return categoryId != null
+                && AuthUtils.isAdmin()
+                && boardMapper.isPinnedCategory(categoryId, policy.getBoardId());
     }
 
     // 댓글/대댓글 알림 발행 (실패해도 댓글 등록 자체는 성공시킨다)
     private void notifyComment(Long boardId, Long postId, Long parentCommentId, Long actorId) {
         try {
             Long postAuthorId = boardMapper.findAuthorIdByPostId(postId);
-            String link = "/api/boards/" + boardId + "/posts/" + postId;
+            String link = "/api/user/boards/" + boardId + "/posts/" + postId;
 
             if (parentCommentId != null) {
                 Long parentAuthorId = boardMapper.findCommentAuthorId(parentCommentId);

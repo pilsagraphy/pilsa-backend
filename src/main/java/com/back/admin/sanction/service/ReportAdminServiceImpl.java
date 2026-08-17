@@ -1,0 +1,122 @@
+package com.back.admin.sanction.service;
+
+import com.back.admin.common.AdminServiceSupport;
+import com.back.admin.common.dto.BulkResultResponse;
+import com.back.admin.sanction.dto.ReportPageResponse;
+import com.back.admin.sanction.dto.ReportedItemResponse;
+import com.back.admin.sanction.exception.ReportAdminException;
+import com.back.admin.sanction.mapper.ReportAdminMapper;
+import com.back.global.security.AuthUtils;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
+
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+
+import static com.back.admin.moderation.service.ModerationServiceImpl.TARGET_COMMENT;
+import static com.back.admin.moderation.service.ModerationServiceImpl.TARGET_POST;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class ReportAdminServiceImpl implements ReportAdminService {
+
+    private final ReportAdminMapper reportAdminMapper;
+    private final ReportBulkExecutor reportBulkExecutor;
+
+    // targetType 검증 (post/comment 만 허용)
+    private void validateTargetType(String targetType) {
+        if (!TARGET_POST.equals(targetType) && !TARGET_COMMENT.equals(targetType)) {
+            throw new ReportAdminException("잘못된 대상 유형입니다: " + targetType, HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    @Override
+    public ReportPageResponse getReportedPosts(int page, int size, String status, Long boardId, String sort) {
+        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
+        page = AdminServiceSupport.clampPage(page);
+        size = AdminServiceSupport.clampSize(size);
+        int totalCount = reportAdminMapper.countReportedPosts(status, boardId);
+        int totalPages = (int) Math.ceil((double) totalCount / size);
+        int offset = (page - 1) * size;
+        List<ReportedItemResponse> items = reportAdminMapper.findReportedPosts(status, boardId, sort, offset, size);
+        return toPage(totalPages, totalCount, items);
+    }
+
+    @Override
+    public ReportPageResponse getReportedComments(int page, int size, String status, Long boardId, String sort) {
+        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
+        page = AdminServiceSupport.clampPage(page);
+        size = AdminServiceSupport.clampSize(size);
+        int totalCount = reportAdminMapper.countReportedComments(status, boardId);
+        int totalPages = (int) Math.ceil((double) totalCount / size);
+        int offset = (page - 1) * size;
+        List<ReportedItemResponse> items = reportAdminMapper.findReportedComments(status, boardId, sort, offset, size);
+        return toPage(totalPages, totalCount, items);
+    }
+
+    @Override
+    @Transactional
+    public BulkResultResponse selectRestore(String targetType, List<Long> targetIds) {
+        return execute(targetType, targetIds, "복원할",
+                (adminId, targetId) -> reportBulkExecutor.restoreItem(targetType, targetId, adminId));
+    }
+
+    @Override
+    @Transactional
+    public BulkResultResponse selectDelete(String targetType, List<Long> targetIds, Long reasonId, String detail) {
+        return execute(targetType, targetIds, "삭제할",
+                (adminId, targetId) -> reportBulkExecutor.deleteItem(targetType, targetId, adminId, reasonId, detail));
+    }
+
+    @Override
+    @Transactional
+    public BulkResultResponse selectBlind(String targetType, List<Long> targetIds, Long reasonId, String detail) {
+        return execute(targetType, targetIds, "블라인드 처리할",
+                (adminId, targetId) -> reportBulkExecutor.blindItem(targetType, targetId, adminId, reasonId, detail));
+    }
+
+    // 조치 1건을 실행하는 동작 (executor 호출부만 다르다)
+    @FunctionalInterface
+    private interface ItemAction {
+        void run(Long adminId, Long targetId);
+    }
+
+    /**
+     * 선택 처리 공통 루프.
+     * 항목마다 독립 트랜잭션(REQUIRES_NEW)이라 한 건이 실패해도 나머지는 그대로 처리되고,
+     * 실패분은 사유와 함께 응답에 담긴다(부분 성공). 중복 id는 한 번만 처리한다.
+     */
+    private BulkResultResponse execute(String targetType, List<Long> targetIds, String actionLabel, ItemAction action) {
+        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
+        validateTargetType(targetType);
+        if (CollectionUtils.isEmpty(targetIds)) {
+            throw new ReportAdminException(actionLabel + " 항목을 선택해 주세요.", HttpStatus.BAD_REQUEST);
+        }
+        Long adminId = AdminServiceSupport.currentAdminId();
+
+        int successCount = 0;
+        List<BulkResultResponse.FailureItem> failures = new ArrayList<>();
+        for (Long targetId : new LinkedHashSet<>(targetIds)) {
+            try {
+                action.run(adminId, targetId);
+                successCount++;
+            } catch (Exception e) {
+                failures.add(new BulkResultResponse.FailureItem(targetId, AdminServiceSupport.resolveFailureMessage(e)));
+            }
+        }
+        return new BulkResultResponse(successCount, failures);
+    }
+
+    private ReportPageResponse toPage(int totalPages, int totalCount, List<ReportedItemResponse> items) {
+        ReportPageResponse response = new ReportPageResponse();
+        response.setTotalPages(totalPages);
+        response.setTotalCount(totalCount);
+        response.setItems(items);
+        return response;
+    }
+}

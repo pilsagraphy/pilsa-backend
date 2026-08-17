@@ -33,71 +33,81 @@
         ORDER BY display_order ASC, board_id ASC
     </select>
 
-    <select id="countPostsByBoard" resultType="int">
-        SELECT COUNT(*) FROM posts WHERE board_id = #{boardId} AND state &lt;&gt; 'deleted'
-    </select>
-
-    <select id="existsBoardName" resultType="boolean">
-        SELECT EXISTS (
-            SELECT 1 FROM boards
-            WHERE name = #{name} AND state = 'normal'
-            <if test="excludeBoardId != null">AND board_id != #{excludeBoardId}</if>
-        )
-    </select>
-
-    <insert id="insertBoard" useGeneratedKeys="true" keyProperty="board.boardId">
-        INSERT INTO boards (name, read_scope, write_level, display_order,
-                            allow_comment, allow_attachment, category_mode,
-                            default_category_id, allow_anonymous, allow_private_comment, state)
-        VALUES (#{board.name}, #{board.readScope}, #{board.writeLevel},
-                COALESCE(#{board.displayOrder}, (SELECT * FROM (SELECT COALESCE(MAX(display_order),0)+1 FROM boards) t)),
-                #{board.allowComment}, #{board.allowAttachment}, #{board.categoryMode},
-                #{board.defaultCategoryId}, #{board.allowAnonymous}, #{board.allowPrivateComment}, 'normal')
-    </insert>
-
-    <update id="updateBoard">
-        UPDATE boards
-        <set>
-            <if test="board.name != null">name = #{board.name},</if>
-            <if test="board.readScope != null">read_scope = #{board.readScope},</if>
-            <if test="board.writeLevel != null">write_level = #{board.writeLevel},</if>
-            <if test="board.displayOrder != null">display_order = #{board.displayOrder},</if>
-            <if test="board.allowComment != null">allow_comment = #{board.allowComment},</if>
-            <if test="board.allowAttachment != null">allow_attachment = #{board.allowAttachment},</if>
-            <if test="board.categoryMode != null">category_mode = #{board.categoryMode},</if>
-            <if test="board.defaultCategoryId != null">default_category_id = #{board.defaultCategoryId},</if>
-            <if test="board.allowAnonymous != null">allow_anonymous = #{board.allowAnonymous},</if>
-            <if test="board.allowPrivateComment != null">allow_private_comment = #{board.allowPrivateComment},</if>
-            board_id = board_id
-        </set>
-        WHERE board_id = #{boardId} AND state = 'normal'
-    </update>
-
-    <!-- 게시판도 소프트삭제 (글/댓글이 남아 있으므로 물리삭제하지 않는다) -->
-    <update id="deleteBoard">
-        UPDATE boards SET state = 'deleted' WHERE board_id = #{boardId} AND state = 'normal'
-    </update>
-
-    <!-- 카테고리 목록 조회 (공지사항 board_id=1 은 데이터가 없어 빈 목록) -->
+    <!-- 카테고리 목록 조회.
+         '중요'(code=PINNED)는 관리자에게만 내려간다(includePinned=false면 제외) → 프론트 분기 불필요.
+         display_order=99로 두어 항상 목록 맨 뒤에 온다. -->
     <select id="findCategoriesByBoardId" resultType="com.back.board.dto.CategoryResponse">
         SELECT category_id AS categoryId,
-               name
+               name,
+               code
         FROM categories
         WHERE board_id = #{boardId}
-        ORDER BY category_id ASC
+          AND is_active = 1
+        <if test="!includePinned">
+            AND code &lt;&gt; 'PINNED'
+        </if>
+        ORDER BY display_order ASC, category_id ASC
     </select>
 
     <!-- 카테고리 유효성 확인 (등록 시 잘못된 categoryId 방지) -->
     <select id="existsCategory" resultType="boolean">
         SELECT EXISTS (
             SELECT 1 FROM categories
-            WHERE category_id = #{categoryId} AND board_id = #{boardId}
+            WHERE category_id = #{categoryId} AND board_id = #{boardId} AND is_active = 1
         )
     </select>
 
-    <!-- 메인 화면용 상단 5개 조회 (공지사항은 is_pinned 우선, 그 외는 최신순)
+    <!-- 선택한 카테고리가 이 게시판의 '중요' 카테고리인가 → is_pinned 판정.
+         uq_categories_board_code(board_id, code) 제약으로 게시판당 PINNED는 최대 1개다.
+         별도 플래그 컬럼 없이 code 로 판정한다. -->
+    <select id="isPinnedCategory" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1 FROM categories
+            WHERE category_id = #{categoryId}
+              AND board_id = #{boardId}
+              AND code = 'PINNED'
+              AND is_active = 1
+        )
+    </select>
+
+    <!-- 삭제 대상 첨부의 물리 경로 (소프트삭제 전에 확보해 디스크 파일까지 지운다) -->
+    <select id="findAttachmentUrls" resultType="string">
+        SELECT file_url
+        FROM attachments
+        WHERE post_id = #{postId}
+          AND state = 'normal'
+          AND attachment_id IN
+          <foreach collection="attachmentIds" item="id" open="(" separator="," close=")">
+              #{id}
+          </foreach>
+    </select>
+
+    <!-- 첨부 소프트삭제. 대상 글 소속인 것만 지운다(남의 글 첨부 id를 섞어 보내도 무해) -->
+    <update id="softDeleteAttachments">
+        UPDATE attachments
+        SET state = 'deleted'
+        WHERE post_id = #{postId}
+          AND state = 'normal'
+          AND attachment_id IN
+          <foreach collection="attachmentIds" item="id" open="(" separator="," close=")">
+              #{id}
+          </foreach>
+    </update>
+
+    <!-- 이전글/다음글 상세 (하단 내비게이션: 카테고리 뱃지 + 제목 + 작성일) -->
+    <select id="findAdjacentPost" resultType="com.back.board.dto.AdjacentPostResponse">
+        SELECT p.post_id    AS postId,
+               p.title,
+               c.name       AS categoryName,
+               p.created_at AS created
+        FROM posts p
+        LEFT JOIN categories c ON p.category_id = c.category_id
+        WHERE p.post_id = #{postId}
+    </select>
+
+    <!-- 메인 화면용 상단 N개 조회 (is_pinned 우선, 그 외는 최신순). 개수는 프론트가 요청한 값
          블라인드/삭제(state != normal) 글은 학생 화면에서 숨김 (PR #57 포팅) -->
-    <select id="findTop5Posts" resultType="com.back.board.dto.BoardTop5Response">
+    <select id="findTopPosts" resultType="com.back.board.dto.BoardTopPostResponse">
         SELECT post_id   AS postId,
                title,
                is_pinned AS isPinned
@@ -105,7 +115,7 @@
         WHERE board_id = #{boardId}
           AND state = 'normal'
         ORDER BY is_pinned DESC, created_at DESC
-        LIMIT 5
+        LIMIT #{limit}
     </select>
 
     <!-- 게시글-게시판 소속 + 상태 가드 (read_scope 우회 차단) -->
@@ -187,11 +197,13 @@
     <select id="findPostDetailById" resultType="com.back.board.dto.BoardDetailResponse">
         SELECT
         p.post_id AS postId,
+        p.board_id AS boardId,
         p.title,
         p.content,
         p.user_id AS userId,
         u.name AS authorName,
         p.view_count AS viewCount,
+        p.created_at AS created,
         p.updated_at AS updated,
         p.is_anonymous AS isAnonymous,
         p.is_pinned AS isPinned,
@@ -201,15 +213,15 @@
                 (SELECT post_id FROM posts
                 WHERE board_id = #{boardId} AND state = 'normal' AND post_id != p.post_id
                 AND (view_count &gt; p.view_count OR (view_count = p.view_count AND post_id &gt; p.post_id))
-                ORDER BY view_count ASC, post_id ASC LIMIT 1) AS prevPostApi,
+                ORDER BY view_count ASC, post_id ASC LIMIT 1) AS prevPostId,
                 (SELECT post_id FROM posts
                 WHERE board_id = #{boardId} AND state = 'normal' AND post_id != p.post_id
                 AND (view_count &lt; p.view_count OR (view_count = p.view_count AND post_id &lt; p.post_id))
-                ORDER BY view_count DESC, post_id DESC LIMIT 1) AS nextPostApi
+                ORDER BY view_count DESC, post_id DESC LIMIT 1) AS nextPostId
             </when>
             <otherwise>
-                (SELECT MAX(post_id) FROM posts WHERE board_id = #{boardId} AND state = 'normal' AND post_id &lt; #{postId}) AS prevPostApi,
-                (SELECT MIN(post_id) FROM posts WHERE board_id = #{boardId} AND state = 'normal' AND post_id &gt; #{postId}) AS nextPostApi
+                (SELECT MAX(post_id) FROM posts WHERE board_id = #{boardId} AND state = 'normal' AND post_id &lt; #{postId}) AS prevPostId,
+                (SELECT MIN(post_id) FROM posts WHERE board_id = #{boardId} AND state = 'normal' AND post_id &gt; #{postId}) AS nextPostId
             </otherwise>
         </choose>
         FROM posts p
@@ -228,9 +240,20 @@
                file_url      AS fileUrl
         FROM attachments
         WHERE post_id = #{postId}
+          AND state = 'normal'
     </select>
 
-    <!-- 댓글 목록 조회 (자유=익명, 정보=비밀댓글). 블라인드/삭제 댓글은 숨김 -->
+    <!-- 노출 대상 댓글 수 (블라인드/삭제 제외) — 목록 count 와 같은 기준 -->
+    <select id="countCommentsByPostId" resultType="int">
+        SELECT COUNT(*)
+        FROM comments
+        WHERE post_id = #{postId}
+          AND state = 'normal'
+    </select>
+
+    <!-- 댓글 목록 조회 (자유=익명, 정보=비밀댓글).
+         state='normal' 만 내려간다 — 관리자가 블라인드(blind)했거나 삭제(deleted)한 댓글,
+         작성자가 지운 댓글은 학생 화면에 절대 노출되지 않는다. -->
     <select id="findCommentsByPostId" resultType="com.back.board.dto.CommentDetailResponse">
         SELECT
             c.comment_id AS commentId,
@@ -239,6 +262,7 @@
             u.name AS authorName,
             c.is_anonymous AS isAnonymous,
             c.is_private AS isPrivate,
+            c.created_at AS created,
             c.updated_at AS updated,
             c.user_id AS userId
         FROM comments c
@@ -280,7 +304,7 @@
     <insert id="insertPost" useGeneratedKeys="true" keyProperty="request.postId">
         INSERT INTO posts (title, content, user_id, board_id, category_id, is_anonymous, is_pinned, created_at)
         VALUES (#{request.title}, #{request.content}, #{userId}, #{boardId},
-                #{request.categoryId}, #{request.isAnonymous}, #{request.isPinned}, NOW())
+                #{request.categoryId}, #{request.isAnonymous}, #{isPinned}, NOW())
     </insert>
 
     <insert id="insertAttachment">
@@ -302,7 +326,7 @@
             <if test="request.content != null">content = #{request.content},</if>
             <if test="request.categoryId != null">category_id = #{request.categoryId},</if>
             is_anonymous = #{request.isAnonymous},
-            is_pinned = #{request.isPinned},
+            is_pinned = #{isPinned},
             updated_at = NOW()
         </set>
         WHERE post_id = #{postId}

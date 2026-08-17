@@ -2,7 +2,10 @@ package com.back.auth.service;
 
 import com.back.auth.dto.*;
 import com.back.auth.mapper.AuthMapper;
+import com.back.auth.dto.WithdrawTarget;
+import com.back.auth.dto.WithdrawnBanInfo;
 import com.back.auth.exception.AuthException;
+import com.back.auth.mapper.WithdrawMapper;
 import com.back.auth.exception.BannedException;
 import com.back.global.security.JwtUtil;
 import io.jsonwebtoken.ExpiredJwtException;
@@ -17,7 +20,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.beans.factory.annotation.Value;
-import com.back.global.mail.service.MailService;
+import com.back.auth.service.MailService;
 import com.back.auth.dto.FindIdVerifyRequest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
@@ -32,6 +35,7 @@ import java.util.concurrent.TimeUnit;
 public class AuthServicempl implements AuthService {
 
     private final AuthMapper authMapper;
+    private final WithdrawMapper withdrawMapper;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final MailService mailService;
@@ -144,6 +148,16 @@ public class AuthServicempl implements AuthService {
     @Transactional
     public void signup(SignupRequest request) {
 
+        // 입력 형식 검증 — 규칙은 프론트(pilsa-frontend schemas/auth.js zod)와 동일하며,
+        // 정규식은 policy_settings(signup_*_regex)에서 로드한다. 프론트 검증만으로는 API 직접 호출을 못 막는다.
+        validateSignupFormat(request);
+
+        // 이메일 인증을 실제로 통과했는지 서버에서 확인 — 프론트 화면 검증은 API 직접 호출로 우회된다.
+        // (인증 성공 시 MailServiceImpl 이 30분짜리 통과 플래그를 남긴다)
+        if (redisTemplate.opsForValue().get("auth:mail:verified:" + request.getEmail()) == null) {
+            throw new AuthException("이메일 인증이 완료되지 않았거나 만료되었습니다. 이메일 인증을 다시 진행해주세요.", HttpStatus.FORBIDDEN);
+        }
+
         // 중복 아이디 확인
         if (authMapper.existsByLoginId(request.getLoginId())) {
             throw new AuthException("이미 존재하는 아이디입니다.", HttpStatus.CONFLICT);
@@ -152,6 +166,48 @@ public class AuthServicempl implements AuthService {
         // 중복 이메일 확인
         if (authMapper.existsByEmail(request.getEmail())) {
             throw new AuthException("이미 존재하는 이메일입니다.", HttpStatus.CONFLICT);
+        }
+
+        // 학번/전화 중복 확인 — UNIQUE 컬럼인데 사전 검사가 없으면 INSERT 에서 1062 → 500 으로 터진다
+        if (request.getStudentNo() == null || request.getStudentNo().isBlank()) {
+            throw new AuthException("학번은 필수입니다.", HttpStatus.BAD_REQUEST);
+        }
+        if (authMapper.existsByStudentNo(request.getStudentNo())) {
+            throw new AuthException("이미 가입된 학번입니다.", HttpStatus.CONFLICT);
+        }
+        if (request.getPhone() != null && !request.getPhone().isBlank()
+                && authMapper.existsByPhone(request.getPhone())) {
+            throw new AuthException("이미 등록된 전화번호입니다.", HttpStatus.CONFLICT);
+        }
+
+        // 재가입 대조 — 탈퇴 시 학번은 복원 불가능한 해시로 보관된다(부정 이용 방지, 개인정보처리방침 명시).
+        // 같은 학번으로 탈퇴한 계정 중 제재 상태가 남아 있으면 가입을 거부해 "제재 → 탈퇴 → 재가입" 우회를 차단한다.
+        String studentNoHash = WithdrawService.hashStudentNo(request.getStudentNo());
+        java.util.List<WithdrawnBanInfo> withdrawnRows = withdrawMapper.findWithdrawnBanByHash(studentNoHash);
+        java.time.LocalDateTime latestWithdrawnAt = null;
+        for (WithdrawnBanInfo ban : withdrawnRows) {
+            if ("permanent".equals(ban.getBanStatus())) {
+                throw new AuthException("가입이 제한된 학번입니다.", HttpStatus.FORBIDDEN);
+            }
+            if ("temporary".equals(ban.getBanStatus())
+                    && ban.getBannedUntil() != null
+                    && ban.getBannedUntil().isAfter(java.time.LocalDateTime.now())) {
+                throw new AuthException("가입이 제한된 학번입니다. ("
+                        + ban.getBannedUntil().toLocalDate() + " 이후 가입 가능)", HttpStatus.FORBIDDEN);
+            }
+            if (ban.getWithdrawnAt() != null
+                    && (latestWithdrawnAt == null || ban.getWithdrawnAt().isAfter(latestWithdrawnAt))) {
+                latestWithdrawnAt = ban.getWithdrawnAt();
+            }
+        }
+        // 재가입 쿨다운 — 탈퇴/재가입 반복으로 계정 행을 양산하는 어뷰징 차단 (기간은 policy_settings 로 조정)
+        if (latestWithdrawnAt != null) {
+            int cooldownDays = parseCooldownDays(withdrawMapper.findPolicySetting("rejoin_cooldown_days"));
+            java.time.LocalDateTime rejoinableAt = latestWithdrawnAt.plusDays(cooldownDays);
+            if (rejoinableAt.isAfter(java.time.LocalDateTime.now())) {
+                throw new AuthException("탈퇴 후 " + cooldownDays + "일 동안 재가입할 수 없습니다. ("
+                        + rejoinableAt.toLocalDate() + " 이후 가능)", HttpStatus.FORBIDDEN);
+            }
         }
 
         // 비밀번호 암호화
@@ -178,6 +234,9 @@ public class AuthServicempl implements AuthService {
         user.setIsDeleted(Boolean.FALSE);
 
         authMapper.insertUser(user);
+
+        // 인증 통과 플래그는 1회용 — 같은 인증으로 계정을 반복 생성하지 못하게 소진시킨다
+        redisTemplate.delete("auth:mail:verified:" + request.getEmail());
     }
 
     // 회원가입 - 아이디 중복
@@ -227,7 +286,7 @@ public class AuthServicempl implements AuthService {
         String verified = redisTemplate.opsForValue().get(verifiedKey);
 
         if (!"true".equals(verified)) {
-            throw new AuthException("이메일 인증이 완료되지 않았습니다.", HttpStatus.UNAUTHORIZED);
+            throw new AuthException("이메일 인증이 완료되지 않았거나 만료되었습니다. 이메일 인증을 다시 진행해주세요.", HttpStatus.UNAUTHORIZED);
         }
 
         String loginId = authMapper.findLoginIdByEmail(email);
@@ -259,12 +318,77 @@ public class AuthServicempl implements AuthService {
         return expireTime;
     }
 
+    // 회원가입 입력 형식 검증 — 프론트 zod 스키마(schemas/auth.js)와 규칙·문구를 맞춘다.
+    // 정규식은 policy_settings 로 조정 가능하며, 행이 없거나 잘못된 정규식이면 코드 기본값을 쓴다.
+    // 길이 상한(이름·아이디 50, 이메일 150)은 DB 컬럼 초과로 500이 터지는 것을 막는 가드.
+    private void validateSignupFormat(SignupRequest request) {
+        requireMatch(request.getName(), "signup_name_regex",
+                "^[a-zA-Zㄱ-ㅎ가-힣]{2,50}$",
+                "이름은 2글자 이상, 한글/영문만 입력할 수 있습니다.");
+        if (request.getMajor() == null || request.getMajor().isBlank() || request.getMajor().length() > 150) {
+            throw new AuthException("학과를 입력해주세요.", HttpStatus.BAD_REQUEST);
+        }
+        requireMatch(request.getStudentNo(), "signup_student_no_regex",
+                "^[0-9]{10}$",
+                "학번은 숫자 10자리를 정확히 입력해주세요.");
+        requireMatch(request.getEmail(), "signup_email_regex",
+                "^[^@ ]+@[^@ ]+[.][^@ ]+$",
+                "올바른 이메일 형식이 아닙니다.");
+        if (request.getEmail().length() > 150) {
+            throw new AuthException("올바른 이메일 형식이 아닙니다.", HttpStatus.BAD_REQUEST);
+        }
+        requireMatch(request.getPhone(), "signup_phone_regex",
+                "^010-[0-9]{4}-[0-9]{4}$",
+                "전화번호는 010-0000-0000 형식으로 입력해주세요.");
+        requireMatch(request.getLoginId(), "signup_login_id_regex",
+                "^[a-zA-Z0-9]{8,50}$",
+                "아이디는 8자 이상, 영문과 숫자만 입력할 수 있습니다.");
+        requireMatch(request.getPassword(), "signup_password_regex",
+                "^(?=.*[A-Za-z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,20}$",
+                "비밀번호는 문자, 숫자, 특수문자를 포함한 8~20자여야 합니다.");
+    }
+
+    // 정책 정규식 검사 — 값이 null 이거나 불일치면 400. 정책 행이 없거나 컴파일 불가면 기본 정규식 사용
+    private void requireMatch(String value, String policyCode, String defaultRegex, String message) {
+        String regex = authMapper.findPolicySetting(policyCode);
+        java.util.regex.Pattern pattern;
+        try {
+            pattern = java.util.regex.Pattern.compile(
+                    (regex == null || regex.isBlank()) ? defaultRegex : regex);
+        } catch (Exception e) {
+            pattern = java.util.regex.Pattern.compile(defaultRegex);
+        }
+        if (value == null || !pattern.matcher(value).matches()) {
+            throw new AuthException(message, HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    // 재가입 쿨다운 일수 (policy_settings.rejoin_cooldown_days, 기본 30)
+    private int parseCooldownDays(String settingValue) {
+        try {
+            return Integer.parseInt(settingValue);
+        } catch (Exception e) {
+            return 30;
+        }
+    }
+
     // 비밀번호 재설정
     @Override
     public void resetPassword(PasswordResetRequest request) {
         UserDto user = authMapper.findByLoginId(request.getLoginId());
         if (user == null) {
             throw new AuthException("해당 아이디는 존재하지 않습니다.", HttpStatus.NOT_FOUND);
+        }
+
+        // 새 비밀번호 형식 검증 — 회원가입과 동일 규칙 재사용. 초기화 경로로 규칙 위반 비밀번호가 설정되는 구멍 봉쇄
+        requireMatch(request.getNewPassword(), "signup_password_regex",
+                "^(?=.*[A-Za-z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,20}$",
+                "비밀번호는 문자, 숫자, 특수문자를 포함한 8~20자여야 합니다.");
+
+        // 이메일 인증(인증번호) 통과 여부를 서버에서 확인 — 없으면 아이디만 알면 남의 비밀번호를 바꿀 수 있다 (계정 탈취 구멍)
+        String verifiedKey = "auth:mail:verified:" + user.getEmail();
+        if (redisTemplate.opsForValue().get(verifiedKey) == null) {
+            throw new AuthException("이메일 인증이 완료되지 않았거나 만료되었습니다. 이메일 인증을 다시 진행해주세요.", HttpStatus.UNAUTHORIZED);
         }
 
 //        // 승인 Y / 대기 N / 탈퇴 X
@@ -275,6 +399,7 @@ public class AuthServicempl implements AuthService {
         // 비밀번호 암호화 후 저장
         String encodedNewPassword = passwordEncoder.encode(request.getNewPassword());
         authMapper.updatePassword(user.getLoginId(), encodedNewPassword);
+        redisTemplate.delete(verifiedKey); // 1회용 소진
     }
 
     // 이메일 찾기 - 학번+이름 일치 시 마스킹된 이메일 반환

@@ -4,6 +4,7 @@ import com.back.admin.board.dto.AdminBoardResponse;
 import com.back.admin.board.dto.BoardSaveRequest;
 import com.back.board.dto.BoardPolicy;
 import com.back.board.exception.BoardException;
+import com.back.admin.board.mapper.AdminBoardMapper;
 import com.back.board.mapper.BoardMapper;
 import com.back.global.security.AuthUtils;
 import lombok.RequiredArgsConstructor;
@@ -18,8 +19,9 @@ import java.util.Set;
 
 /**
  * 게시판 관리 서비스.
+ * 관리 전용 쿼리는 이 패키지의 AdminBoardMapper 가 갖는다.
  * 게시판이 데이터가 되었으므로(=BoardType enum 제거) 관리자가 만든 게시판도
- * 별도 배포 없이 /api/boards/{boardId}/** 로 즉시 동작한다.
+ * 별도 배포 없이 /api/user/boards/{boardId}/** 로 즉시 동작한다.
  */
 @Slf4j
 @Service
@@ -27,18 +29,21 @@ import java.util.Set;
 @Transactional(readOnly = true)
 public class AdminBoardService {
 
+    // 게시판 열람 대상은 반드시 로그인 회원 이상이다 — 전체 공개(ALL)는 선택지에서 제외한다
     private static final Set<String> ALLOWED_READ_SCOPES =
-            Set.of(BoardPolicy.SCOPE_ALL, BoardPolicy.SCOPE_MEMBER, BoardPolicy.SCOPE_STUDENT, BoardPolicy.SCOPE_ALUMNI);
+            Set.of(BoardPolicy.SCOPE_MEMBER, BoardPolicy.SCOPE_STUDENT, BoardPolicy.SCOPE_ALUMNI);
     private static final int MIN_WRITE_LEVEL = 0;
     private static final int MAX_WRITE_LEVEL = 3;
 
+    private final AdminBoardMapper adminBoardMapper;
+    // 게시판 정책 조회는 회원 판정과 같은 쿼리를 쓰므로 board 도메인 매퍼를 재사용한다
     private final BoardMapper boardMapper;
 
     public List<AdminBoardResponse> getBoards() {
         AuthUtils.requireAdmin();
         List<AdminBoardResponse> result = new ArrayList<>();
         for (BoardPolicy policy : boardMapper.findBoardPolicies()) {
-            result.add(toResponse(policy, boardMapper.countPostsByBoard(policy.getBoardId())));
+            result.add(toResponse(policy, adminBoardMapper.countPostsByBoard(policy.getBoardId())));
         }
         return result;
     }
@@ -51,7 +56,7 @@ public class AdminBoardService {
             throw new BoardException("게시판 이름은 필수입니다.", HttpStatus.BAD_REQUEST);
         }
         String name = request.getName().trim();
-        if (boardMapper.existsBoardName(name, null)) {
+        if (adminBoardMapper.existsBoardName(name, null)) {
             throw new BoardException("이미 존재하는 게시판 이름입니다.", HttpStatus.CONFLICT);
         }
         validateScopeAndLevel(request);
@@ -69,7 +74,12 @@ public class AdminBoardService {
         board.setAllowAnonymous(Boolean.TRUE.equals(request.getAllowAnonymous()));
         board.setAllowPrivateComment(Boolean.TRUE.equals(request.getAllowPrivateComment()));
 
-        boardMapper.insertBoard(board);
+        adminBoardMapper.insertBoard(board);
+
+        // 모든 게시판이 '중요'(code=PINNED) 카테고리를 갖도록 자동 생성한다.
+        // 상단 고정은 이 카테고리 선택으로만 결정되므로, 없으면 새 게시판에서 고정을 못 쓴다.
+        adminBoardMapper.insertPinnedCategory(board.getBoardId());
+
         log.info("게시판 생성 완료 - boardId: {}, name: {}", board.getBoardId(), name);
         return toResponse(boardMapper.findBoardPolicy(board.getBoardId()), 0);
     }
@@ -89,7 +99,7 @@ public class AdminBoardService {
             if (name.isEmpty()) {
                 throw new BoardException("게시판 이름은 비울 수 없습니다.", HttpStatus.BAD_REQUEST);
             }
-            if (boardMapper.existsBoardName(name, boardId)) {
+            if (adminBoardMapper.existsBoardName(name, boardId)) {
                 throw new BoardException("이미 존재하는 게시판 이름입니다.", HttpStatus.CONFLICT);
             }
             request.setName(name);
@@ -107,8 +117,8 @@ public class AdminBoardService {
         patch.setAllowAnonymous(request.getAllowAnonymous());
         patch.setAllowPrivateComment(request.getAllowPrivateComment());
 
-        boardMapper.updateBoard(boardId, patch);
-        return toResponse(boardMapper.findBoardPolicy(boardId), boardMapper.countPostsByBoard(boardId));
+        adminBoardMapper.updateBoard(boardId, patch);
+        return toResponse(boardMapper.findBoardPolicy(boardId), adminBoardMapper.countPostsByBoard(boardId));
     }
 
     @Transactional
@@ -119,16 +129,16 @@ public class AdminBoardService {
             throw new BoardException("존재하지 않는 게시판입니다.", HttpStatus.NOT_FOUND);
         }
         // 글이 남아 있으면 삭제 금지 (글을 먼저 정리하게 유도 — 고아 게시글 방지)
-        int postCount = boardMapper.countPostsByBoard(boardId);
+        int postCount = adminBoardMapper.countPostsByBoard(boardId);
         if (postCount > 0) {
             throw new BoardException("게시글이 " + postCount + "건 남아 있어 삭제할 수 없습니다.", HttpStatus.CONFLICT);
         }
-        boardMapper.deleteBoard(boardId);
+        adminBoardMapper.deleteBoard(boardId);
     }
 
     private void validateScopeAndLevel(BoardSaveRequest request) {
         if (request.getReadScope() != null && !ALLOWED_READ_SCOPES.contains(request.getReadScope())) {
-            throw new BoardException("열람 권한 값이 올바르지 않습니다. (ALL/MEMBER/STUDENT/ALUMNI)", HttpStatus.BAD_REQUEST);
+            throw new BoardException("열람 권한 값이 올바르지 않습니다. (MEMBER=재학+졸업 / STUDENT=재학 / ALUMNI=졸업)", HttpStatus.BAD_REQUEST);
         }
         if (request.getWriteLevel() != null
                 && (request.getWriteLevel() < MIN_WRITE_LEVEL || request.getWriteLevel() > MAX_WRITE_LEVEL)) {

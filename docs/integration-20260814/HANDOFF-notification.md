@@ -1,0 +1,96 @@
+# [전달] 알림 기능 — 디자인·프론트 안내 (2026-08-16 확정)
+
+> 대상: 디자인팀, 프론트엔드.
+> 백엔드 구현은 완료 상태이며, 이 문서의 내용만 반영하면 됩니다. 기술 상세는 [PUSH-NOTIFICATION-GUIDE.md](PUSH-NOTIFICATION-GUIDE.md) 참고.
+
+## 0. 한 장 요약 — "알림처럼 보이는 것"은 3가지고, 서로 다른 물건입니다
+
+| | 무엇 | 언제 보이나 | 브라우저 권한 | 상태 |
+|---|---|---|---|---|
+| ① 알림함 | 종 아이콘 → 알림 목록 | 앱 안에서 | 불필요 | **기존대로** (`GET /api/user/mypage/toast`) |
+| ② 인앱 토스트 | 화면 구석에 잠깐 뜨는 팝업 | 앱이 열려 있을 때 | 불필요 | 프론트 UI (서버 무관) |
+| ③ OS 알림 (푸시) | 폰 상태바/알림 트레이 | **앱이 꺼져 있어도** | **필요** | **이번에 신설** |
+
+- 발행되는 알림은 2종뿐: **내 글에 댓글(COMMENT), 내 댓글에 답글(REPLY)**. 신고 처리·제재·공지 알림은 없음(확정).
+- ③이 실패해도(권한 거부 등) ①②는 정상 동작 — 푸시는 전달 채널일 뿐 알림의 원본은 서버 DB.
+
+## 1. 디자인팀에 요청 (신규 시안 2장)
+
+1. **모바일 마이페이지 — "이 기기에서 알림 받기" 토글 1개**
+   - 상태는 **ON/OFF 2가지만**. "브라우저에서 차단됨" 전용 화면은 만들지 않는다(카카오톡이 OS 차단을 앱에서 안내하지 않는 것과 같은 선).
+   - 문구는 "알림 받기"가 아니라 "**이 기기에서** 알림 받기" — 기기별 설정이라 폰에서 켜도 다른 기기엔 적용 안 됨.
+2. **알림 유도 바텀시트 1장** — "새 댓글·답글 알림을 받아보세요" + [알림 켜기] / [나중에]
+   - 웹앱 설치 후 첫 로그인 시 1회 노출. [나중에] 선택 시 7일 뒤 1회만 재노출, 이후 침묵.
+
+## 2. 노출 정책 (확정)
+
+- **PC 웹 = 알림함만.** 토글·바텀시트는 **모바일에서만** 노출 (에브리타임 방식).
+- **판별은 화면 폭으로 하지 않는다** — PC에서 창을 좁힌 사용자에게 새는 것을 막기 위함. 화면 폭은 레이아웃에만 쓰고, 기능 노출은 아래로 판별:
+
+```js
+const isStandalone   = matchMedia('(display-mode: standalone)').matches   // 설치된 앱 창으로 실행 중인가 (진입 경로 무관)
+                    || navigator.standalone === true;                     // 구형 iOS 사파리 보완
+const isMobileDevice = navigator.userAgentData?.mobile ?? /Android|iPhone|iPad/i.test(navigator.userAgent);
+const pushSupported  = 'serviceWorker' in navigator && 'PushManager' in window;
+
+const 토글_노출     = isMobileDevice && pushSupported;
+const 바텀시트_노출 = 토글_노출 && isStandalone && !기기등록됨 && Notification.permission !== 'denied';
+```
+
+- 플랫폼 지원: 안드로이드(브라우저·설치형·플레이스토어 TWA) ⭕ / 아이폰은 **홈 화면에 추가한 경우만**(iOS 16.4+) ⭕, 사파리 일반 탭 ✕(토글 자체가 숨음).
+
+## 3. 프론트 구현 절차
+
+### 3-1. 토글 ON (= 바텀시트의 [알림 켜기]와 동일)
+```js
+// 반드시 클릭 핸들러 안에서 (iOS는 제스처 필수, 크롬도 아니면 팝업 강등)
+const reg = await navigator.serviceWorker.register('/sw.js');
+const perm = await Notification.requestPermission();
+if (perm !== 'granted') { toast('브라우저에서 알림이 차단되어 있어요'); return; }  // 차단 처리는 이 한 줄이 전부
+
+const { publicKey } = await api('/api/user/mypage/toast/vapid-key');
+const sub = await reg.pushManager.subscribe({ userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(publicKey) });
+await api.post('/api/user/mypage/toast/devices', sub.toJSON());   // 기기 등록 → 토글 ON
+```
+
+### 3-2. 토글 OFF
+```js
+const sub = await reg.pushManager.getSubscription();
+if (sub) { await api.delete('/api/user/mypage/toast/devices', { endpoint: sub.endpoint }); await sub.unsubscribe(); }
+```
+
+### 3-3. sw.js — 수신·클릭 (포그라운드면 인앱 토스트, 아니면 OS 알림)
+```js
+self.addEventListener('push', e => {
+  const d = e.data.json();                       // 서버 페이로드: { title, body, linkUrl }
+  e.waitUntil((async () => {
+    const wins = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const focused = wins.find(w => w.focused);
+    if (focused) focused.postMessage({ type: 'toast', ...d });          // 앱 보는 중 → 인앱 토스트(②)
+    else await self.registration.showNotification(d.title, { body: d.body, data: d }); // → OS 알림(③)
+  })());
+});
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(clients.openWindow(e.notification.data.linkUrl));  // linkUrl = 알림함 응답과 동일한 앱 내 경로
+});
+```
+
+### 3-4. 앱 배지 (지원 환경에서만)
+```js
+if ('setAppBadge' in navigator) {  // iOS PWA·데스크톱만 지원. 안드로이드는 알림이 떠 있으면 런처가 자동 표시
+  const { unreadCount } = await api('/api/user/mypage/toast/unread-count');
+  unreadCount > 0 ? navigator.setAppBadge(unreadCount) : navigator.clearAppBadge();
+}
+```
+
+## 4. 신규 API 3본 (구현 완료 — 상세 예시는 Swagger "마이페이지-알림")
+
+| 메서드·경로 | 용도 |
+|---|---|
+| `POST /api/user/mypage/toast/devices` | 기기 등록 (subscription.toJSON() 그대로 전송, 재등록=갱신) |
+| `DELETE /api/user/mypage/toast/devices` | 기기 해제 (`{endpoint}` 만) |
+| `GET /api/user/mypage/toast/vapid-key` | 구독용 공개키 (값 불변 — 상수 보관 가능) |
+
+기존 알림함 API(목록/unread-count/read/read-all/delete)는 **변경 없음**.

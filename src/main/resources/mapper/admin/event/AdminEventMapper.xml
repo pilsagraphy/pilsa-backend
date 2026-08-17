@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.admin.event.mapper.AdminEventMapper">
+
+    <insert id="insertEvent" useGeneratedKeys="true" keyProperty="request.eventId">
+        INSERT INTO events (
+            title,
+            category,
+            description,
+            start_at,
+            end_at,
+            user_id,
+            created_at,
+            updated_at
+        ) VALUES (
+                     #{request.title},
+                     #{request.category},
+                     #{request.description},
+                     #{request.startDate},
+                     #{request.endDate},
+                     #{userId},
+                     NOW(),
+                     NOW()
+                 )
+    </insert>
+
+    <update id="updateEvent">
+        UPDATE events
+        <set>
+            <if test="request.title != null">title = #{request.title},</if>
+            <if test="request.category != null">category = #{request.category},</if>
+            <if test="request.description != null">description = #{request.description},</if>
+            <if test="request.startDate != null">start_at = #{request.startDate},</if>
+            <if test="request.endDate != null">end_at = #{request.endDate},</if>
+            updated_at = NOW()
+        </set>
+        WHERE event_id = #{eventId} AND state = 'normal'
+    </update>
+
+    <!-- 소프트 삭제 (프로젝트 전역 원칙: 물리 삭제 없음) -->
+    <update id="deleteEvent">
+        UPDATE events SET state = 'deleted', updated_at = NOW()
+        WHERE event_id = #{eventId} AND state = 'normal'
+    </update>
+
+</mapper>

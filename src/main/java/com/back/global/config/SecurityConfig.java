@@ -40,7 +40,8 @@ public class SecurityConfig {
                     // 비로그인 공개 리소스 (기존 /api/public/** 접두사 폐지 → 리소스 경로로 명시)
                     "/api/donations",        // 명예의전당
                     "/api/quotes/current",   // 이 주의 문장
-                    "/api/events",           // 일정(캘린더) 조회
+                    "/api/event",              // 일정(캘린더) 조회
+                    "/api/event/calendar.ics", // 구글 캘린더 구독 피드 (구글 서버가 인증 없이 가져감)
                     "/api/mail/**", // 인증번호 관련
                     "/swagger-ui/**", // 스웨거 관련
                     "/v3/api-docs/**", // 스웨거 관련
@@ -50,7 +51,7 @@ public class SecurityConfig {
                 // 관리자 화면 전용 경로만 URL 레벨에서 막는다 (admin_level>=1 → ROLE_ADMIN)
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
-                // 그 외 회원 기능(게시판 쓰기, /api/reports, /api/mypage/** ...)은
+                // 그 외 회원 기능(게시판 쓰기, /api/user/reports, /api/user/mypage/** ...)은
                 // "로그인 여부"만 URL에서 확인하고, 실제 접근 가능 여부는 데이터로 판정한다.
                 //  - 게시판: boards.read_scope(열람 대상) / boards.write_level(작성 최소 관리레벨)
                 //  - 그 외 : 각 서비스가 AuthUtils 로 신분·관리레벨을 확인
