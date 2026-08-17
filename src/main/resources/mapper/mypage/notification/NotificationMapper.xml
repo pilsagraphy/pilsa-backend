@@ -3,15 +3,10 @@
 <mapper namespace="com.back.mypage.notification.mapper.NotificationMapper">
 
     <!--
-      알림함 화면(목록·읽음·삭제)에 필요한 쿼리는 아직 없다 — 담당자 과제.
+      알림 발행(INSERT)과 알림함 화면용 조회/읽음/삭제 쿼리는 아직 없다 — 담당자 과제.
       과제 설명: docs/integration-20260814/HANDOFF-notification-tasks.md
-      (notifications 테이블과 발행은 정상 동작하므로 데이터는 계속 쌓인다)
+      (notifications 테이블은 이미 있으므로 스키마는 DB에서 직접 확인할 것)
     -->
-
-    <insert id="insertNotification">
-        INSERT INTO notifications (user_id, type, title, message, link_url, target_type, target_id, created_at)
-        VALUES (#{userId}, #{type}, #{title}, #{message}, #{linkUrl}, #{targetType}, #{targetId}, NOW())
-    </insert>
 
     <!-- 탈퇴 시 본인 알림 일괄 소프트삭제 -->
     <update id="softDeleteAllByUser">

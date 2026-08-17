@@ -736,6 +736,7 @@ END:VCALENDAR
   "keys": { "p256dh": "BNc...", "auth": "k8J..." }
 }
 ※ 브라우저 pushManager.subscribe() 결과의 toJSON() 을 그대로 전송
+※ 프론트가 아직 없으므로 §6 의 방법으로 값을 직접 만들어 넣는다
 ```
 **기대 출력**
 ```
@@ -1373,8 +1374,7 @@ files:        아무 이미지/PDF 2개 (한글 파일명으로 하나 넣어볼
 - [ ] 관리자 조치가 **select-* 3종**으로만 되고 부분 성공 응답
 - [ ] 관리자 수정/정지/차단/삭제가 **PATCH**
 - [ ] 게시판 생성 시 `readScope:"ALL"` → 400
-- [ ] 댓글/대댓글 시 **상대방에게만** 알림(본인 행동은 알림 없음)
-      → 알림함 조회 API 가 없으므로 DB 로 확인: `SELECT * FROM notifications ORDER BY notification_id DESC LIMIT 5;`
+- [ ] ~~댓글/대댓글 알림~~ → **발행 기능이 담당자 과제로 환원되어 현재 알림이 생기지 않는다**(정상). 구현 후 검증
 - [ ] 회원가입: 인증번호 검증 없이 바로 register 호출 → **403 "이메일 인증이 완료되지 않았거나 만료되었습니다. 이메일 인증을 다시 진행해주세요."**
 - [ ] 비밀번호 초기화(84): 인증 검증 없이 바로 호출 → **401** (기존엔 아이디만 알면 변경 가능했던 구멍)
 - [ ] 회원가입 형식 위반 → 각각 **400 필드별 message** (학번 8자리 / 아이디 4자 / 비밀번호 "weak" / 전화 01012345678 / 이름 1자)
@@ -1387,6 +1387,85 @@ files:        아무 이미지/PDF 2개 (한글 파일명으로 하나 넣어볼
 - [ ] 정지 중 탈퇴한 학번으로 재가입 → **403 "가입이 제한된 학번입니다. (YYYY-MM-DD 이후 가입 가능)"**
 - [ ] 탈퇴 직후 기존 액세스 토큰으로 API 호출 → **401** (JWT 필터가 매 요청 DB 재조회)
 
-## 5. 실패 시 기록
+## 5. 스웨거로 테스트하는 법
+
+주소: `http://localhost:8080/swagger-ui/index.html` (상단 filter 로 검색, 도메인별 태그)
+
+**① 로그인 → 토큰 물리기 (이걸 안 하면 전부 401)**
+1. `POST /api/auth/login` 실행 → 응답의 `accessToken` 복사
+2. 우측 상단 **Authorize** → `Bearer eyJ...` 가 아니라 **토큰 값만** 붙여넣기 → Authorize
+3. 계정을 바꿀 때마다 Authorize 를 다시 해야 한다 (t_stu → t_adm3 등)
+
+**② 파일 업로드가 있는 API** (게시글 등록·수정)
+`multipart/form-data` 라 스웨거에서 파일 선택 UI 가 뜬다. 파일 없이 보내려면 그 칸을 비우고 실행.
+한글 파일명도 테스트할 것 (원본 파일명 저장 확인).
+
+**③ 날짜 파라미터**
+`YYYY-MM-DD` 문자열이다. 예: `2026-03-01`. 시간까지 넣으면 400.
+
+---
+
+## 6. 프론트 없이 웹 푸시 테스트하기
+
+기기 등록(`POST .../toast/devices`)은 원래 브라우저가 만든 구독 정보를 프론트가 보내주는데,
+지금은 프론트가 없다. 아래 둘 중 하나로 백엔드만 검증한다.
+
+### 방법 A — 등록/해제 API 만 검증 (간단, 실제 발송은 확인 못 함)
+
+스웨거에서 아무 문자열이나 형식만 맞춰 넣으면 저장까지 확인된다.
+
+```json
+{
+  "endpoint": "https://fcm.googleapis.com/fcm/send/test-dummy-0001",
+  "keys": { "p256dh": "dummy-p256dh-value", "auth": "dummy-auth-value" }
+}
+```
+
+확인할 것:
+- 200 + `notification_devices` 테이블에 행 생성 (`SELECT * FROM notification_devices;`)
+- **같은 endpoint 로 다시 등록 → 행이 늘지 않고 갱신**(UPSERT)
+- `endpoint` 를 비우거나 `keys` 를 빼고 전송 → **400**
+- `DELETE` 로 해제 → 행 삭제, **이미 없는 endpoint 를 또 해제해도 200**
+- 다른 계정 토큰으로 남의 endpoint 해제 시도 → 그 행은 그대로 남아야 함
+
+> 더미 값이라 실제 발송은 실패한다. 정상이다 — 서버는 발송 실패(404/410)를 만나면 그 기기를 자동 정리하므로,
+> 발행 기능이 붙은 뒤에는 더미 행이 저절로 사라질 수 있다.
+
+### 방법 B — 진짜 구독 정보 만들어서 발송까지 검증
+
+브라우저(크롬) 개발자도구 콘솔에서 직접 구독을 만든다. **HTTPS 또는 localhost 에서만 동작한다.**
+
+1. `GET /api/user/mypage/toast/vapid-key` 로 공개키를 복사한다.
+2. 아무 페이지(`http://localhost:8080/swagger-ui/index.html`)에서 콘솔을 열고 실행:
+
+```js
+// 1) 서비스워커 등록 (빈 파일이어도 됨)
+const blob = new Blob([''], {type: 'text/javascript'});
+const reg = await navigator.serviceWorker.register(URL.createObjectURL(blob));
+
+// 2) 알림 권한 허용
+await Notification.requestPermission();
+
+// 3) 구독 생성 — VAPID_PUBLIC_KEY 자리에 1번에서 복사한 값
+const key = 'VAPID_PUBLIC_KEY';
+const raw = atob(key.replace(/-/g,'+').replace(/_/g,'/'));
+const sub = await reg.pushManager.subscribe({
+  userVisibleOnly: true,
+  applicationServerKey: Uint8Array.from([...raw].map(c => c.charCodeAt(0)))
+});
+
+// 4) 이 출력값을 그대로 스웨거 요청 본문에 붙여넣는다
+console.log(JSON.stringify(sub.toJSON()));
+```
+
+3. 출력된 JSON 을 `POST .../toast/devices` 본문으로 전송 → 200 확인.
+4. 발송 확인은 **알림 발행 기능이 붙은 뒤**에 가능하다(현재 담당자 과제).
+   그때 댓글을 달아보고 브라우저에 알림이 뜨는지 확인하면 된다.
+
+> VAPID 키를 바꾸면 기존에 등록된 기기는 전부 무효가 된다. `application.properties` 의 키를 함부로 교체하지 말 것.
+
+---
+
+## 7. 실패 시 기록
 `confirmed_at` 을 채우지 말고, 실패 내용을 이 문서 아래에 추가하거나 바로 알려줄 것.
 (요청/응답 전문 + 서버 로그가 있으면 원인 파악이 빠름)
