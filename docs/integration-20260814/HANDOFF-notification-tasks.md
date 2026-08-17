@@ -32,6 +32,15 @@
 - 단, **최근 N개월치만** — N 은 `policy_settings.notification_list_months` (현재 2). 하드코딩 금지
 - 알림 API 는 `toast` 네임스페이스 (`구독`이라는 단어는 캘린더 구독과 혼동되므로 쓰지 않는다)
 
+### ⚠ 계약 변경 (2026-08-17 PM 확정) — 아래 4가지를 지키지 않으면 코드가 안 돌거나 프론트와 어긋난다
+
+1. **응답 필드는 `toastId`** — `notificationId` 라는 이름은 쓰지 않는다 (경로변수 `{toastId}` 와 통일)
+2. **응답에 `linkUrl` 을 넣지 않는다** — 이동 정보는 `targetType`/`targetId`/`boardId` 만. 화면 경로 조립은 프론트 몫
+3. **`notifications.link_url` 컬럼은 드랍됨** — 발행 INSERT 에 이 컬럼을 쓰면 SQL 에러
+4. **발행 순서: 알림 행 INSERT → 생성된 id 확보 → 그 id 를 넣어 발송 호출**
+   `NotificationPushService.sendToUser(receiverId, toastId, title, body, targetType, targetId, boardId)`
+   — 푸시에 toastId 가 실려야 OS 알림을 누른 프론트가 읽음 API 로 뱃지를 줄일 수 있다
+
 ### 단건 읽음 응답 (확정)
 
 사용자는 알림을 **읽기만 하지 않고 그 대상으로 이동한다.** 읽음 처리 응답 하나로 이동까지 되어야 한다
@@ -40,24 +49,21 @@
 ```json
 {
   "message": "읽음 처리되었습니다.",
-  "notificationId": 12,
+  "toastId": 12,
   "type": "COMMENT",
   "targetType": "post", "targetId": 171, "boardId": 2,
-  "linkUrl": "/api/user/boards/2/posts/171",
   "unreadCount": 2
 }
 ```
 
 - **이미 읽은 알림을 다시 호출해도 200 + 동일 응답**(멱등). 재클릭 시에도 이동해야 하므로 no-op 로 끝내면 안 된다
 - 없거나 본인 알림이 아니면 404
-- `linkUrl` 은 **API 경로이며 화면 경로가 아니다.** 게시판은 데이터로 정의되므로 백엔드는 프론트 라우팅을 알 수 없다
-  — 프론트가 `boardId`/`targetId` 로 화면 경로를 조립한다. **백엔드가 프론트 경로를 만들어 넣지 말 것**
-- 목록(`GET .../toast`) 응답의 각 항목에도 같은 이유로 `boardId` 를 포함한다 (프론트가 `linkUrl` 문자열을 파싱하게 두지 말 것)
+- 목록(`GET .../toast`) 응답의 각 항목에도 같은 이유로 `boardId` 를 포함한다
 
 ### 단건 삭제 응답 (확정)
 
 ```json
-{"message":"삭제되었습니다.","notificationId":12,"unreadCount":2}
+{"message":"삭제되었습니다.","toastId":12,"unreadCount":2}
 ```
 
 - 소프트삭제. 이동 정보는 싣지 않는다 — 지운 알림으로 갈 일은 없다

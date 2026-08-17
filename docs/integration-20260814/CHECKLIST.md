@@ -164,6 +164,11 @@ VALUES ('notification_list_months', '2', '알림함에 보여줄 기간(개월) 
 INSERT INTO `policy_settings` (code, setting_value, description)
 VALUES ('notification_retention_days', '365', '알림 보존 일수 — 경과 시 새벽 배치(04:40)가 물리 삭제 (읽음/삭제 여부 무관, 발생 시각 기준)');
 
+-- [2026-08-17] 알림 이동 정보를 targetType/targetId/boardId 로 확정 (PM) — linkUrl 폐기
+-- 저장돼 있던 값이 API 경로(/api/...)라 클릭 시 화면이 아닌 JSON 이 떴다. 화면 경로 조립은 프론트 몫.
+-- boardId 는 컬럼 없이 조회 시 JOIN 으로 파생 (post→board_id / comment→post→board_id)
+ALTER TABLE `notifications` DROP COLUMN `link_url`;
+
 -- [2026-08-16] api_endpoints 에 스웨거 실테스트 확정일 컬럼 추가 (PM 수동 기록용)
 ALTER TABLE `api_endpoints`
   ADD COLUMN `confirmed_at` date DEFAULT NULL

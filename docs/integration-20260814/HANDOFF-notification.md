@@ -115,7 +115,7 @@ const on = !!sub && devices.some(d => d.endpoint === sub.endpoint);   // 이 값
 ### 3-3. sw.js — 수신·클릭 (포그라운드면 인앱 토스트, 아니면 OS 알림)
 ```js
 self.addEventListener('push', e => {
-  const d = e.data.json();                       // 서버 페이로드: { title, body, linkUrl }
+  const d = e.data.json();   // 서버 페이로드: { title, body, toastId, targetType, targetId, boardId }
   e.waitUntil((async () => {
     const wins = await clients.matchAll({ type: 'window', includeUncontrolled: true });
     const focused = wins.find(w => w.focused);
@@ -125,9 +125,15 @@ self.addEventListener('push', e => {
 });
 self.addEventListener('notificationclick', e => {
   e.notification.close();
-  e.waitUntil(clients.openWindow(e.notification.data.linkUrl));  // linkUrl = 알림함 응답과 동일한 앱 내 경로
+  const d = e.notification.data;
+  // 화면 경로는 프론트가 조립한다 (백엔드는 프론트 라우팅을 모른다 — linkUrl 을 내려주지 않음)
+  const url = d.targetType === 'post' ? `/boards/${d.boardId}/posts/${d.targetId}` : '/notifications';
+  e.waitUntil(clients.openWindow(`${url}?toastId=${d.toastId}`));
 });
 ```
+페이지 진입 후 `?toastId=` 가 있으면 `PATCH /api/user/mypage/toast/{toastId}/read` 를 호출한다
+— 응답의 `unreadCount` 로 뱃지를 갱신한다. **이걸 안 하면 OS 알림으로 들어온 사용자의 뱃지가 안 줄어든다.**
+(읽음 API 는 멱등이라 이미 읽은 알림을 다시 눌러도 200 + 동일 응답으로 이동에 지장 없다)
 
 ### 3-4. 앱 배지 (지원 환경에서만)
 ```js
