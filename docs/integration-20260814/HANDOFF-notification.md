@@ -54,17 +54,54 @@ const sub = await reg.pushManager.subscribe({ userVisibleOnly: true,
 await api.put('/api/user/mypage/toast/devices', { enabled: true, ...sub.toJSON() });  // 수신 동의 → 토글 ON
 ```
 
-### 3-2. 토글 OFF
+### 3-2. 토글 OFF (사용자가 직접 끔)
 ```js
 const sub = await reg.pushManager.getSubscription();
 if (sub) {
   await api.put('/api/user/mypage/toast/devices', { enabled: false, endpoint: sub.endpoint });
-  await sub.unsubscribe();
+  await sub.unsubscribe();          // 사용자가 끈 경우에만 구독까지 해제
 }
 ```
-로그아웃할 때도 같이 호출한다 — 빼먹으면 그 기기로 알림이 계속 간다.
+**서버 먼저, 브라우저 나중.** `unsubscribe()` 를 먼저 하면 endpoint 를 잃어버려서
+서버에 어느 기기를 끄라고 말할 수 없다.
 
-### 3-2-1. 토글 초기 상태 (화면 진입 시)
+### 3-2-1. 로그아웃 — 토글 OFF 와 다르게 처리한다
+```js
+const sub = await reg.pushManager.getSubscription();
+if (sub) {
+  await api.put('/api/user/mypage/toast/devices', { enabled: false, endpoint: sub.endpoint });
+  // ❗ unsubscribe() 는 하지 않는다 — 재로그인 시 알림 설정을 되살리는 유일한 근거다
+}
+await api.post('/api/auth/logout');
+```
+서버 행은 지운다(로그아웃 중에는 알림이 배달되면 안 된다 — 공용 기기에서 남의 알림 내용이 뜬다).
+하지만 브라우저 구독은 남긴다. **"구독이 남아 있다 = 사용자가 알림을 끈 게 아니다"** 가 되어,
+재로그인 때 3-2-2 로 자동 복구된다. 여기서 `unsubscribe()` 까지 하면 근거가 사라져
+**로그인할 때마다 알림을 다시 켜야 하는** 화면이 된다.
+
+순서도 중요하다 — 로그아웃 후에는 토큰이 없어서 `PUT` 이 401 로 실패한다.
+
+### 3-2-2. 로그인 직후 — 알림 설정 자동 복구
+```js
+const reg = await navigator.serviceWorker.getRegistration();
+const sub = await reg?.pushManager.getSubscription();
+
+if (sub && Notification.permission === 'granted') {
+  const { devices } = await api.get('/api/user/mypage/toast/devices');
+  if (!devices.some(d => d.endpoint === sub.endpoint)) {
+    await api.put('/api/user/mypage/toast/devices', { enabled: true, ...sub.toJSON() });
+  }
+}
+```
+사용자에게 아무것도 묻지 않는다 — 권한은 이미 허용된 상태라 `requestPermission()` 이 다시 뜨지 않는다.
+이 절이 없으면 로그아웃/재로그인마다 알림이 꺼진 채로 남는다.
+
+**한계(알고 쓸 것)**: 브라우저 권한과 구독은 **오리진 단위라 계정과 무관**하다. 그래서 A 가 알림을 켜둔
+기기에서 로그아웃한 뒤 B 가 로그인하면, B 는 동의한 적 없는데도 위 로직으로 알림이 켜진다
+(내용은 B 본인 알림이라 유출은 없다). 계정 단위 수신 의사를 서버가 기억해야 한다면
+`users` 에 수신 동의 플래그를 두고 `GET devices` 응답에 실어주는 방식이 필요하다 — 현재는 미도입.
+
+### 3-2-3. 토글 초기 상태 (설정 화면 진입 시)
 ```js
 const sub = await reg.pushManager.getSubscription();
 const { devices } = await api.get('/api/user/mypage/toast/devices');

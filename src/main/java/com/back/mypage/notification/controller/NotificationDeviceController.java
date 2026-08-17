@@ -80,10 +80,22 @@ public class NotificationDeviceController {
                     - **켤 때(enabled=true)**: 브라우저 알림 권한을 허용받고 `pushManager.subscribe()` 한 결과의
                       `toJSON()` 을 endpoint·keys 로 그대로 보낸다. 같은 기기 재등록은 갱신되며(중복 없음),
                       한 회원이 여러 기기를 등록할 수 있다.
-                    - **끌 때(enabled=false)**: `subscription.unsubscribe()` 와 함께 호출한다. keys 는 필요 없다.
-                      해당 기기 행을 물리 삭제한다(notification_devices 는 세션성 데이터라 소프트삭제 예외).
+                    - **끌 때(enabled=false)**: keys 는 필요 없다. 해당 기기 행을 물리 삭제한다
+                      (notification_devices 는 세션성 데이터라 소프트삭제 예외).
                       본인 소유 기기만 해제되고, 다른 기기의 수신 설정은 그대로 유지된다.
-                    - 로그아웃 시에도 enabled=false 로 호출한다 — 호출하지 않으면 그 기기로 알림이 계속 간다.
+                    - **로그아웃 시에도 enabled=false 로 호출한다** — 호출하지 않으면 그 기기로 알림이 계속 가고,
+                      공용 기기에서는 남의 알림 내용이 뜬다.
+
+                    ### 프론트 주의 — 토글 OFF 와 로그아웃은 브라우저 쪽 처리가 다르다
+                    | | 서버 기기 행 | `subscription.unsubscribe()` |
+                    |---|---|---|
+                    | 사용자가 토글 OFF | 삭제 | **한다** |
+                    | 로그아웃 | 삭제 | **하지 않는다** |
+
+                    구독이 남아 있는 것이 "사용자가 알림을 끈 게 아니다"의 유일한 근거다. 로그아웃에서
+                    unsubscribe 까지 하면 재로그인 시 복구할 근거가 없어져 **로그인할 때마다 알림이 꺼진 채**가 된다.
+                    재로그인 직후 구독이 살아 있으면 이 API 를 enabled=true 로 한 번 호출해 조용히 되살린다
+                    (권한이 이미 granted 라 사용자에게 다시 묻지 않는다). 절차는 HANDOFF-notification.md 3-2-1·3-2-2.
 
                     ### 요청 예시 (동의)
                     ```json
