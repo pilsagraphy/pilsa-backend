@@ -1,8 +1,6 @@
 package com.back.mypage.notification.service;
 
 import com.back.mypage.notification.dto.NotificationDeviceRequest;
-import com.back.mypage.notification.dto.NotificationPageResponse;
-import com.back.mypage.notification.dto.NotificationResponse;
 import com.back.mypage.notification.dto.NotificationType;
 import com.back.mypage.notification.exception.NotificationException;
 import com.back.mypage.notification.mapper.NotificationDeviceMapper;
@@ -15,13 +13,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-
 /**
- * 알림 발행/조회 서비스.
+ * 알림 발행 서비스 + 알림 수신 기기 등록부.
  *
  * 발행(notifyXxx)은 본 기능(댓글 등록, 신고 처리 등)의 부가 작업이므로 REQUIRES_NEW 로 분리한다.
  * 알림 저장이 실패해도 본 기능 트랜잭션은 롤백되지 않는다.
+ *
+ * 알림함 화면(목록·읽음·삭제)에 필요한 API 는 아직 없다 — 담당자 과제.
+ * 과제 설명: docs/integration-20260814/HANDOFF-notification-tasks.md
  */
 @Slf4j
 @Service
@@ -32,47 +31,6 @@ public class NotificationService {
     private final NotificationMapper notificationMapper;
     private final NotificationDeviceMapper notificationDeviceMapper;
     private final NotificationPushService notificationPushService;
-
-    // ---- 조회 ----
-
-    public NotificationPageResponse getMyNotifications(int page, int size, boolean unreadOnly) {
-        Long userId = AuthUtils.currentUserId();
-        page = Math.max(1, page);
-        size = Math.min(Math.max(1, size), 100);
-
-        int totalCount = notificationMapper.countByUser(userId, unreadOnly);
-        List<NotificationResponse> list = totalCount == 0
-                ? List.of()
-                : notificationMapper.findByUser(userId, unreadOnly, (page - 1) * size, size);
-
-        NotificationPageResponse response = new NotificationPageResponse();
-        response.setTotalCount(totalCount);
-        response.setTotalPages((int) Math.ceil((double) totalCount / size));
-        response.setUnreadCount(notificationMapper.countUnread(userId));
-        response.setNotifications(list);
-        return response;
-    }
-
-    public int getUnreadCount() {
-        return notificationMapper.countUnread(AuthUtils.currentUserId());
-    }
-
-    // ---- 읽음/삭제 ----
-
-    @Transactional
-    public void markAsRead(Long notificationId) {
-        notificationMapper.markAsRead(notificationId, AuthUtils.currentUserId());
-    }
-
-    @Transactional
-    public int markAllAsRead() {
-        return notificationMapper.markAllAsRead(AuthUtils.currentUserId());
-    }
-
-    @Transactional
-    public void delete(Long notificationId) {
-        notificationMapper.deleteNotification(notificationId, AuthUtils.currentUserId());
-    }
 
     // ---- 발행 ----
 
