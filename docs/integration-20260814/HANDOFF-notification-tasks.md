@@ -93,7 +93,8 @@
 기기 등록은 원래 브라우저가 만든 구독 정보가 필요하다. 크롬 콘솔에서 직접 만든다 (localhost/HTTPS 에서만 동작).
 
 1. `GET /api/user/mypage/toast/vapid-key` 로 공개키 복사
-2. 아무 페이지 콘솔에서 실행 후, 출력된 JSON 을 `POST .../toast/devices` 본문에 그대로 붙여넣기
+2. 아무 페이지 콘솔에서 실행 후, 출력된 JSON 에 `"enabled": true` 를 넣어
+   `PUT .../toast/devices` 본문으로 보내기 (등록·해제가 이 API 하나로 통합돼 있다)
 
 ```js
 const blob = new Blob([''], {type: 'text/javascript'});

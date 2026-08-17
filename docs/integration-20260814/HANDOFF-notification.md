@@ -51,14 +51,29 @@ if (perm !== 'granted') { toast('브라우저에서 알림이 차단되어 있�
 const { publicKey } = await api('/api/user/mypage/toast/vapid-key');
 const sub = await reg.pushManager.subscribe({ userVisibleOnly: true,
     applicationServerKey: urlBase64ToUint8Array(publicKey) });
-await api.post('/api/user/mypage/toast/devices', sub.toJSON());   // 기기 등록 → 토글 ON
+await api.put('/api/user/mypage/toast/devices', { enabled: true, ...sub.toJSON() });  // 수신 동의 → 토글 ON
 ```
 
 ### 3-2. 토글 OFF
 ```js
 const sub = await reg.pushManager.getSubscription();
-if (sub) { await api.delete('/api/user/mypage/toast/devices', { endpoint: sub.endpoint }); await sub.unsubscribe(); }
+if (sub) {
+  await api.put('/api/user/mypage/toast/devices', { enabled: false, endpoint: sub.endpoint });
+  await sub.unsubscribe();
+}
 ```
+로그아웃할 때도 같이 호출한다 — 빼먹으면 그 기기로 알림이 계속 간다.
+
+### 3-2-1. 토글 초기 상태 (화면 진입 시)
+```js
+const sub = await reg.pushManager.getSubscription();
+const { devices } = await api.get('/api/user/mypage/toast/devices');
+const on = !!sub && devices.some(d => d.endpoint === sub.endpoint);   // 이 값으로 토글을 그린다
+```
+브라우저 구독만 보고 판단하면 안 된다. 서버 행은 프론트 모르게 사라질 수 있다 —
+다른 기기에서 로그아웃했거나, 발송이 404/410 으로 실패해 서버가 자동 정리한 경우다.
+그때 브라우저에는 구독이 남아 있어서 **토글은 켜져 있는데 알림은 안 오는** 화면이 된다.
+`on === false` 인데 `sub` 가 있으면 3-1 을 다시 호출해 재등록하면 복구된다.
 
 ### 3-3. sw.js — 수신·클릭 (포그라운드면 인앱 토스트, 아니면 OS 알림)
 ```js
@@ -89,8 +104,12 @@ if ('setAppBadge' in navigator) {  // iOS PWA·데스크톱만 지원. 안드로
 
 | 메서드·경로 | 용도 |
 |---|---|
-| `POST /api/user/mypage/toast/devices` | 기기 등록 (subscription.toJSON() 그대로 전송, 재등록=갱신) |
-| `DELETE /api/user/mypage/toast/devices` | 기기 해제 (`{endpoint}` 만) |
+| `GET /api/user/mypage/toast/devices` | 수신 동의 상태 (내 기기 목록 → 토글 초기값 판정) |
+| `PUT /api/user/mypage/toast/devices` | 수신 동의/거부 **하나로 통합**. `{enabled:true, endpoint, keys}` / `{enabled:false, endpoint}` |
 | `GET /api/user/mypage/toast/vapid-key` | 구독용 공개키 (값 불변 — 상수 보관 가능) |
+
+`PUT` 하나인 이유: 프론트가 현재 서버 상태를 몰라도 "원하는 상태"만 보내면 되고, 같은 요청을 두 번 보내도
+결과가 같다(동의는 UPSERT, 거부는 없는 기기여도 성공). 응답에 `{enabled, deviceCount, message}` 가 담겨
+처리 후 목록을 재조회할 필요도 없다.
 
 기존 알림함 API(목록/unread-count/read/read-all/delete)는 **변경 없음**.
