@@ -15,4 +15,10 @@ public interface NotificationMapper {
 
     /** 탈퇴 시 본인 알림 일괄 정리 (수신자 본인만 보는 데이터라 증적 가치 없음) */
     int softDeleteAllByUser(@Param("userId") Long userId);
+
+    /** policy_settings 값 조회 (notification_retention_days 등) */
+    String findPolicySetting(@Param("code") String code);
+
+    /** 보존기간이 지난 알림 물리 삭제 — 새벽 정리 배치 전용 */
+    int deleteExpiredNotifications(@Param("retentionDays") int retentionDays);
 }

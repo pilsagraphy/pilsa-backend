@@ -159,6 +159,11 @@ VALUES ('정기모임', 1), ('MT', 2), ('행사', 3), ('스터디', 4), ('기타
 INSERT INTO `policy_settings` (code, setting_value, description)
 VALUES ('notification_list_months', '2', '알림함에 보여줄 기간(개월) — 목록은 페이징 없이 이 기간만 전체 반환');
 
+-- [2026-08-17] 알림 보존기간 (PM 확정: 1년 보존 후 물리 삭제 — 새벽 배치 04:40, NotificationRetentionScheduler)
+-- 알림은 수신자 본인만 보는 UI 편의 데이터라 소프트삭제 대전제의 예외 (notification_devices 와 같은 논리)
+INSERT INTO `policy_settings` (code, setting_value, description)
+VALUES ('notification_retention_days', '365', '알림 보존 일수 — 경과 시 새벽 배치(04:40)가 물리 삭제 (읽음/삭제 여부 무관, 발생 시각 기준)');
+
 -- [2026-08-16] api_endpoints 에 스웨거 실테스트 확정일 컬럼 추가 (PM 수동 기록용)
 ALTER TABLE `api_endpoints`
   ADD COLUMN `confirmed_at` date DEFAULT NULL
