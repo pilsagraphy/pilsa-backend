@@ -735,8 +735,9 @@ END:VCALENDAR
   "endpoint": "https://fcm.googleapis.com/fcm/send/abc...",
   "keys": { "p256dh": "BNc...", "auth": "k8J..." }
 }
-※ 브라우저 pushManager.subscribe() 결과의 toJSON() 을 그대로 전송
-※ 프론트가 아직 없으므로 §6 의 방법으로 값을 직접 만들어 넣는다
+※ 원래는 브라우저 pushManager.subscribe() 결과를 프론트가 보내주지만,
+   프론트가 없으므로 **위 더미 문자열을 그대로 넣어** 저장까지 확인하면 된다.
+   (실제 발송 검증은 알림 담당자 과제 — HANDOFF-notification-tasks.md 에 방법을 넣어뒀다)
 ```
 **기대 출력**
 ```
@@ -744,7 +745,9 @@ END:VCALENDAR
 
 실패: 400 {"message":"기기 등록 정보가 올바르지 않습니다."}
 ```
-> 알림 켜기(권한 허용) 시 호출. 같은 기기 재등록은 갱신(UPSERT), 한 회원이 여러 기기 가능. 캘린더 구독과 무관한 웹 푸시 전달 채널. 테이블 notification_devices(세션성 — 물리삭제 예외)
+> 확인: 같은 endpoint 로 **다시 등록해도 행이 늘지 않아야**(UPSERT) 하고,
+> `endpoint` 를 비우거나 `keys` 를 빼면 **400**. `SELECT * FROM notification_devices;` 로 대조.
+> 알림 켜기(권한 허용) 시 호출. 한 회원이 여러 기기 가능. 캘린더 구독과 무관한 웹 푸시 전달 채널. 테이블 notification_devices(세션성 — 물리삭제 예외)
 
 #### 38) `DELETE /api/user/mypage/toast/devices` — 알림 수신 기기 해제  (id 137)
 **입력**
@@ -1405,67 +1408,6 @@ files:        아무 이미지/PDF 2개 (한글 파일명으로 하나 넣어볼
 
 ---
 
-## 6. 프론트 없이 웹 푸시 테스트하기
-
-기기 등록(`POST .../toast/devices`)은 원래 브라우저가 만든 구독 정보를 프론트가 보내주는데,
-지금은 프론트가 없다. 아래 둘 중 하나로 백엔드만 검증한다.
-
-### 방법 A — 등록/해제 API 만 검증 (간단, 실제 발송은 확인 못 함)
-
-스웨거에서 아무 문자열이나 형식만 맞춰 넣으면 저장까지 확인된다.
-
-```json
-{
-  "endpoint": "https://fcm.googleapis.com/fcm/send/test-dummy-0001",
-  "keys": { "p256dh": "dummy-p256dh-value", "auth": "dummy-auth-value" }
-}
-```
-
-확인할 것:
-- 200 + `notification_devices` 테이블에 행 생성 (`SELECT * FROM notification_devices;`)
-- **같은 endpoint 로 다시 등록 → 행이 늘지 않고 갱신**(UPSERT)
-- `endpoint` 를 비우거나 `keys` 를 빼고 전송 → **400**
-- `DELETE` 로 해제 → 행 삭제, **이미 없는 endpoint 를 또 해제해도 200**
-- 다른 계정 토큰으로 남의 endpoint 해제 시도 → 그 행은 그대로 남아야 함
-
-> 더미 값이라 실제 발송은 실패한다. 정상이다 — 서버는 발송 실패(404/410)를 만나면 그 기기를 자동 정리하므로,
-> 발행 기능이 붙은 뒤에는 더미 행이 저절로 사라질 수 있다.
-
-### 방법 B — 진짜 구독 정보 만들어서 발송까지 검증
-
-브라우저(크롬) 개발자도구 콘솔에서 직접 구독을 만든다. **HTTPS 또는 localhost 에서만 동작한다.**
-
-1. `GET /api/user/mypage/toast/vapid-key` 로 공개키를 복사한다.
-2. 아무 페이지(`http://localhost:8080/swagger-ui/index.html`)에서 콘솔을 열고 실행:
-
-```js
-// 1) 서비스워커 등록 (빈 파일이어도 됨)
-const blob = new Blob([''], {type: 'text/javascript'});
-const reg = await navigator.serviceWorker.register(URL.createObjectURL(blob));
-
-// 2) 알림 권한 허용
-await Notification.requestPermission();
-
-// 3) 구독 생성 — VAPID_PUBLIC_KEY 자리에 1번에서 복사한 값
-const key = 'VAPID_PUBLIC_KEY';
-const raw = atob(key.replace(/-/g,'+').replace(/_/g,'/'));
-const sub = await reg.pushManager.subscribe({
-  userVisibleOnly: true,
-  applicationServerKey: Uint8Array.from([...raw].map(c => c.charCodeAt(0)))
-});
-
-// 4) 이 출력값을 그대로 스웨거 요청 본문에 붙여넣는다
-console.log(JSON.stringify(sub.toJSON()));
-```
-
-3. 출력된 JSON 을 `POST .../toast/devices` 본문으로 전송 → 200 확인.
-4. 발송 확인은 **알림 발행 기능이 붙은 뒤**에 가능하다(현재 담당자 과제).
-   그때 댓글을 달아보고 브라우저에 알림이 뜨는지 확인하면 된다.
-
-> VAPID 키를 바꾸면 기존에 등록된 기기는 전부 무효가 된다. `application.properties` 의 키를 함부로 교체하지 말 것.
-
----
-
-## 7. 실패 시 기록
+## 6. 실패 시 기록
 `confirmed_at` 을 채우지 말고, 실패 내용을 이 문서 아래에 추가하거나 바로 알려줄 것.
 (요청/응답 전문 + 서버 로그가 있으면 원인 파악이 빠름)

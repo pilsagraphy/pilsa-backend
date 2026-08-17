@@ -37,3 +37,5 @@ out/
 .vscode/
 
 **/*.properties
+# 문서 작업 중 임시 백업 폴더
+docs/**/_backup-*/
