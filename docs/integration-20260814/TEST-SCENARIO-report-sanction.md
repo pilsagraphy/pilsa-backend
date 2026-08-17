@@ -53,6 +53,12 @@ isAnonymous: false
 
 ## 2단계. 신고 접수 — `t_stu` 로 로그인 교체
 
+**⏳ [미구현 — 구현 후 이 자리에 삽입] 신고 사유 목록 (21번)**
+`GET /api/user/reports/reasons` → `[{"reasonId":1,"label":"스팸 · 홍보/도배"}, ...]`
+구현되면 아래 표의 `reasonId` 하드코딩 값을 이 응답에서 고르는 흐름으로 바꾼다.
+확인 항목: `is_active=1` 만 나오는지, `display_order` 순인지 (reasons 테이블과 대조).
+지금은 미구현이라 호출 시 404 — 아래 표는 reasons 테이블 실제 값(1=스팸, 2=욕설, 8=기타)을 직접 쓴다.
+
 같은 API(`POST /api/user/reports`)를 값만 바꿔 **7번 호출**한다. 순서대로:
 
 | # | 요청 본문 | 기대 응답 |
@@ -158,6 +164,18 @@ SELECT points, void_action_id FROM penalty_log WHERE user_id=97;   -- void_actio
 
 ---
 
+## 6-1단계. ⏳ [미구현 — 구현 후 이 자리에 삽입] 댓글 직접 조치 (44번)
+
+신고를 거치지 않는 관리자 진입점. 지금까지는 신고된 것만 조치했다면, 여기서는 **관리자가 댓글 목록을 훑다가 직접 조치**한다.
+
+- `t_adm1` 로 `GET /api/admin/comments?page=1&size=10` (필터/검색 파라미터는 구현 시 확정)
+  → 1단계에서 만든 `{C1}` 이 보이는지 확인
+- `{C1}` 을 `PATCH /api/admin/reports/select-blind` `{"targetType":"comment","targetIds":[{C1}],"reasonId":2}` 로 조치
+  → **조치 API 는 신고 관리와 동일한 것을 쓴다** (2단계에서 {C1} 에 접수한 신고는 pending 유지 확인)
+- 지금은 44번이 미구현이라 호출 시 404 — 댓글 조치 자체는 select-blind/delete 에 `targetType:"comment"` 로 이미 가능하다
+
+---
+
 ## 7단계. 에스컬레이션 — 벌점 10점 → 경고 1회 → 1주 정지
 
 수치: 삭제 1건 = +2 (`caution_per_delete`), 10점 = 경고 1회 (`cautions_per_warning`), 경고 1회 = 1주 정지 (`ban_policy BAN_W1`).
@@ -227,3 +245,5 @@ DELETE FROM reports_log  WHERE reporter_id IN (96, 98);
 - [ ] 복원 시 벌점 회수 (void_action_id)
 - [ ] 10점 도달 → 경고 1 + ban_log(auto) + 로그인 403 (banType/bannedUntil)
 - [ ] 해제 → 로그인 성공, 경고는 잔존 (다음 정지는 한 달)
+- [ ] ⏳ (구현 후) 신고 사유 목록(21번): 활성만·display_order 순 — 2단계 하드코딩 reasonId 대체
+- [ ] ⏳ (구현 후) 관리자 댓글 목록(44번): 직접 조치 진입점 — 6-1단계
