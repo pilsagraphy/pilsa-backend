@@ -45,7 +45,8 @@ public class SecurityConfig {
                     "/api/mail/**", // 인증번호 관련
                     "/swagger-ui/**", // 스웨거 관련
                     "/v3/api-docs/**", // 스웨거 관련
-                    "/uploads/**" // 파일 경로
+                    "/uploads/**", // 파일 경로
+                    "/files/**" // attachment_id 기반 파일 서빙 (/uploads 와 동일하게 공개 서빙)
                 ).permitAll()
                 
                 // 관리자 화면 전용 경로만 URL 레벨에서 막는다 (admin_level>=1 → ROLE_ADMIN)

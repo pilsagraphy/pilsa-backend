@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!--
+  임시저장(draft) + 선업로드 첨부/이미지 매퍼.
+  drafts 는 세션성 데이터 → 소프트삭제(state) 없이 물리 DELETE.
+  초안/대기 첨부는 post_id NULL 이라 게시글 조회(WHERE post_id=…)에 자연히 안 걸린다.
+-->
+<mapper namespace="com.back.board.draft.mapper.DraftMapper">
+
+    <!-- (1) 내 임시저장 목록 (최근 저장 순). 일반 첨부(file) 개수 포함.
+         preview 는 본문 HTML 태그를 걷어낸 앞부분 50자 (목록에 전체 HTML 을 그릴 필요가 없음) -->
+    <select id="findDraftsByUser" resultType="com.back.board.draft.dto.DraftListItemResponse">
+        SELECT d.draft_id   AS draftId,
+               d.slot_no    AS slotNo,
+               d.title      AS title,
+               LEFT(REGEXP_REPLACE(COALESCE(d.content, ''), '<[^>]*>', ''), 50) AS preview,
+               (SELECT COUNT(*)
+                  FROM attachments a
+                 WHERE a.draft_id = d.draft_id
+                   AND a.attachment_type = 'file'
+                   AND a.state = 'normal') AS attachCnt,
+               d.updated_at AS updatedAt
+        FROM drafts d
+        WHERE d.user_id = #{userId}
+        ORDER BY d.updated_at DESC
+    </select>
+
+    <!-- (2) 단건 불러오기 — 본인 소유일 때만 (아니면 결과 없음 → 서비스가 404) -->
+    <select id="findDraftDetail" resultType="com.back.board.draft.dto.DraftDetailResponse">
+        SELECT draft_id     AS draftId,
+               slot_no      AS slotNo,
+               board_id     AS boardId,
+               title        AS title,
+               content      AS content,
+               category_id  AS categoryId,
+               is_anonymous AS isAnonymous,
+               updated_at   AS updatedAt
+        FROM drafts
+        WHERE draft_id = #{draftId}
+          AND user_id = #{userId}
+    </select>
+
+    <!-- (2) 초안의 일반 첨부 목록. 이미지(attachment_type='image')는 content HTML 에 이미 있으므로 제외 -->
+    <select id="findFileAttachmentsByDraftId" resultType="com.back.board.dto.AttachmentFileResponse">
+        SELECT attachment_id AS attachmentId,
+               file_name     AS originName,
+               file_size     AS fileSize,
+               file_url      AS fileUrl
+        FROM attachments
+        WHERE draft_id = #{draftId}
+          AND attachment_type = 'file'
+          AND state = 'normal'
+    </select>
+
+    <!-- 소유·게시판 일치 확인. 본인 초안이고 board_id 도 맞으면 draftId, 아니면 결과 없음 -->
+    <select id="findOwnedDraftId" resultType="java.lang.Long">
+        SELECT draft_id
+        FROM drafts
+        WHERE draft_id = #{draftId}
+          AND user_id = #{userId}
+          AND board_id = #{boardId}
+    </select>
+
+    <!-- 사용 중인 슬롯 번호 (빈 슬롯 계산용) -->
+    <select id="findUsedSlots" resultType="java.lang.Integer">
+        SELECT slot_no
+        FROM drafts
+        WHERE user_id = #{userId}
+    </select>
+
+    <!-- (3) 신규 저장 — 빈 슬롯에 INSERT. UNIQUE(user_id, slot_no) 라 슬롯 포화 시 무결성 예외 -->
+    <insert id="insertDraft" useGeneratedKeys="true" keyProperty="req.draftId" keyColumn="draft_id">
+        INSERT INTO drafts (user_id, slot_no, board_id, category_id, title, content, is_anonymous,
+                            created_at, updated_at)
+        VALUES (#{userId}, #{slotNo}, #{boardId}, #{req.categoryId}, #{req.title}, #{req.content},
+                #{req.isAnonymous}, NOW(), NOW())
+    </insert>
+
+    <!-- (4) 덮어쓰기 — 슬롯 유지, 본인 소유일 때만 (rows=0 → 남의 것/없음). updated_at 은 ON UPDATE 로 자동 갱신 -->
+    <update id="updateDraft">
+        UPDATE drafts
+        SET title        = #{req.title},
+            content      = #{req.content},
+            category_id  = #{req.categoryId},
+            is_anonymous = #{req.isAnonymous}
+        WHERE draft_id = #{draftId}
+          AND user_id = #{userId}
+    </update>
+
+    <!-- reconcile: 참조 중인 첨부를 이 초안으로 귀속.
+         uploaded_by=본인 → 남의 대기 첨부 하이재킹 차단 / post_id IS NULL → 발행글 첨부 불가침 -->
+    <update id="bindAttachmentsToDraft">
+        UPDATE attachments
+        SET draft_id = #{draftId}
+        WHERE uploaded_by = #{userId}
+          AND post_id IS NULL
+          AND (draft_id IS NULL OR draft_id = #{draftId})
+          AND attachment_id IN
+          <foreach collection="ids" item="id" open="(" separator="," close=")">
+              #{id}
+          </foreach>
+    </update>
+
+    <!-- reconcile: 이 초안 소유였으나 지금 참조(keepIds)에 없는 첨부의 물리 경로 (삭제 전 확보).
+         keepIds 가 비면 NOT IN () 는 문법 오류 → 초안 첨부 전체가 대상 -->
+    <select id="findDraftAttachmentUrlsNotIn" resultType="string">
+        SELECT file_url
+        FROM attachments
+        WHERE draft_id = #{draftId}
+        <if test="keepIds != null and keepIds.size() > 0">
+            AND attachment_id NOT IN
+            <foreach collection="keepIds" item="id" open="(" separator="," close=")">
+                #{id}
+            </foreach>
+        </if>
+    </select>
+
+    <!-- reconcile: 위 대상 물리 DELETE (본문에서 빠진 이미지/떼어낸 첨부) -->
+    <delete id="deleteDraftAttachmentsNotIn">
+        DELETE FROM attachments
+        WHERE draft_id = #{draftId}
+        <if test="keepIds != null and keepIds.size() > 0">
+            AND attachment_id NOT IN
+            <foreach collection="keepIds" item="id" open="(" separator="," close=")">
+                #{id}
+            </foreach>
+        </if>
+    </delete>
+
+    <!-- (5) 삭제 전 확보 — 초안에 묶인 첨부 전체의 물리 경로 -->
+    <select id="findAttachmentUrlsByDraftId" resultType="string">
+        SELECT file_url
+        FROM attachments
+        WHERE draft_id = #{draftId}
+    </select>
+
+    <!-- (5) 초안 물리 삭제. attachments 는 fk_attachments_draft ON DELETE CASCADE 로 함께 정리 -->
+    <delete id="deleteDraft">
+        DELETE FROM drafts
+        WHERE draft_id = #{draftId}
+          AND user_id = #{userId}
+    </delete>
+
+    <!-- (6) 발행: 초안 첨부 소유권을 게시글로 이전. **초안 DELETE 보다 반드시 먼저** 실행.
+         post_id 세팅 + draft_id NULL → 단일 UPDATE 라 완화 CHECK 만족, CASCADE 대상에서 빠진다 -->
+    <update id="bindDraftAttachmentsToPost">
+        UPDATE attachments
+        SET post_id = #{postId},
+            draft_id = NULL
+        WHERE draft_id = #{draftId}
+    </update>
+
+    <!-- 선업로드 대기 첨부 INSERT (post_id·draft_id 둘 다 NULL) -->
+    <insert id="insertPendingAttachment" useGeneratedKeys="true" keyProperty="a.attachmentId" keyColumn="attachment_id">
+        INSERT INTO attachments (post_id, draft_id, file_name, file_url, file_size, file_type,
+                                 attachment_type, uploaded_by, state, created_at)
+        VALUES (NULL, NULL, #{a.originName}, #{a.fileUrl}, #{a.fileSize}, #{a.fileType},
+                #{a.attachmentType}, #{a.uploadedBy}, 'normal', NOW())
+    </insert>
+
+    <!-- /files/{attachmentId} 서빙용 정보 -->
+    <select id="findServeFileInfo" resultType="com.back.board.draft.dto.ServeFileInfo">
+        SELECT file_url  AS fileUrl,
+               file_type AS fileType,
+               file_name AS originName
+        FROM attachments
+        WHERE attachment_id = #{attachmentId}
+          AND state = 'normal'
+    </select>
+
+    <!-- (7) 업로드 대기(둘 다 NULL) + N시간 경과 첨부의 물리 경로 (삭제 전 확보) -->
+    <select id="findExpiredPendingAttachmentUrls" resultType="string">
+        SELECT file_url
+        FROM attachments
+        WHERE post_id IS NULL
+          AND draft_id IS NULL
+          AND created_at &lt; DATE_SUB(NOW(), INTERVAL #{hours} HOUR)
+    </select>
+
+    <!-- (7) 위 대상 물리 DELETE -->
+    <delete id="deleteExpiredPendingAttachments">
+        DELETE FROM attachments
+        WHERE post_id IS NULL
+          AND draft_id IS NULL
+          AND created_at &lt; DATE_SUB(NOW(), INTERVAL #{hours} HOUR)
+    </delete>
+
+</mapper>

@@ -46,6 +46,10 @@ public class BoardRequest {
             requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
     private List<MultipartFile> files;
 
+    @Schema(description = "임시저장에서 발행하는 경우 그 초안의 draftId (선택). 넘기면 발행 성공 시 그 초안과 초안 첨부가 게시글로 이관되고 초안은 삭제됩니다. 없는/남의 draftId 는 무시하고 발행은 성공",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true, example = "12")
+    private Long draftId;
+
     @Schema(description = "[서버 내부용] DB 저장 후 생성된 게시글 ID. 요청 시 입력 불필요", hidden = true)
     private Long postId;
 }

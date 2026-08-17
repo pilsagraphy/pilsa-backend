@@ -28,8 +28,9 @@
 이미지를 에디터에 넣는 순간 **화면에 보여줄 URL이 즉시 필요**하다. 발행 시점에 올리는 방식으로는
 에디터가 이미지를 표시할 방법이 없으므로, 삽입 즉시 업로드하고 URL을 받아 본문 텍스트에 심는다.
 
-- 담당 API: `POST /api/user/boards/{boardId}/posts/images` → `{"url":"/uploads/..."}`
-  ⚠️ **아직 미구현(planned, 백로그 A-4)** — 구현 전까지 에디터의 이미지 버튼은 비활성 권장.
+- 담당 API: `POST /api/user/boards/{boardId}/posts/images` → `{"attachmentId":31,"url":"/files/31", ...}`
+  ✅ **구현 완료(2026-08-17)** — url 은 소유자와 무관하게 안정적인 `/files/{attachmentId}`. `<img src>` 로 본문에 삽입.
+  파일 스트리밍은 `GET /files/{attachmentId}` (공개). 저장 없이 창을 닫아 방치된 이미지는 24h 후 새벽 배치가 정리.
 - **임시저장이어도 동일하다.** 초안에는 `![](url)` 텍스트만 저장되고 이미지 파일은 이미 서버에 있다.
 - 첨부파일(pdf 등)은 선업로드가 아니라 발행 multipart 의 `files[]` — 화면에 미리 보여줄 필요가 없어서다.
 
@@ -51,16 +52,24 @@ title/content 필수(등록과 동일 검증) + 첨부는 증분:
 → 403 수정 권한 없음 / 404 블라인드·삭제된 글
 ```
 
-### 임시저장 5종 — ⚠️ 전부 미구현(planned, SPEC-A5). 계약만 확정
+### 임시저장 — ✅ 구현 완료(2026-08-17). Swagger "게시판 임시저장(글쓰기 초안)" 태그
 ```
 POST   .../drafts                { title?, content?, categoryId?, isAnonymous?, attachmentIds? }
-                                 → { message, draftId } / 409 "최대 5개" (보관 상한 5 확정)
-PUT    .../drafts/{draftId}      같은 본문 → { message }        (저장 버튼 재클릭 = 덮어쓰기, 안 쌓임)
-GET    .../drafts?limit=5        → { drafts: [{draftId, title, preview(20자), updatedAt}] }  ← count 없음, 개수는 length
-GET    .../drafts/{draftId}      → 이어쓰기용 전체 본문 + updatedAt
-DELETE .../drafts/{draftId}      → 물리 삭제
-※ 남의/없는 draftId 는 전부 404. 날짜는 목록·단건 모두 updatedAt(마지막 저장 시각)만.
+                                 → { message, draftId, slotNo } / 400 "저장할 내용이 없습니다"(제목·본문 모두 빔)
+                                 / 403 쓰기권한 없음 / 409 "임시저장은 최대 5개까지 가능합니다"
+PUT    .../drafts/{draftId}      같은 본문 → { message }        (저장 버튼 재클릭 = 덮어쓰기, 슬롯 유지·안 쌓임)
+GET    .../drafts                → { count, drafts: [{draftId, slotNo, title, preview(50자), attachCnt, updatedAt}] }
+GET    .../drafts/{draftId}      → 이어쓰기용 전체 본문 + attachments(일반 첨부만) + updatedAt
+DELETE .../drafts/{draftId}      → 물리 삭제 (첨부/이미지 물리 파일까지 삭제)
+POST   .../drafts/attachments    multipart(file) → { attachmentId, url, originName, fileSize } (초안 일반 첨부 선업로드)
+※ 남의/없는/게시판 불일치 draftId 는 전부 404. 슬롯은 회원 단위(게시판 무관, 최대 5개 총량).
+※ 첨부: 본문 이미지는 content 에서 자동 추출(선업로드 §2), 일반 첨부는 위 선업로드 후 attachmentIds 로 전달.
 ```
+
+> ⚠️ **본문 포맷 상충 주의(PM/프론트 확정 필요)**: 이 문서 §0 은 content 를 "마크다운"으로 규정하지만,
+> 임시저장/본문이미지 구현(A-4·A-5)은 리치 에디터 **HTML**(`<img src="/files/{id}">`) 기준으로 만들어졌다.
+> 서버는 content 를 그대로 저장/반환하므로 마크다운이 와도 동작은 하지만, 본문 이미지 재조정(reconcile)은
+> content 안의 `/files/{id}` 패턴으로 참조를 찾는다(마크다운 `![](...)`, HTML `<img src>` 모두 인식). 최종 포맷 합의 필요.
 
 ### 그 외 확정 사항
 - **상단 N개**: `GET .../posts/top/{num}` — 5 고정이 아니라 요청 개수만큼(1~50).

@@ -109,3 +109,19 @@ events/quotes(state 추가), ban_log(warning_no nullable + source), notification
 | honor(명예의전당) `/api/public/honor` | 경로가 **`GET /api/donations`** 로 변경 (패키지도 donation) |
 | admin members/community — 아직 더미 데이터 | 신규 API(#57/#60/#68)가 계약 선점 — 노션 명세 공유로 정렬 |
 | gallery/guestbook 라우트 존재, API 없음 | BACKLOG E/F |
+
+## 6. A-5 임시저장 + A-4 본문이미지 (2026-08-17 구현) — 결정 기록
+
+- **본문 포맷을 HTML 로 확정** (작업 지시 기준). HANDOFF-editor §0 의 "마크다운" 기술과 상충 →
+  reconcile 은 표기 무관하게 `/files/{id}` URL 패턴으로 참조를 찾도록 구현(마크다운/HTML 모두 인식). **PM/프론트 최종 합의 필요.**
+- **보관 상한을 slot_no(1~5)+UNIQUE 로 DB 강제** — 앱 카운트(초안 draft_max_count=5)는 판정 근거에서 제외되고
+  물리 슬롯이 정본. policy_settings.draft_max_count 는 표시/참고용으로만 남김(코드 상수 MAX_SLOT=5와 일치시킬 것).
+- **attachments 완화 CHECK(방식 A)** 채택 — "둘 다 NULL(업로드 대기)" 허용이 리치 에디터 선업로드의 전제.
+- **`uploaded_by` 컬럼 추가**(초안 지시 DDL 대비 추가분) — 대기 첨부는 소유자를 알 방법이 이것뿐이라,
+  없으면 남의 대기 첨부 id 를 자기 초안에 묶는 하이재킹이 가능하다(attachment_id 는 순차라 추측 가능).
+  bind 시 `uploaded_by = 본인 AND post_id IS NULL` 로 제한. PM 반려 시 제거 가능하나 보안상 유지 권장.
+- **`/files/{attachmentId}` 공개 서빙** — 기존 `/uploads/**` 가 이미 permitAll 인 것과 동일 기준으로 열었다.
+  attachment_id 가 순차라 열거 가능성이 있으나 현행 uploads 정적 서빙도 동일 수준. 게시판별 열람권한을
+  이미지 서빙까지 확장하려면 별도 티켓(발행글은 board read_scope, 초안 이미지는 소유자 한정) 필요.
+- **발행/삭제/청소 물리 파일 삭제**는 기존 updatePost 패턴(경로 확보→행 삭제→파일 삭제)을 따랐다.
+  파일 삭제를 트랜잭션 내부에서 수행 → 커밋 전 롤백되면 파일만 지워질 수 있는 미세 위험은 기존 코드와 동일(후속 개선 여지).

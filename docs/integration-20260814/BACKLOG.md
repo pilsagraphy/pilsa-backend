@@ -46,28 +46,33 @@
 현재 `prevPostApi`/`nextPostApi`가 post_id만 반환. 시안은 **카테고리 뱃지 + 제목 + 날짜** 표시.
 → BoardDetailResponse에 `{prev: {postId,title,categoryName,created}, next: {...}}` 구조 확장.
 
-### A-4. 🔴 본문 인라인 이미지/동영상 업로드 — 시안 p21·23 리치 에디터 (담당 제안: 사라연)
+### A-4. 🟢 본문 인라인 이미지 업로드 (선업로드) — **구현 완료 (2026-08-17, A-5와 함께)**
 | 메서드 | 경로 | 요청 | 응답 | 권한 |
 |--------|------|------|------|------|
-| POST | /api/user/boards/{boardId}/posts/images | multipart(file) | {url} | 로그인 |
-- 에디터가 본문에 삽입할 URL 반환. 미사용 고아 이미지 정리 정책(배치) 함께 설계.
-- 🔵 본문 저장 포맷(HTML? 마크다운?) 기획 확정 필요 — XSS 필터링 정책 포함.
+| POST | /api/user/boards/{boardId}/posts/images | multipart(file) | {attachmentId, url:/files/{id}, ...} | 로그인+쓰기 |
+| GET  | /files/{attachmentId} | - | 파일 스트리밍 | 공개 |
+- 에디터 삽입 즉시 선업로드 → **안정 URL `/files/{attachmentId}`** 반환(소유권 draft→post 이전에도 불변).
+- 미사용 고아 이미지 정리 = 업로드 대기(post_id·draft_id 둘 다 NULL) 24h 경과분 새벽 04:15 배치(`PendingAttachmentCleanupScheduler`).
+- 🔵 본문 저장 포맷: **이번 구현은 HTML 기준**(리치 에디터 `<img src="/files/{id}">`). XSS 새니타이즈는 프론트 렌더 책임(HANDOFF-editor §0).
+  → HANDOFF-editor.md 의 "content=마크다운" 기술과 상충하므로 PM/프론트와 최종 포맷 확정 필요(REVIEW-NOTES 참고).
 
-### A-5. 🔴 임시저장(글 저장하기) — 시안 p21 "저장 | 1" (담당 제안: 사라연)
-📄 **상세 지시서: [SPEC-A5-drafts.md](SPEC-A5-drafts.md)** — DDL·API 6종·수용기준·PM 확정항목 포함. 인계 시 이 문서를 전달할 것.
+### A-5. 🟢 임시저장(글 저장하기) — **구현 완료 (2026-08-17)**
+📄 확정 DDL·근거: [SPEC-A5-drafts-DDL.md](SPEC-A5-drafts-DDL.md) (초안 [SPEC-A5-drafts.md](SPEC-A5-drafts.md) 대체). 패키지: `com.back.board.draft`.
 
 | 메서드 | 경로 | 요청 | 응답 | 권한 |
 |--------|------|------|------|------|
-| POST | /api/user/boards/{boardId}/drafts | {title?,content?,categoryId?,isAnonymous?} | {draftId} | 로그인 |
-| PUT | /api/user/boards/{boardId}/drafts/{draftId} | 위와 동일 | message | 본인 |
-| GET | /api/user/boards/{boardId}/drafts | - | {count, drafts:[{draftId,title,updatedAt}]} | 본인 |
-| GET | /api/user/boards/{boardId}/drafts/{draftId} | - | 초안 전체(이어쓰기용) | 본인 |
-| DELETE | /api/user/boards/{boardId}/drafts/{draftId} | - | message | 본인 |
-| POST(수정) | /api/user/boards/{boardId}/posts | form-data에 draftId? 추가 | 기존과 동일 | 기존과 동일 |
+| POST | /api/user/boards/{boardId}/drafts | {title?,content?,categoryId?,isAnonymous?,attachmentIds?} | {message,draftId,slotNo} | 로그인+쓰기 |
+| PUT | /api/user/boards/{boardId}/drafts/{draftId} | 위와 동일 | {message} | 본인 |
+| GET | /api/user/boards/{boardId}/drafts | - | {count, drafts:[{draftId,slotNo,title,preview,attachCnt,updatedAt}]} | 본인 |
+| GET | /api/user/boards/{boardId}/drafts/{draftId} | - | 초안 전체+첨부(이어쓰기용) | 본인 |
+| DELETE | /api/user/boards/{boardId}/drafts/{draftId} | - | {message} (물리 파일 포함 삭제) | 본인 |
+| POST | /api/user/boards/{boardId}/drafts/attachments | multipart(file) | {attachmentId, url, ...} | 로그인+쓰기 |
+| POST(수정) | /api/user/boards/{boardId}/posts | form-data에 draftId? 추가 | 기존과 동일(발행 시 초안+첨부 이관 후 초안 삭제) | 기존과 동일 |
 
 - posts.state 재사용 금지 → **별도 drafts 테이블**(목록/조회수/신고/제재 쿼리 오염 방지).
 - drafts는 소프트삭제 대전제의 **예외**(세션성 데이터) → state 컬럼 없이 물리 삭제.
-- 첨부파일은 attachments.post_id NOT NULL 제약상 초안 보존 불가 → 이번 범위 제외.
+- 보관 상한: **slot_no 1~5 + UNIQUE(user_id, slot_no)** 로 DB 강제(포화 시 409). 슬롯은 회원 단위(게시판 무관).
+- 첨부/이미지: attachments 를 **방식 A(완화 CHECK)** 로 확장해 초안 첨부 지원. 발행은 UPDATE(소유권 이전) → DELETE(초안) 순서 고정.
 
 ### A-6. 🟡 목록 정렬 옵션 확장 — FE가 `sort=liked`(좋아요순) 사용 예정. 현재 created/viewCount만 지원.
 

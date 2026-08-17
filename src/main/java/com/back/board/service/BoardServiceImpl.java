@@ -1,5 +1,6 @@
 package com.back.board.service;
 
+import com.back.board.draft.mapper.DraftMapper;
 import com.back.board.dto.*;
 import com.back.board.exception.BoardException;
 import com.back.board.mapper.BoardMapper;
@@ -34,6 +35,7 @@ public class BoardServiceImpl implements BoardService {
     private final BoardMapper boardMapper;
     private final BoardPolicyService boardPolicyService;
     private final FileStorageUtil fileStorageUtil;
+    private final DraftMapper draftMapper;
 
     /**
      * 게시판 카테고리 목록 (카테고리 미사용 게시판은 빈 목록).
@@ -192,9 +194,31 @@ public class BoardServiceImpl implements BoardService {
 
         boardMapper.insertPost(request, userId, boardId, pinned);
         saveAttachments(policy, request.getPostId(), request.getFiles());
+        publishFromDraftIfAny(request.getDraftId(), request.getPostId(), userId, boardId);
 
         // 생성 PK 반환 — 프론트가 등록 직후 상세 페이지로 이동하는 데 필요
         return new BoardResponse("게시글이 성공적으로 등록되었습니다.", request.getPostId());
+    }
+
+    /**
+     * 임시저장에서 발행한 경우: 초안 첨부를 게시글로 이관하고 초안을 삭제한다(같은 트랜잭션).
+     *
+     * ⚠️ 순서 절대 중요 — UPDATE(소유권 이전) 먼저, DELETE(초안 삭제) 나중.
+     *   초안을 먼저 지우면 fk_attachments_draft ON DELETE CASCADE 가 방금 발행한 글의 첨부를 통째로 지운다.
+     *   UPDATE 로 draft_id 를 NULL 로 비워 CASCADE 대상에서 뺀 뒤에 초안을 지워야 안전하다.
+     *
+     * 없는/남의/게시판 불일치 draftId 는 무시하고 발행은 성공시킨다(발행을 막을 이유가 없음 — SPEC-A5 §2-6).
+     */
+    private void publishFromDraftIfAny(Long draftId, Long postId, Long userId, Long boardId) {
+        if (draftId == null) {
+            return;
+        }
+        Long ownedDraftId = draftMapper.findOwnedDraftId(draftId, userId, boardId);
+        if (ownedDraftId == null) {
+            return; // 없는/남의/다른 게시판 초안 → 무시
+        }
+        draftMapper.bindDraftAttachmentsToPost(ownedDraftId, postId); // ① 소유권 이전 (draft_id → NULL)
+        draftMapper.deleteDraft(ownedDraftId, userId);                // ② 초안 삭제 (첨부는 이미 빠져 CASCADE 무영향)
     }
 
     // 첨부 저장 (등록·수정 공통). 첨부를 쓰지 않는 게시판이면 조용히 무시한다

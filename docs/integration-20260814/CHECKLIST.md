@@ -182,6 +182,47 @@ CREATE TABLE `notification_devices` (
   CONSTRAINT `fk_notification_devices_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='알림 수신 기기 등록부 (웹 푸시. 세션성 데이터 — 물리 삭제 허용)';
 
+-- [2026-08-17] A-5 임시저장(draft) — 전체 DDL·근거는 SPEC-A5-drafts-DDL.md 참고.
+--   방식 A(완화 CHECK) 채택 / 보관 상한은 slot_no 1~5 + UNIQUE 로 DB 강제 / 본문은 리치 에디터 HTML.
+--   ⚠️ drafts 생성 → attachments 변경 순서로 적용할 것.
+CREATE TABLE `drafts` (
+  `draft_id`     bigint       NOT NULL AUTO_INCREMENT COMMENT '임시저장 고유 번호',
+  `user_id`      bigint       NOT NULL                COMMENT '작성자 (→users)',
+  `slot_no`      tinyint unsigned NOT NULL            COMMENT '임시저장 슬롯 번호 (1~5)',
+  `board_id`     bigint       NOT NULL                COMMENT '작성 중인 게시판 (→boards)',
+  `category_id`  bigint       DEFAULT NULL            COMMENT '선택한 카테고리 (→categories, 미선택 가능)',
+  `title`        varchar(200) DEFAULT NULL            COMMENT '제목 (작성 중이라 NULL 허용)',
+  `content`      longtext     DEFAULT NULL            COMMENT '본문 HTML (작성 중이라 NULL 허용)',
+  `is_anonymous` tinyint(1)   NOT NULL DEFAULT 0      COMMENT '익명 게시 체크 여부',
+  `created_at`   datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`   datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`draft_id`),
+  UNIQUE KEY `uq_drafts_user_slot` (`user_id`,`slot_no`),
+  KEY `idx_drafts_user_updated` (`user_id`,`updated_at`),
+  CONSTRAINT `ck_drafts_slot` CHECK (`slot_no` BETWEEN 1 AND 5),
+  CONSTRAINT `fk_drafts_user`     FOREIGN KEY (`user_id`)     REFERENCES `users` (`user_id`)          ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_drafts_board`    FOREIGN KEY (`board_id`)    REFERENCES `boards` (`board_id`)        ON UPDATE CASCADE,
+  CONSTRAINT `fk_drafts_category` FOREIGN KEY (`category_id`) REFERENCES `categories` (`category_id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='글쓰기 임시저장 (발행 전 초안)';
+
+ALTER TABLE `attachments`
+  MODIFY COLUMN `post_id` bigint NULL COMMENT '게시글 고유 번호 (초안/업로드 대기 상태면 NULL)';
+ALTER TABLE `attachments`
+  ADD COLUMN `draft_id` bigint NULL COMMENT '임시저장 고유 번호 (발행되면 NULL 로 비움)' AFTER `post_id`,
+  ADD KEY `idx_attachments_draft` (`draft_id`),
+  ADD CONSTRAINT `fk_attachments_draft` FOREIGN KEY (`draft_id`) REFERENCES `drafts` (`draft_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `attachments`
+  ADD COLUMN `attachment_type` enum('file','image') NOT NULL DEFAULT 'file'
+      COMMENT 'file=일반첨부 / image=본문삽입 이미지' AFTER `file_type`;
+ALTER TABLE `attachments`
+  ADD COLUMN `uploaded_by` bigint NULL COMMENT '업로드한 회원 (→users, 대기 행 소유 확인용)' AFTER `attachment_type`,
+  ADD KEY `idx_attachments_uploaded` (`uploaded_by`,`created_at`),
+  ADD CONSTRAINT `fk_attachments_uploader` FOREIGN KEY (`uploaded_by`) REFERENCES `users` (`user_id`) ON DELETE SET NULL ON UPDATE CASCADE;
+-- 완화 CHECK(방식 A): 동시 소유만 금지, 둘 다 NULL(업로드 대기)은 허용
+ALTER TABLE `attachments`
+  ADD CONSTRAINT `ck_attachments_owner` CHECK ( NOT (`post_id` IS NOT NULL AND `draft_id` IS NOT NULL) );
+-- created_at 은 이미 존재(코드 확인) → 추가 불필요. state 컬럼도 기존 유지(초안/대기 첨부는 물리 DELETE 사용)
+
 ```
 - [x] events DDL 적용 (2026-08-14, location 값 전부 NULL 확인 후 제거)
 - [x] boards 권한 컬럼 DDL 적용 (#61 §1)
