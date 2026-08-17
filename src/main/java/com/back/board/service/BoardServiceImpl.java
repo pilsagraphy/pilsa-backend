@@ -5,7 +5,6 @@ import com.back.board.exception.BoardException;
 import com.back.board.mapper.BoardMapper;
 import com.back.global.security.AuthUtils;
 import com.back.global.util.FileStorageUtil;
-import com.back.mypage.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -35,7 +34,6 @@ public class BoardServiceImpl implements BoardService {
     private final BoardMapper boardMapper;
     private final BoardPolicyService boardPolicyService;
     private final FileStorageUtil fileStorageUtil;
-    private final NotificationService notificationService;
 
     /**
      * 게시판 카테고리 목록 (카테고리 미사용 게시판은 빈 목록).
@@ -303,8 +301,9 @@ public class BoardServiceImpl implements BoardService {
 
         boardMapper.insertComment(postId, userId, request);
 
-        // 알림: 원글 작성자에게(본인 댓글 제외), 대댓글이면 부모 댓글 작성자에게
-        notifyComment(boardId, postId, parentCommentId, userId);
+        // TODO(담당자 과제): 댓글·대댓글 알림 발행을 여기에 연결한다.
+        //   누구에게 알림이 가야 하고 누구에게는 가면 안 되는지부터 정리할 것.
+        //   과제 설명: docs/integration-20260814/HANDOFF-notification-tasks.md
 
         return new CommentResponse("댓글이 성공적으로 등록되었습니다.");
     }
@@ -401,24 +400,4 @@ public class BoardServiceImpl implements BoardService {
                 && boardMapper.isPinnedCategory(categoryId, policy.getBoardId());
     }
 
-    // 댓글/대댓글 알림 발행 (실패해도 댓글 등록 자체는 성공시킨다)
-    private void notifyComment(Long boardId, Long postId, Long parentCommentId, Long actorId) {
-        try {
-            Long postAuthorId = boardMapper.findAuthorIdByPostId(postId);
-            String link = "/api/user/boards/" + boardId + "/posts/" + postId;
-
-            if (parentCommentId != null) {
-                Long parentAuthorId = boardMapper.findCommentAuthorId(parentCommentId);
-                notificationService.notifyReply(parentAuthorId, actorId, postId, link);
-                // 원글 작성자가 부모 댓글 작성자와 다르면 원글 작성자에게도 알림
-                if (postAuthorId != null && !postAuthorId.equals(parentAuthorId)) {
-                    notificationService.notifyComment(postAuthorId, actorId, postId, link);
-                }
-            } else {
-                notificationService.notifyComment(postAuthorId, actorId, postId, link);
-            }
-        } catch (Exception e) {
-            log.warn("댓글 알림 발행 실패 - postId: {}, {}", postId, e.getMessage());
-        }
-    }
 }

@@ -1,6 +1,6 @@
 # 스웨거 전수 테스트 시나리오 (2026-08-16 작성)
 
-> 대상: `api_endpoints` 의 **status='active' 71건**. planned 18건은 미구현이라 대상 아님.
+> 대상: `api_endpoints` 의 **status='active' 66건**. planned 18건은 미구현이라 대상 아님.
 > 도구: `http://localhost:8080/swagger-ui/index.html` (도메인별 태그 + 상단 filter 검색 가능)
 
 ## 0. 진행 방식 — confirmed_at
@@ -66,7 +66,10 @@ Play Console → **앱 콘텐츠 → 앱 액세스**에 두 계정을 각각 등
 
 ---
 
-## 2. 전수 체크리스트 — active 71건, 쉬운 순서 (성공 시 confirmed_at 직접 입력)
+## 2. 전수 체크리스트 — active 66건, 쉬운 순서 (성공 시 confirmed_at 직접 입력)
+
+> 순번에 빠진 숫자가 있는 것은 정상입니다 — 알림함 API 5종(id 25·26·27·28·29)이
+> 2026-08-16 담당자 과제로 환원되어 테스트 대상에서 제외됐습니다. (`HANDOFF-notification-tasks.md`)
 
 ```sql
 -- 성공 처리 (id 는 아래 표의 id 컬럼)
@@ -114,8 +117,6 @@ UPDATE api_endpoints SET confirmed_at = CURDATE() WHERE endpoint_id IN (…);
 | 24 | 14 | `GET /api/user/boards/{boardId}/posts/top/{num}` | 공통게시판 페이지 - 상단 N개 (is_pinned 우선) | ☐ |
 | 25 | 6 | `GET /api/user/boards/{boardId}/posts/{postId}` | 공통게시판 페이지 - 게시글 상세 (첨부·좋아요·이전다음). 댓글은 별도 API | ☐ |
 | 26 | 123 | `GET /api/user/boards/{boardId}/posts/{postId}/comments` | 공통게시판 페이지 - 댓글/대댓글 목록 | ☐ |
-| 27 | 25 | `GET /api/user/mypage/toast` | 알림 목록 (unreadOnly 필터) | ☐ |
-| 28 | 29 | `GET /api/user/mypage/toast/unread-count` | 미읽음 알림 수 (뱃지) | ☐ |
 | 29 | 138 | `GET /api/user/mypage/toast/vapid-key` | 알림 발송 서버 공개키 (VAPID) | ☐ |
 
 ### STEP 5. 회원 쓰기 (게시글·댓글·신고·알림·기기) — 13건
@@ -130,9 +131,6 @@ UPDATE api_endpoints SET confirmed_at = CURDATE() WHERE endpoint_id IN (…);
 | 36 | 12 | `PATCH /api/user/boards/{boardId}/posts/{postId}/like` | 공통게시판 페이지 - 좋아요 토글 | ☐ |
 | 37 | 136 | `POST /api/user/mypage/toast/devices` | 알림 수신 기기 등록 (웹 푸시) | ☐ |
 | 38 | 137 | `DELETE /api/user/mypage/toast/devices` | 알림 수신 기기 해제 | ☐ |
-| 39 | 28 | `PATCH /api/user/mypage/toast/read-all` | 알림 전체 읽음 처리 | ☐ |
-| 40 | 26 | `PATCH /api/user/mypage/toast/{toastId}/delete` | 알림 삭제 (소프트) | ☐ |
-| 41 | 27 | `PATCH /api/user/mypage/toast/{toastId}/read` | 알림 읽음 처리 (단건) | ☐ |
 | 42 | 20 | `POST /api/user/reports` | 공통게시판/댓글 신고 페이지 - 게시글/댓글 신고 접수 | ☐ |
 | 42-1 | 139 | `PATCH /api/user/mypage/withdraw` | 회원 탈퇴 (개인정보 파기 — **맨 마지막에, 버릴 계정으로**) | ☐ |
 | 42-2 | 140 | `PATCH /api/admin/users/{userId}/withdraw` | 회원 강제 탈퇴 (관리자 — 관리자 계정 대상 시 400 확인) | ☐ |
@@ -187,7 +185,7 @@ UPDATE api_endpoints SET confirmed_at = CURDATE() WHERE endpoint_id IN (…);
 | `{postId}` | STEP 5-①(게시글 등록) 응답의 `postId` | 조회 계열은 기존 글 id 아무거나 가능 |
 | `{commentId}` | STEP 5(댓글 등록) 후 댓글 목록에서 확인 | |
 | `{num}` | `3` | 상단 N개 — 3건만 오는지 |
-| `{toastId}` | `GET /api/user/mypage/toast` 목록의 `notificationId` | |
+| `{toastId}` | (알림함 API 미구현 — 담당자 과제) | |
 | `{userId}` | 정지=**75**(test_susp1w), 차단=**77**(test_banned), 상세조회=**79**(test_reported_author) | 제재 화면용 |
 | `{quoteId}` | STEP 7(문장 등록) 응답의 id | |
 | `{eventId}` | STEP 7(일정 등록) 응답의 `eventId` | |
@@ -607,34 +605,6 @@ END:VCALENDAR
 ```
 > state=normal 댓글만 내려간다 — 관리자가 블라인드(blind)했거나 삭제(deleted)한 댓글, 작성자가 지운 댓글은 목록에 포함되지 않는다. 마스킹은 전부 서버 책임
 
-#### 27) `GET /api/user/mypage/toast` — 알림 목록 (unreadOnly 필터)  (id 25)
-**입력**
-```
-쿼리: ?page=1&size=20&unreadOnly=false
-```
-**기대 출력**
-```
-{
-  "totalPages":1,"totalCount":3,"unreadCount":1,
-  "notifications":[{"notificationId":12,"type":"COMMENT",
-    "title":"새 댓글이 달렸습니다.","message":null,
-    "linkUrl":"/api/user/boards/2/posts/171","targetType":"post","targetId":171,
-    "isRead":false,"createdAt":"2026-08-14T10:20:00"}]
-}
-※ type: COMMENT|REPLY|REPORT_RESOLVED|SANCTION|NOTICE
-```
-> 헤더 종 아이콘. 발행 범위 확정(2026-08-16): 내가 작성한 글에 달린 댓글(COMMENT), 내가 작성한 댓글에 달린 대댓글(REPLY) 만 발행한다. REPORT_RESOLVED/SANCTION/NOTICE 타입은 정의만 있고 발행하지 않음(확정). 웹앱(TWA) 푸시는 별개 전달 채널로 증축 가능(docs/integration-20260814/PUSH-NOTIFICATION-GUIDE.md)
-
-#### 28) `GET /api/user/mypage/toast/unread-count` — 미읽음 알림 수 (뱃지)  (id 29)
-**입력**
-```
-없음
-```
-**기대 출력**
-```
-{"unreadCount":3}
-```
-
 #### 29) `GET /api/user/mypage/toast/vapid-key` — 알림 발송 서버 공개키 (VAPID)  (id 138)
 **입력**
 ```
@@ -765,7 +735,9 @@ END:VCALENDAR
   "endpoint": "https://fcm.googleapis.com/fcm/send/abc...",
   "keys": { "p256dh": "BNc...", "auth": "k8J..." }
 }
-※ 브라우저 pushManager.subscribe() 결과의 toJSON() 을 그대로 전송
+※ 원래는 브라우저 pushManager.subscribe() 결과를 프론트가 보내주지만,
+   프론트가 없으므로 **위 더미 문자열을 그대로 넣어** 저장까지 확인하면 된다.
+   (실제 발송 검증은 알림 담당자 과제 — HANDOFF-notification-tasks.md 에 방법을 넣어뒀다)
 ```
 **기대 출력**
 ```
@@ -773,7 +745,9 @@ END:VCALENDAR
 
 실패: 400 {"message":"기기 등록 정보가 올바르지 않습니다."}
 ```
-> 알림 켜기(권한 허용) 시 호출. 같은 기기 재등록은 갱신(UPSERT), 한 회원이 여러 기기 가능. 캘린더 구독과 무관한 웹 푸시 전달 채널 — 인앱 toast API 는 그대로 유지. 테이블 notification_devices(세션성 — 물리삭제 예외)
+> 확인: 같은 endpoint 로 **다시 등록해도 행이 늘지 않아야**(UPSERT) 하고,
+> `endpoint` 를 비우거나 `keys` 를 빼면 **400**. `SELECT * FROM notification_devices;` 로 대조.
+> 알림 켜기(권한 허용) 시 호출. 한 회원이 여러 기기 가능. 캘린더 구독과 무관한 웹 푸시 전달 채널. 테이블 notification_devices(세션성 — 물리삭제 예외)
 
 #### 38) `DELETE /api/user/mypage/toast/devices` — 알림 수신 기기 해제  (id 137)
 **입력**
@@ -786,36 +760,6 @@ END:VCALENDAR
 (이미 없는 기기여도 200)
 ```
 > 알림 끄기·로그아웃 시 프론트가 pushManager 해제와 함께 호출. 본인 기기만 해제. 발송 응답 404/410 인 기기는 서버가 자동 정리
-
-#### 39) `PATCH /api/user/mypage/toast/read-all` — 알림 전체 읽음 처리  (id 28)
-**입력**
-```
-없음
-```
-**기대 출력**
-```
-{"message":"전체 읽음 처리되었습니다.","updatedCount":3}
-```
-
-#### 40) `PATCH /api/user/mypage/toast/{toastId}/delete` — 알림 삭제 (소프트)  (id 26)
-**입력**
-```
-없음
-```
-**기대 출력**
-```
-{"message":"삭제되었습니다."}
-```
-
-#### 41) `PATCH /api/user/mypage/toast/{toastId}/read` — 알림 읽음 처리 (단건)  (id 27)
-**입력**
-```
-없음
-```
-**기대 출력**
-```
-{"message":"읽음 처리되었습니다."}
-```
 
 #### 42) `POST /api/user/reports` — 공통게시판/댓글 신고 페이지 - 게시글/댓글 신고 접수  (id 20)
 **입력**
@@ -1433,7 +1377,7 @@ files:        아무 이미지/PDF 2개 (한글 파일명으로 하나 넣어볼
 - [ ] 관리자 조치가 **select-* 3종**으로만 되고 부분 성공 응답
 - [ ] 관리자 수정/정지/차단/삭제가 **PATCH**
 - [ ] 게시판 생성 시 `readScope:"ALL"` → 400
-- [ ] 댓글/대댓글 시 **상대방에게만** 알림(본인 행동은 알림 없음)
+- [ ] ~~댓글/대댓글 알림~~ → **발행 기능이 담당자 과제로 환원되어 현재 알림이 생기지 않는다**(정상). 구현 후 검증
 - [ ] 회원가입: 인증번호 검증 없이 바로 register 호출 → **403 "이메일 인증이 완료되지 않았거나 만료되었습니다. 이메일 인증을 다시 진행해주세요."**
 - [ ] 비밀번호 초기화(84): 인증 검증 없이 바로 호출 → **401** (기존엔 아이디만 알면 변경 가능했던 구멍)
 - [ ] 회원가입 형식 위반 → 각각 **400 필드별 message** (학번 8자리 / 아이디 4자 / 비밀번호 "weak" / 전화 01012345678 / 이름 1자)
@@ -1446,6 +1390,24 @@ files:        아무 이미지/PDF 2개 (한글 파일명으로 하나 넣어볼
 - [ ] 정지 중 탈퇴한 학번으로 재가입 → **403 "가입이 제한된 학번입니다. (YYYY-MM-DD 이후 가입 가능)"**
 - [ ] 탈퇴 직후 기존 액세스 토큰으로 API 호출 → **401** (JWT 필터가 매 요청 DB 재조회)
 
-## 5. 실패 시 기록
+## 5. 스웨거로 테스트하는 법
+
+주소: `http://localhost:8080/swagger-ui/index.html` (상단 filter 로 검색, 도메인별 태그)
+
+**① 로그인 → 토큰 물리기 (이걸 안 하면 전부 401)**
+1. `POST /api/auth/login` 실행 → 응답의 `accessToken` 복사
+2. 우측 상단 **Authorize** → `Bearer eyJ...` 가 아니라 **토큰 값만** 붙여넣기 → Authorize
+3. 계정을 바꿀 때마다 Authorize 를 다시 해야 한다 (t_stu → t_adm3 등)
+
+**② 파일 업로드가 있는 API** (게시글 등록·수정)
+`multipart/form-data` 라 스웨거에서 파일 선택 UI 가 뜬다. 파일 없이 보내려면 그 칸을 비우고 실행.
+한글 파일명도 테스트할 것 (원본 파일명 저장 확인).
+
+**③ 날짜 파라미터**
+`YYYY-MM-DD` 문자열이다. 예: `2026-03-01`. 시간까지 넣으면 400.
+
+---
+
+## 6. 실패 시 기록
 `confirmed_at` 을 채우지 말고, 실패 내용을 이 문서 아래에 추가하거나 바로 알려줄 것.
 (요청/응답 전문 + 서버 로그가 있으면 원인 파악이 빠름)

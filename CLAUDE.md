@@ -18,7 +18,8 @@ com.back
 ├── auth            # 로그인/회원가입/토큰 + 신분·권한 조회(GET /api/role) + 이메일 인증번호(/api/mail/**)
 ├── board           # 게시판 (posts/comments/boards). 게시판은 데이터로 정의됨
 │   └── report      # 신고 접수 (POST /api/user/reports) — 게시글/댓글에 대한 회원 기능이라 board 하위
-├── mypage          # 마이페이지 — notification(헤더 종 아이콘 + 알림 수신 기기 등록부=웹 푸시)
+├── mypage          # 마이페이지 — notification(발행 훅 + 알림 수신 기기 등록부=웹 푸시).
+│                   #   알림 발행·알림함 API 는 담당자 과제로 비워둠(HANDOFF-notification-tasks.md)
 ├── event           # 일정 조회(회원 달력, 공개) + 구글 캘린더 구독 피드(/api/event/calendar.ics)
 ├── donation        # 명예의전당 (donations)
 ├── admin           # 관리자 화면 전용 도메인

@@ -108,8 +108,8 @@ ALTER TABLE `boards`
   MODIFY COLUMN `read_scope` varchar(20) NOT NULL DEFAULT 'MEMBER'
     COMMENT '열람 대상: MEMBER(재학+졸업) / STUDENT(재학생만) / ALUMNI(졸업생만) — 전체공개(ALL) 없음';
 
--- [2026-08-16] event_categories(일정 카테고리 테이블)는 적용했다가 **PM 지시로 당일 롤백** —
---               팀원 과제로 전환. 완성 구현본(DDL+시드+API+검증)은 git 브랜치 archive/event-categories 에 보관.
+-- [2026-08-16] event_categories 는 적용 → 당일 롤백 → **재적용**(아래 CREATE 문 참고).
+--               최종 방침: 테이블·시드는 PM 이 적용하고 API 는 담당자 과제.
 
 -- [2026-08-16] 임시저장 보관 상한 5개 확정 (PM 지시 — 코드는 하드코딩 대신 이 값을 로드할 것)
 INSERT INTO `policy_settings` (code, setting_value, description)
@@ -142,6 +142,22 @@ INSERT INTO `policy_settings` (code, setting_value, description) VALUES
 UPDATE `reasons` SET display_order = display_order + 1 WHERE display_order >= 4;
 INSERT INTO `reasons` (code, label, display_order, is_active)
 VALUES ('CHILD_SAFETY', '아동 안전 위반 · 아동 성착취물', 4, 1);
+
+-- [2026-08-16] 일정 카테고리 정본 테이블 재생성 (PM 지시: 테이블은 PM 이, API 는 담당자가)
+CREATE TABLE `event_categories` (
+  `event_category_id` bigint NOT NULL AUTO_INCREMENT COMMENT '일정 카테고리 고유 번호',
+  `name` varchar(50) NOT NULL COMMENT '카테고리명 (화면 노출 한글명)',
+  `display_order` int NOT NULL DEFAULT 0 COMMENT '노출 순서',
+  `is_active` tinyint(1) NOT NULL DEFAULT 1 COMMENT '사용 여부 (0=숨김, 물리삭제 없음)',
+  PRIMARY KEY (`event_category_id`),
+  UNIQUE KEY `uq_event_categories_name` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='일정 카테고리 (events.category 값의 정본)';
+INSERT INTO `event_categories` (name, display_order)
+VALUES ('정기모임', 1), ('MT', 2), ('행사', 3), ('스터디', 4), ('기타', 99);
+
+-- [2026-08-16] 알림함 표시 기간 (PM 확정: 페이징 없이 전체 반환하되 최근 N개월만)
+INSERT INTO `policy_settings` (code, setting_value, description)
+VALUES ('notification_list_months', '2', '알림함에 보여줄 기간(개월) — 목록은 페이징 없이 이 기간만 전체 반환');
 
 -- [2026-08-16] api_endpoints 에 스웨거 실테스트 확정일 컬럼 추가 (PM 수동 기록용)
 ALTER TABLE `api_endpoints`

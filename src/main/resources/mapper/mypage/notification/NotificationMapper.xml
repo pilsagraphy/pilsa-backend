@@ -2,65 +2,11 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.back.mypage.notification.mapper.NotificationMapper">
 
-    <insert id="insertNotification">
-        INSERT INTO notifications (user_id, type, title, message, link_url, target_type, target_id, created_at)
-        VALUES (#{userId}, #{type}, #{title}, #{message}, #{linkUrl}, #{targetType}, #{targetId}, NOW())
-    </insert>
-
-    <sql id="userWhere">
-        WHERE user_id = #{userId}
-          AND state = 'normal'
-        <if test="unreadOnly">
-            AND is_read = 0
-        </if>
-    </sql>
-
-    <select id="findByUser" resultType="com.back.mypage.notification.dto.NotificationResponse">
-        SELECT notification_id AS notificationId,
-               type,
-               title,
-               message,
-               link_url        AS linkUrl,
-               target_type     AS targetType,
-               target_id       AS targetId,
-               is_read         AS isRead,
-               created_at      AS createdAt
-        FROM notifications
-        <include refid="userWhere"/>
-        ORDER BY created_at DESC
-        LIMIT #{size} OFFSET #{offset}
-    </select>
-
-    <select id="countByUser" resultType="int">
-        SELECT COUNT(*) FROM notifications
-        <include refid="userWhere"/>
-    </select>
-
-    <select id="countUnread" resultType="int">
-        SELECT COUNT(*) FROM notifications
-        WHERE user_id = #{userId} AND state = 'normal' AND is_read = 0
-    </select>
-
-    <update id="markAsRead">
-        UPDATE notifications
-        SET is_read = 1, read_at = NOW()
-        WHERE notification_id = #{notificationId}
-          AND user_id = #{userId}
-          AND is_read = 0
-    </update>
-
-    <update id="markAllAsRead">
-        UPDATE notifications
-        SET is_read = 1, read_at = NOW()
-        WHERE user_id = #{userId} AND is_read = 0 AND state = 'normal'
-    </update>
-
-    <!-- 소프트삭제 (프로젝트 전역 원칙) -->
-    <update id="deleteNotification">
-        UPDATE notifications
-        SET state = 'deleted'
-        WHERE notification_id = #{notificationId} AND user_id = #{userId} AND state = 'normal'
-    </update>
+    <!--
+      알림 발행(INSERT)과 알림함 화면용 조회/읽음/삭제 쿼리는 아직 없다 — 담당자 과제.
+      과제 설명: docs/integration-20260814/HANDOFF-notification-tasks.md
+      (notifications 테이블은 이미 있으므로 스키마는 DB에서 직접 확인할 것)
+    -->
 
     <!-- 탈퇴 시 본인 알림 일괄 소프트삭제 -->
     <update id="softDeleteAllByUser">
