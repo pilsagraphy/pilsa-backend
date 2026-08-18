@@ -46,11 +46,14 @@ public class AuthController {
 
                     실패: 401 {"message":"아이디 또는 비밀번호가 올바르지 않습니다."}
                     실패: 401 {"message":"승인되지 않은 계정입니다."}
-                    실패(정지): 403 {"message":"정지된 계정입니다.","banType":"temporary","bannedUntil":"2026-03-30T00:00:00"}
+                    실패(정지): 403 {"message":"정지된 계정입니다.","banType":"temporary","bannedUntil":"2026.03.30 00:00"}
                     실패(차단): 403 {"message":"영구적으로 차단된 계정입니다.","banType":"permanent","bannedUntil":null}
 
                     ※ 정지/차단 사유는 message로, 해제 일시는 bannedUntil 필드로 내려간다 —
                     프론트가 "2026.03.30 00:00 부터 다시 로그인 할 수 있습니다"를 그릴 수 있다.
+                    ※ bannedUntil 은 ISO 가 아니라 화면 표기 그대로 'yyyy.MM.dd HH:mm' 다 (2026-08-18 변경).
+                    이 안내 화면이 쓰는 형태가 하나뿐이라 프론트에 포맷 코드를 두지 않기 위함이며,
+                    관리자 화면(제재 목록·상세)은 표기가 달라 그쪽 응답은 ISO 를 유지한다 — 인증 거부 응답 한정 규칙.
                     """
     )
     @PostMapping("/login")

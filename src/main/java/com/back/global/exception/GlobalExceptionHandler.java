@@ -33,7 +33,8 @@ public class GlobalExceptionHandler {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("message", e.getMessage());
         body.put("banType", e.getBanType());          // temporary / permanent
-        body.put("bannedUntil", e.getBannedUntil());  // 영구차단이면 null
+        // ISO 가 아니라 화면 표기 그대로('yyyy.MM.dd HH:mm') — 안내 화면이 쓰는 형태가 하나뿐이라 포맷을 서버가 확정한다
+        body.put("bannedUntil", BannedException.formatBannedUntil(e.getBannedUntil()));  // 영구차단이면 null
         return ResponseEntity.status(e.getStatus()).body(body);
     }
 
