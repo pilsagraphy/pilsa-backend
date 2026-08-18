@@ -18,6 +18,23 @@
 | `trending_post` | **`stats_post_hourly`** | 위 둘을 흡수. PK `(stat_hour, post_id)` |
 | — | **`stats_signup_weekly`** 신설 | 탈퇴 90일 정리가 users 행을 지워 과거 가입수가 소급 감소 → 스냅샷 필요 |
 
+### 컬럼 확정
+
+| 항목 | 제안본 | 확정 |
+|------|--------|------|
+| `notified_at` | 있음 | **제거** (알림 미구현) |
+| `active_user_count` | `trending_window` 에 저장 | **저장 안 함** — 원본에서 계산 |
+| `view_count`/`like_count`/`comment_count` | 별도 snapshot 테이블 | **집계 행에 포함** |
+| `boards.trending_enabled` | 추가 | **그대로** |
+| `notifications.type` | TRENDING 추가 | **변경 없음** (알림 미구현) |
+
+### 로직 확정 2건
+
+| 항목 | 제안본 | 확정 |
+|------|--------|------|
+| baseline | `AVG(raw_score)` 직전 6행 | **`SUM(raw_score)/6`** — 활동 없던 구간이 0으로 안 들어가 평소 수준이 부풀고, *조용하다 튀는 글*이 가장 못 잡히던 결함 |
+| 적재 컷 | `delta <> 0` | **`raw_score >= 5`** (`trending_min_delta_score`) — 조회 1~2회짜리 구간까지 행을 만들 필요 없음. 스킵분은 누적값 덕에 다음 행에서 잡힘(손실 없음) |
+
 ### 남은 3개의 역할
 
 | 테이블 | 성격 | 왜 이렇게 |
