@@ -2,6 +2,7 @@
 
 > 대상: 2026-08-18 제안 DDL (visit_log + trending 3테이블).
 > 결론: **설계 방향 승인. 아래 3가지를 반영한 수정본으로 재제출** 후 적용한다.
+> 1차 적용 범위는 **집계 + 조회까지** — 급상승 알림(§9)은 이번에 구현하지 않는다 (반영 2).
 > 스냅샷 차분 방식(좋아요 취소 반영), boards 조인 + trending_enabled 기본 1(동적 게시판),
 > 계산 근거 전 컬럼 보존, 멱등 재실행, 조정 가이드까지 — 문서·설계 수준이 높다. 아래만 고치면 된다.
 
@@ -39,15 +40,17 @@ CREATE TABLE `visit_log` (
   회원별 접속일수(월간), 시간대 분포, DAU/MAU 전부 이 한 테이블에서 조회 가능
 - 보존기간 정책 행 추가할 것: `visit_log_retention_days` (예: 365) — 알림 정리 배치(04:40)와 같은 패턴
 
-## 반영 2. 알림(§9) — 타입 추가는 수용, 발행 경로만 앱으로
+## 반영 2. 알림(§9) — **이번에 구현하지 않는다 (PM 확정, 2026-08-18)**
 
-- `NotificationType`에 **TRENDING 추가 승인** (PM 확인 완료)
-- 단, §9의 `INSERT INTO notifications` **SQL 직접 실행은 금지** — 웹 푸시(NotificationPushService)를 우회하게 된다.
-  발행은 반드시 앱 경로: **알림 행 INSERT → 생성 id 확보 → sendToUser(receiverId, toastId, title, body, targetType, targetId, boardId)**
-  (계약 상세: HANDOFF-notification-tasks.md "계약 변경" 절)
-- 알림 발행 코드는 담당자 과제(HANDOFF-notification-tasks.md)로 진행 중 — **TRENDING 발행도 그 과제에 합류**한다.
-  §9의 수신 대상 판정(canRead 동일 규칙)·쿨다운·일일 상한(remaining/seq 2중 컷) 설계는 그대로 서비스 로직으로 옮긴다. 잘 만든 부분이다.
-- §9의 대상 제외 목록(탈퇴·차단·발송 직전 state 재확인)도 그대로 유지
+- **§9 전체 보류.** 1차 적용 범위는 집계(§2~§8)와 조회(§10)까지 — 급상승 알림은 발송하지 않는다
+- §6의 `notifications.type` 주석 변경(TRENDING 추가)과 §7의 알림 관련 정책 3행
+  (`trending_notify_cooldown_hours`, `trending_notify_daily_cap`)도 **함께 보류** — 쓰는 코드가 없는 값을 미리 넣지 않는다
+- 나중에 구현하게 되면 지켜야 할 것 (그때를 위한 기록):
+  - SQL 직접 INSERT 금지 — 웹 푸시(NotificationPushService)를 우회한다.
+    발행은 앱 경로: **알림 행 INSERT → 생성 id 확보 → sendToUser(receiverId, toastId, title, body, targetType, targetId, boardId)**
+    (계약 상세: HANDOFF-notification-tasks.md "계약 변경" 절)
+  - §9의 수신 대상 판정(canRead 동일 규칙)·쿨다운·일일 상한(remaining/seq 2중 컷)·
+    대상 제외 목록(탈퇴·차단·발송 직전 state 재확인) 설계는 잘 만들어져 있으니 그대로 서비스 로직으로 옮기면 된다
 
 ## 반영 3. baseline 계산 수정 — 관문 2가 실제보다 엄격해지는 결함
 
