@@ -1,6 +1,6 @@
 name: Deploy QA
 
-# dev 브랜치에 push 되면 QA(포트 8081, pilsa-qa.service)에 자동 배포
+# dev 브랜치 push 시 QA(포트 8081, pilsa-qa.service)에 자동 배포
 on:
   push:
     branches: [dev]
@@ -10,29 +10,22 @@ concurrency:
   group: deploy-backend-qa
   cancel-in-progress: false
 
+env:
+  DEPLOY_BRANCH: dev
+
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 25
     steps:
-      - name: Configure SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.PILSA_SSH_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "${{ secrets.PILSA_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
-
       - name: Deploy backend to QA
         run: |
-          ssh -i ~/.ssh/deploy_key \
-              -o ServerAliveInterval=30 -o ServerAliveCountMax=40 \
-              "${{ secrets.PILSA_USER }}@${{ secrets.PILSA_HOST }}" 'bash -s' <<'DEPLOY'
           set -euo pipefail
 
-          echo "===== [1/4] 소스 최신화 (origin/dev) ====="
+          echo "===== [1/4] 소스 최신화 (origin/${DEPLOY_BRANCH}) ====="
           cd ~/backend-qa
-          git fetch origin dev
-          git reset --hard origin/dev
+          git fetch origin "${DEPLOY_BRANCH}"
+          git reset --hard "origin/${DEPLOY_BRANCH}"
           git log --oneline -1
 
           echo "===== [2/4] Gradle 빌드 ====="
@@ -55,4 +48,3 @@ jobs:
           echo "QA 백엔드가 기동하지 않았습니다. 최근 로그:"
           sudo journalctl -u pilsa-qa -n 50 --no-pager
           exit 1
-          DEPLOY
