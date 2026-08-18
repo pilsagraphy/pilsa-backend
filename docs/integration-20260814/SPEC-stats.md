@@ -8,6 +8,18 @@
 
 ## 1. 테이블 3개로 끝내는 이유
 
+### 제안본 5개 → 확정 3개 (결정 이력)
+
+| 제안본 | 확정 | 왜 |
+|--------|------|-----|
+| `visit_log` (세션형) | **`stats_access_hourly`** (시간 버킷형) | 무상태 JWT라 세션이 없고 로그아웃을 안 눌러 유령 세션이 쌓인다 → 인증 요청 시 `INSERT IGNORE` 로 시간대당 1행 |
+| `post_metric_snapshot` | **삭제** | 누적값을 집계 행에 저장해 다음 집계가 직전 행을 기준선으로 쓴다 |
+| `trending_window` | **삭제** | 접속자 수는 `stats_access_hourly` 에서 그때그때 세면 된다 (중복 저장 불필요) |
+| `trending_post` | **`stats_post_hourly`** | 위 둘을 흡수. PK `(stat_hour, post_id)` |
+| — | **`stats_signup_weekly`** 신설 | 탈퇴 90일 정리가 users 행을 지워 과거 가입수가 소급 감소 → 스냅샷 필요 |
+
+### 남은 3개의 역할
+
 | 테이블 | 성격 | 왜 이렇게 |
 |--------|------|-----------|
 | `stats_access_hourly` | 원본 (user_id + 시간버킷) | 일·주·월·학기·연 통계를 전부 GROUP BY로 뽑는다. 단위별 테이블·배치는 데이터가 수억 행일 때 얘기 |
