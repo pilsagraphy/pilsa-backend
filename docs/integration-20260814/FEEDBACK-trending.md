@@ -67,8 +67,8 @@ trending_post 에는 **활동이 있던 구간만 행이 생긴다.** 그래서 
 LEFT JOIN (
   SELECT x.`post_id`,
          SUM(x.`raw_score`) / #{baselineWindows} AS `baseline_score`
-  FROM `trending_post` x
-  JOIN (SELECT `window_id` FROM `trending_window`
+  FROM `stats_trending_post` x               -- ※ 확정 테이블명 기준 (최종 반영본의 명명 체계 참조)
+  JOIN (SELECT `window_id` FROM `stats_window`
          WHERE `window_id` < #{windowId}
          ORDER BY `window_id` DESC LIMIT #{baselineWindows}) recent
     ON recent.`window_id` = x.`window_id`
@@ -99,6 +99,22 @@ LEFT JOIN (
 
 # 최종 반영본 (2026-08-18 PM 확정) — 이대로 수정본을 만들면 된다
 
+## 테이블 명명 체계 (PM 확정)
+
+파생 통계 테이블은 **`stats_` 접두사**로 묶는다 — 통계 기능이 늘어도 `stats_*` 로 모이고,
+자바 패키지 `com.back.admin.stats` 와 1:1 대응된다 (패키지=테이블 단위 컨벤션).
+
+| 원안 이름 | 확정 이름 | 비고 |
+|---|---|---|
+| visit_log (세션형) | `visit_log` (시간 버킷형) | 기존 `*_log` 계열(ban/penalty/reports/moderation/warning) 유지 — 파생이 아닌 **원본 기록** |
+| post_metric_snapshot | `stats_post_snapshot` | |
+| trending_window | `stats_window` | |
+| trending_post | `stats_trending_post` | |
+
+`boards.trending_enabled` 컬럼명과 `policy_settings` 의 `trending_*` 코드는 그대로 —
+기능(급상승)을 가리키는 이름이라 테이블 접두사와 별개다.
+집계 배치 SQL(§8)과 조회(§10)의 테이블 참조도 전부 새 이름으로 바꿔서 수정본을 만들 것.
+
 ## 신규 테이블 4개
 
 ```sql
@@ -111,20 +127,20 @@ CREATE TABLE `visit_log` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='회원 접속 기록 (시간 버킷당 1행. 세션성 — 물리 삭제 예외)';
 
--- ② 게시글 지표 직전 스냅샷 (원안 그대로)
-CREATE TABLE `post_metric_snapshot` (
+-- ② 게시글 지표 직전 스냅샷 (원안에서 이름만 변경)
+CREATE TABLE `stats_post_snapshot` (
   `post_id`       bigint   NOT NULL COMMENT '대상 게시글 (FK 없음 — 통계 기준선 보존)',
   `view_count`    int      NOT NULL DEFAULT '0' COMMENT '스냅샷 시점의 누적 조회수',
   `like_count`    int      NOT NULL DEFAULT '0' COMMENT '스냅샷 시점의 좋아요 수',
   `comment_count` int      NOT NULL DEFAULT '0' COMMENT '스냅샷 시점의 공개 댓글 수 (state=normal, is_private=0)',
   `captured_at`   datetime NOT NULL COMMENT '이 스냅샷을 찍은 시각',
   PRIMARY KEY (`post_id`),
-  KEY `idx_snapshot_captured` (`captured_at`)
+  KEY `idx_stats_post_snapshot_captured` (`captured_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='게시글 지표 직전 스냅샷 (증가분 계산 기준선)';
 
--- ③ 집계 구간 (원안 그대로 — active_user_count 출처만 visit_log 시간 버킷으로)
-CREATE TABLE `trending_window` (
+-- ③ 집계 구간 (원안에서 이름 변경 — active_user_count 출처는 visit_log 시간 버킷)
+CREATE TABLE `stats_window` (
   `window_id`         bigint   NOT NULL AUTO_INCREMENT COMMENT '집계 창 번호',
   `window_start`      datetime NOT NULL COMMENT '구간 시작 (이상)',
   `window_end`        datetime NOT NULL COMMENT '구간 종료 (미만)',
@@ -134,14 +150,14 @@ CREATE TABLE `trending_window` (
   `trending_count`    int      NOT NULL DEFAULT '0' COMMENT '급상승으로 선정된 글 수',
   `created_at`        datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '집계 실행 시각',
   PRIMARY KEY (`window_id`),
-  UNIQUE KEY `uq_trending_window` (`window_start`,`window_end`),
-  KEY `idx_trending_window_start` (`window_start`)
+  UNIQUE KEY `uq_stats_window` (`window_start`,`window_end`),
+  KEY `idx_stats_window_start` (`window_start`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='급상승 집계 창 (구간별 실행 기록)';
 
--- ④ 구간별 점수·선정 결과 (원안에서 notified_at 만 제거 — 알림 미구현이라 쓰는 코드 없음)
-CREATE TABLE `trending_post` (
-  `window_id`      bigint        NOT NULL COMMENT '집계 창 (→trending_window)',
+-- ④ 구간별 점수·선정 결과 (원안에서 이름 변경 + notified_at 제거 — 알림 미구현이라 쓰는 코드 없음)
+CREATE TABLE `stats_trending_post` (
+  `window_id`      bigint        NOT NULL COMMENT '집계 창 (→stats_window)',
   `post_id`        bigint        NOT NULL COMMENT '대상 게시글 (FK 없음 — 통계 보존)',
   `board_id`       bigint        NOT NULL COMMENT '대상 게시판 (→boards)',
   `read_scope`     varchar(20)   NOT NULL COMMENT '집계 당시 게시판 열람 범위 스냅샷: MEMBER / STUDENT / ALUMNI',
@@ -156,12 +172,12 @@ CREATE TABLE `trending_post` (
   `rank_no`        int           DEFAULT NULL COMMENT '구간 내 최종 점수 순위 (1위부터)',
   `is_trending`    tinyint(1)    NOT NULL DEFAULT '0' COMMENT '급상승 선정 여부 (관문 1·2·3 통과)',
   PRIMARY KEY (`window_id`,`post_id`),
-  KEY `idx_trending_post_score` (`window_id`,`final_score`),
-  KEY `idx_trending_post_selected` (`window_id`,`is_trending`,`rank_no`),
-  KEY `idx_trending_post_post` (`post_id`,`window_id`),
-  KEY `idx_trending_post_board` (`board_id`,`window_id`),
-  CONSTRAINT `fk_trending_post_window` FOREIGN KEY (`window_id`) REFERENCES `trending_window` (`window_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_trending_post_board` FOREIGN KEY (`board_id`) REFERENCES `boards` (`board_id`) ON UPDATE CASCADE
+  KEY `idx_stats_trending_post_score` (`window_id`,`final_score`),
+  KEY `idx_stats_trending_post_selected` (`window_id`,`is_trending`,`rank_no`),
+  KEY `idx_stats_trending_post_post` (`post_id`,`window_id`),
+  KEY `idx_stats_trending_post_board` (`board_id`,`window_id`),
+  CONSTRAINT `fk_stats_trending_post_window` FOREIGN KEY (`window_id`) REFERENCES `stats_window` (`window_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_stats_trending_post_board` FOREIGN KEY (`board_id`) REFERENCES `boards` (`board_id`) ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='급상승 인기글 집계 결과 (구간 × 게시글)';
 ```
@@ -173,7 +189,7 @@ CREATE TABLE `trending_post` (
 | `boards` | `trending_enabled` 없음 | `ADD COLUMN trending_enabled tinyint(1) NOT NULL DEFAULT 1 COMMENT '급상승 집계 대상 여부 (1=포함). 신설 게시판 기본 포함' AFTER state` |
 | `notifications` | type 주석 COMMENT/REPLY/... | **변경 없음** — 원안 §6(TRENDING)은 알림 미구현으로 보류 |
 
-원안 대비: visit_log 세션형 → 시간 버킷 / trending_post.notified_at 제거 / notifications 무변경.
+원안 대비: 테이블명 stats_ 체계로 변경 / visit_log 세션형 → 시간 버킷 / notified_at 제거 / notifications 무변경.
 
 ## policy_settings 추가 12행 (소문자 snake_case)
 
