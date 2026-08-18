@@ -1,0 +1,57 @@
+name: Deploy Production
+
+# 수동 트리거 전용: Actions 탭 → Deploy Production → Run workflow
+# release 브랜치를 운영(포트 8080, pilsa.service)에 배포
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PILSA_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.PILSA_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy backend to Production
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+              -o ServerAliveInterval=30 -o ServerAliveCountMax=40 \
+              "${{ secrets.PILSA_USER }}@${{ secrets.PILSA_HOST }}" 'bash -s' <<'DEPLOY'
+          set -euo pipefail
+
+          echo "===== [1/4] 소스 최신화 (origin/release) ====="
+          cd ~/backend
+          git fetch origin release
+          git reset --hard origin/release
+          git log --oneline -1
+
+          echo "===== [2/4] Gradle 빌드 ====="
+          chmod +x ./gradlew
+          ./gradlew build -x test
+
+          echo "===== [3/4] pilsa 서비스 재시작 ====="
+          sudo systemctl restart pilsa
+
+          echo "===== [4/4] 헬스체크 (포트 8080) ====="
+          for i in $(seq 1 30); do
+            sleep 2
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/actuator/health || true)
+            if [ "$code" != "000" ]; then
+              echo "운영 백엔드 응답 확인 (HTTP $code, 약 $((i*2))초 소요)"
+              sudo systemctl is-active pilsa
+              exit 0
+            fi
+          done
+          echo "운영 백엔드가 기동하지 않았습니다. 최근 로그:"
+          sudo journalctl -u pilsa -n 50 --no-pager
+          exit 1
+          DEPLOY
