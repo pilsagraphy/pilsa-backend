@@ -1,6 +1,7 @@
 package com.back.mypage.notification.mapper;
 
 import com.back.mypage.notification.dto.NotificationDevice;
+import com.back.mypage.notification.dto.NotificationDeviceSummary;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -22,7 +23,11 @@ public interface NotificationDeviceMapper {
     /** 본인 기기만 해제 */
     int deleteByEndpoint(@Param("userId") Long userId, @Param("endpoint") String endpoint);
 
+    /** 발송용 — 암호화 키를 포함한다. 화면 응답에 그대로 쓰지 말 것 */
     List<NotificationDevice> findByUserId(@Param("userId") Long userId);
+
+    /** 화면 응답용 — 암호화 키 없이 endpoint·등록일시만 */
+    List<NotificationDeviceSummary> findSummaryByUserId(@Param("userId") Long userId);
 
     /** 발송 응답이 404/410(수신 거부·앱 삭제)이면 즉시 정리 */
     void deleteById(@Param("deviceId") Long deviceId);

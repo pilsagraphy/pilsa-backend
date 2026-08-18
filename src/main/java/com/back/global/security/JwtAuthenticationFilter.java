@@ -1,5 +1,6 @@
 package com.back.global.security;
 
+import com.back.auth.exception.BannedException;
 import com.back.auth.mapper.AuthMapper;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
@@ -91,7 +92,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     // 로그인 시점의 BannedException 응답과 동일한 형태로 내려 프론트 분기가 한 곳에서 끝나게 한다
                     String body = isPermanentBan
                             ? "{\"message\":\"영구적으로 차단된 계정입니다.\",\"banType\":\"permanent\",\"bannedUntil\":null}"
-                            : "{\"message\":\"정지된 계정입니다.\",\"banType\":\"temporary\",\"bannedUntil\":\"" + user.getBannedUntil() + "\"}";
+                            : "{\"message\":\"정지된 계정입니다.\",\"banType\":\"temporary\",\"bannedUntil\":\""
+                              + BannedException.formatBannedUntil(user.getBannedUntil()) + "\"}";
                     writeJson(response, HttpServletResponse.SC_FORBIDDEN, body);
                     return;
                 }

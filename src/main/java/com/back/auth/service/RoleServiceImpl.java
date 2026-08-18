@@ -1,6 +1,7 @@
 package com.back.auth.service;
 
 import com.back.auth.dto.RoleResponse;
+import com.back.auth.dto.UserNameResponse;
 import com.back.auth.mapper.RoleMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -26,5 +27,17 @@ public class RoleServiceImpl implements RoleService {
     }
 
     return info;
+  }
+
+  @Override
+  public UserNameResponse getCurrentUserName() {
+    Long userId = AuthUtils.currentUserId();
+
+    String name = roleMapper.findNameByUserId(userId);
+    if (name == null) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "사용자 정보를 찾을 수 없습니다.");
+    }
+
+    return new UserNameResponse(name);
   }
 }

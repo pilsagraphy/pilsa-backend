@@ -14,4 +14,12 @@
         LIMIT 1
     </select>
 
+    <select id="findNameByUserId" resultType="string">
+        SELECT name
+        FROM users
+        WHERE user_id = #{userId}
+          AND is_deleted = false
+        LIMIT 1
+    </select>
+
 </mapper>

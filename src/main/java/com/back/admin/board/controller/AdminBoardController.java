@@ -24,7 +24,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 @RequestMapping("/api/admin/boards")
 @Tag(name = "관리자-게시판 관리",
-        description = "게시판 관리 페이지. 게시판을 런타임에 생성/수정/삭제하고 열람 권한(readScope)·작성 권한(writeLevel)·노출 순서를 설정한다. 여기서 만든 게시판은 코드 수정·재배포 없이 /api/boards/{boardId}/** 로 즉시 동작한다.")
+        description = "게시판 관리 페이지. 게시판을 런타임에 생성/수정/삭제하고 열람 권한(readScope)·작성 권한(writeLevel)·노출 순서를 설정한다. 여기서 만든 게시판은 코드 수정·재배포 없이 /api/user/boards/{boardId}/** 로 즉시 동작한다.")
 public class AdminBoardController {
 
     private final AdminBoardService adminBoardService;
@@ -55,7 +55,7 @@ public class AdminBoardController {
 
     @Operation(summary = "새 게시판 생성 (관리자)",
             description = """
-                    게시판 관리 페이지에서 "게시판 추가" 시 호출한다. 생성 즉시 /api/boards/{boardId}/** 가 동작한다(코드 수정 불필요).
+                    게시판 관리 페이지에서 "게시판 추가" 시 호출한다. 생성 즉시 /api/user/boards/{boardId}/** 가 동작한다(코드 수정 불필요).
 
                     ### 요청 예시
                     ```json
