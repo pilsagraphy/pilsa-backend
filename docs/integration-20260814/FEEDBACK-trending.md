@@ -99,26 +99,33 @@ LEFT JOIN (
 
 # 최종 반영본 (2026-08-18 PM 확정) — 이대로 수정본을 만들면 된다
 
-## 테이블 명명 체계 (PM 확정)
+## 테이블을 4개 → 2개로 줄인다 (PM 확정)
 
-파생 통계 테이블은 **`stats_` 접두사**로 묶는다 — 통계 기능이 늘어도 `stats_*` 로 모이고,
-자바 패키지 `com.back.admin.stats` 와 1:1 대응된다 (패키지=테이블 단위 컨벤션).
+원안은 5개(visit_log + snapshot + window + trending_post + notifications 변경)였다.
+우리 규모에서 테이블 3개를 나눌 이유가 없다:
 
-| 원안 이름 | 확정 이름 | 비고 |
+| 원안 | 확정 | 왜 |
 |---|---|---|
-| visit_log (세션형) | `visit_log` (시간 버킷형) | 기존 `*_log` 계열(ban/penalty/reports/moderation/warning) 유지 — 파생이 아닌 **원본 기록** |
-| post_metric_snapshot | `stats_post_snapshot` | |
-| trending_window | `stats_window` | |
-| trending_post | `stats_trending_post` | |
+| visit_log (세션형) | **`visit_log`** (시간 버킷형) | 원본 기록이라 `*_log` 계열 유지. 세션 → 버킷 재설계(반영 1) |
+| post_metric_snapshot | **삭제** | 별도 기준선 테이블 대신 집계 행에 **그 시점 누적값**을 함께 저장 → 다음 집계가 직전 행에서 읽는다 |
+| trending_window | **삭제** | 구간 시각·접속자 수를 집계 행에 함께 저장 (구간당 몇 행 중복이지만 우리 규모에선 무의미) |
+| trending_post | **`stats_post_hourly`** | 위 둘을 흡수한 단일 집계 테이블 |
+| notifications 변경 | **없음** | 알림 1차 미구현(반영 2) |
 
-`boards.trending_enabled` 컬럼명과 `policy_settings` 의 `trending_*` 코드는 그대로 —
-기능(급상승)을 가리키는 이름이라 테이블 접두사와 별개다.
-집계 배치 SQL(§8)과 조회(§10)의 테이블 참조도 전부 새 이름으로 바꿔서 수정본을 만들 것.
+파생 통계는 `stats_` 접두사로 묶는다 — 자바 패키지 `com.back.admin.stats` 와 1:1 (패키지=테이블 단위 컨벤션).
+`boards.trending_enabled` 와 `policy_settings` 의 `trending_*` 코드는 그대로 — 기능 이름이라 테이블 접두사와 별개다.
 
-## 신규 테이블 4개
+### 행 증가량 — 글마다 매시간 쌓이지 않는다
+두 겹으로 걸러진다: ① 최근 7일 글만 후보(`trending_post_max_age_hours`) ② 그중 **그 구간에 변화가 있던 글만**
+(조회·좋아요·댓글 delta 가 전부 0이면 행을 만들지 않는다).
+조용한 글은 행이 아예 안 생기고, 7일 지나면 후보에서 빠진다. 우리 규모로 **하루 수십 행 / 1년 2만 행 안쪽**.
+
+부수 효과: 3시간 조용했다 반응이 온 글은 직전 행(3시간 전 누적값)과 비교되어 그 사이 증가분이 그대로 잡힌다 — 놓치는 구간이 없다.
+
+## 신규 테이블 2개
 
 ```sql
--- ① 접속 기록 (세션형 → 시간 버킷 재설계. JWT 필터가 인증 성공 시 INSERT IGNORE)
+-- ① 접속 기록 (세션형 → 시간 버킷 재설계. JWT 필터가 인증 성공 시 INSERT IGNORE 1줄)
 CREATE TABLE `visit_log` (
   `user_id`      bigint   NOT NULL COMMENT '접속 회원 (FK 없음 — 탈퇴 후에도 통계 보존)',
   `visited_hour` datetime NOT NULL COMMENT '시간 버킷 (분·초 절삭, 예: 2026-08-18 21:00:00)',
@@ -127,69 +134,56 @@ CREATE TABLE `visit_log` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
   COMMENT='회원 접속 기록 (시간 버킷당 1행. 세션성 — 물리 삭제 예외)';
 
--- ② 게시글 지표 직전 스냅샷 (원안에서 이름만 변경)
-CREATE TABLE `stats_post_snapshot` (
-  `post_id`       bigint   NOT NULL COMMENT '대상 게시글 (FK 없음 — 통계 기준선 보존)',
-  `view_count`    int      NOT NULL DEFAULT '0' COMMENT '스냅샷 시점의 누적 조회수',
-  `like_count`    int      NOT NULL DEFAULT '0' COMMENT '스냅샷 시점의 좋아요 수',
-  `comment_count` int      NOT NULL DEFAULT '0' COMMENT '스냅샷 시점의 공개 댓글 수 (state=normal, is_private=0)',
-  `captured_at`   datetime NOT NULL COMMENT '이 스냅샷을 찍은 시각',
-  PRIMARY KEY (`post_id`),
-  KEY `idx_stats_post_snapshot_captured` (`captured_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='게시글 지표 직전 스냅샷 (증가분 계산 기준선)';
-
--- ③ 집계 구간 (원안에서 이름 변경 — active_user_count 출처는 visit_log 시간 버킷)
-CREATE TABLE `stats_window` (
-  `window_id`         bigint   NOT NULL AUTO_INCREMENT COMMENT '집계 창 번호',
-  `window_start`      datetime NOT NULL COMMENT '구간 시작 (이상)',
-  `window_end`        datetime NOT NULL COMMENT '구간 종료 (미만)',
-  `interval_minutes`  int      NOT NULL COMMENT '구간 길이(분). 실행 당시 policy_settings 값 스냅샷',
-  `active_user_count` int      NOT NULL DEFAULT '0' COMMENT '구간 내 접속 회원 수 (visit_log 시간 버킷 기준, 점수 보정 분모)',
-  `candidate_count`   int      NOT NULL DEFAULT '0' COMMENT '점수가 계산된 후보 글 수',
-  `trending_count`    int      NOT NULL DEFAULT '0' COMMENT '급상승으로 선정된 글 수',
-  `created_at`        datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '집계 실행 시각',
-  PRIMARY KEY (`window_id`),
-  UNIQUE KEY `uq_stats_window` (`window_start`,`window_end`),
-  KEY `idx_stats_window_start` (`window_start`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='급상승 집계 창 (구간별 실행 기록)';
-
--- ④ 구간별 점수·선정 결과 (원안에서 이름 변경 + notified_at 제거 — 알림 미구현이라 쓰는 코드 없음)
-CREATE TABLE `stats_trending_post` (
-  `window_id`      bigint        NOT NULL COMMENT '집계 창 (→stats_window)',
+-- ② 게시글 구간 집계 (원안의 snapshot + window + trending_post 를 하나로)
+CREATE TABLE `stats_post_hourly` (
+  `stat_hour`      datetime      NOT NULL COMMENT '집계 구간 시작 (시간 버킷)',
   `post_id`        bigint        NOT NULL COMMENT '대상 게시글 (FK 없음 — 통계 보존)',
   `board_id`       bigint        NOT NULL COMMENT '대상 게시판 (→boards)',
-  `read_scope`     varchar(20)   NOT NULL COMMENT '집계 당시 게시판 열람 범위 스냅샷: MEMBER / STUDENT / ALUMNI',
-  `view_delta`     int           NOT NULL DEFAULT '0' COMMENT '구간 내 조회 증가분',
-  `like_delta`     int           NOT NULL DEFAULT '0' COMMENT '구간 내 좋아요 순증 (취소 시 음수 가능)',
-  `comment_delta`  int           NOT NULL DEFAULT '0' COMMENT '구간 내 공개 댓글 순증',
-  `raw_score`      decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '가중 합산 점수 (조회×1 + 좋아요×5 + 댓글×3)',
-  `baseline_score` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '평소 수준 = 직전 N개 구간 raw_score 의 SUM/N (행 평균 아님)',
-  `spike_ratio`    decimal(8,2)  DEFAULT NULL COMMENT '평소 대비 배수 = raw/baseline. NULL = 이력 없음(신규 글, 관문2 면제)',
-  `freshness`      decimal(6,4)  NOT NULL DEFAULT '1.0000' COMMENT '글 나이 감쇠 계수 (1=방금, 0.5=하루 경과)',
-  `final_score`    decimal(12,4) NOT NULL DEFAULT '0.0000' COMMENT '최종 점수 = raw_score / 접속자수보정 × freshness',
-  `rank_no`        int           DEFAULT NULL COMMENT '구간 내 최종 점수 순위 (1위부터)',
+  `read_scope`     varchar(20)   NOT NULL COMMENT '집계 당시 열람 범위 스냅샷: MEMBER / STUDENT / ALUMNI',
+  -- 그 시점 누적값 — 다음 집계의 기준선 (별도 snapshot 테이블을 대체)
+  `view_count`     int           NOT NULL DEFAULT '0' COMMENT '집계 시점 누적 조회수',
+  `like_count`     int           NOT NULL DEFAULT '0' COMMENT '집계 시점 좋아요 수',
+  `comment_count`  int           NOT NULL DEFAULT '0' COMMENT '집계 시점 공개 댓글 수 (state=normal, is_private=0)',
+  -- 직전 행과의 차이
+  `view_delta`     int           NOT NULL DEFAULT '0' COMMENT '직전 행 이후 조회 증가분',
+  `like_delta`     int           NOT NULL DEFAULT '0' COMMENT '직전 행 이후 좋아요 순증 (취소 시 음수)',
+  `comment_delta`  int           NOT NULL DEFAULT '0' COMMENT '직전 행 이후 공개 댓글 순증',
+  -- 구간 정보 (별도 window 테이블을 대체)
+  `interval_minutes` int         NOT NULL COMMENT '구간 길이(분). 실행 당시 정책값 스냅샷',
+  `active_users`   int           NOT NULL DEFAULT '0' COMMENT '구간 내 접속 회원 수 (visit_log 기준, 점수 보정 분모)',
+  -- 점수와 판정
+  `raw_score`      decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '가중 합산 (조회×1 + 좋아요×5 + 댓글×3)',
+  `baseline_score` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '평소 수준 = 직전 N구간 raw_score 의 SUM/N (행 평균 아님)',
+  `spike_ratio`    decimal(8,2)  DEFAULT NULL COMMENT '평소 대비 배수. NULL = 이력 없음(신규 글, 관문2 면제)',
+  `freshness`      decimal(6,4)  NOT NULL DEFAULT '1.0000' COMMENT '글 나이 감쇠 (1=방금, 0.5=하루 경과)',
+  `final_score`    decimal(12,4) NOT NULL DEFAULT '0.0000' COMMENT 'raw_score / 접속자수보정 × freshness',
+  `rank_no`        int           DEFAULT NULL COMMENT '구간 내 순위 (1위부터)',
   `is_trending`    tinyint(1)    NOT NULL DEFAULT '0' COMMENT '급상승 선정 여부 (관문 1·2·3 통과)',
-  PRIMARY KEY (`window_id`,`post_id`),
-  KEY `idx_stats_trending_post_score` (`window_id`,`final_score`),
-  KEY `idx_stats_trending_post_selected` (`window_id`,`is_trending`,`rank_no`),
-  KEY `idx_stats_trending_post_post` (`post_id`,`window_id`),
-  KEY `idx_stats_trending_post_board` (`board_id`,`window_id`),
-  CONSTRAINT `fk_stats_trending_post_window` FOREIGN KEY (`window_id`) REFERENCES `stats_window` (`window_id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_stats_trending_post_board` FOREIGN KEY (`board_id`) REFERENCES `boards` (`board_id`) ON UPDATE CASCADE
+  PRIMARY KEY (`stat_hour`,`post_id`),
+  KEY `idx_stats_post_hourly_selected` (`stat_hour`,`is_trending`,`rank_no`),
+  KEY `idx_stats_post_hourly_post` (`post_id`,`stat_hour`),
+  KEY `idx_stats_post_hourly_board` (`board_id`,`stat_hour`),
+  CONSTRAINT `fk_stats_post_hourly_board` FOREIGN KEY (`board_id`) REFERENCES `boards` (`board_id`) ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='급상승 인기글 집계 결과 (구간 × 게시글)';
+  COMMENT='게시글 구간 집계 + 급상승 판정 (구간 × 게시글. 변화 있는 글만 적재)';
 ```
+
+### 집계 SQL 에서 달라지는 점 (수정본 작업 지침)
+- 기준선(직전 누적값)은 snapshot 조회 대신 **그 글의 가장 최근 행**에서 가져온다:
+  `(SELECT h.view_count FROM stats_post_hourly h WHERE h.post_id = p.post_id ORDER BY h.stat_hour DESC LIMIT 1)`
+  → 첫 등장 글은 없으므로 `COALESCE(..., 0)`
+- 접속자 수는 구간마다 한 번 계산해 그 구간 전체 행에 같은 값을 넣는다:
+  `SELECT COUNT(DISTINCT user_id) FROM visit_log WHERE visited_hour >= #{windowStart} AND visited_hour < #{windowEnd}`
+- baseline: 행 평균(AVG) 금지 → 직전 N개 **구간**의 `SUM(raw_score) / N` (반영 3)
+- 원안 §8-(6) 스냅샷 갱신 단계는 **삭제** — 누적값을 집계 INSERT 에 함께 넣으므로 순서 의존성도 사라진다
+- 원안 §9(알림) 전체 삭제, §10 조회는 `stat_hour = (SELECT MAX(stat_hour) FROM stats_post_hourly)` 로 변경
 
 ## 수정되는 기존 테이블 — AS-IS / TO-BE
 
 | 테이블 | AS-IS | TO-BE |
 |---|---|---|
 | `boards` | `trending_enabled` 없음 | `ADD COLUMN trending_enabled tinyint(1) NOT NULL DEFAULT 1 COMMENT '급상승 집계 대상 여부 (1=포함). 신설 게시판 기본 포함' AFTER state` |
-| `notifications` | type 주석 COMMENT/REPLY/... | **변경 없음** — 원안 §6(TRENDING)은 알림 미구현으로 보류 |
-
-원안 대비: 테이블명 stats_ 체계로 변경 / visit_log 세션형 → 시간 버킷 / notified_at 제거 / notifications 무변경.
+| `notifications` | type 주석 COMMENT/REPLY/... | **변경 없음** (알림 1차 미구현) |
 
 ## policy_settings 추가 12행 (소문자 snake_case)
 
@@ -206,7 +200,19 @@ INSERT IGNORE INTO `policy_settings` (`code`, `setting_value`, `description`) VA
 ('trending_baseline_windows',   '6',   '관문2 — 평소 수준 계산 구간 수 (SUM/N 고정 나눗셈)'),
 ('trending_top_n',              '5',   '관문3 — 구간당 선정 최대 글 수'),
 ('trending_post_max_age_hours', '168', '후보 글 최대 나이(시간). 168=7일'),
-('visit_log_retention_days',    '365', '접속 기록 보존 일수 — 경과 시 새벽 배치가 물리 삭제');
+('stats_retention_days',        '365', '통계·접속 기록 보존 일수 — 경과 시 새벽 배치가 물리 삭제 (visit_log, stats_post_hourly 공통)');
 ```
 
-원안 13행 대비: 알림용 2행(trending_notify_*) 제외, visit_log_retention_days 추가.
+원안 13행 대비: 알림용 2행 제외, 보존기간 1행 추가.
+보존 배치는 알림 정리(04:40)와 같은 패턴으로 `visit_log`·`stats_post_hourly` 를 함께 정리한다.
+
+## 나중에 통계가 늘어나면
+
+**재계산 가능한 통계는 테이블을 만들지 않는다.** 신입회원 수·월별 가입 추이·게시판별 글 수는
+`users.created_at` / `posts` 쿼리로 끝난다. 테이블이 필요한 것은 **그 순간 안 남기면 소실되는 데이터**뿐이다
+(접속 기록, 시점별 누적 조회수 — 이번 2개가 그것).
+
+단순 일별 숫자를 보관해야 할 일이 생기면 개별 테이블을 늘리지 말고 범용 1개로 모은다:
+`stats_daily(metric_code, stat_date, value)` — policy_settings 와 같은 형태.
+급상승만 전용 테이블이 필요한 이유는 글마다 지표가 10개가 넘어서, 범용 형태에 넣으면
+한 글·한 구간이 10행으로 쪼개지고 조회가 전부 CASE 문이 되기 때문이다.
