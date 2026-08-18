@@ -182,8 +182,82 @@ CREATE TABLE `notification_devices` (
   CONSTRAINT `fk_notification_devices_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='알림 수신 기기 등록부 (웹 푸시. 세션성 데이터 — 물리 삭제 허용)';
 
+
+-- [2026-08-18] 통계 3종 (PM 적용 완료 — 아래는 적용된 정본 기록).
+--   설계 요점: 스냅샷·구간 테이블을 따로 두지 않는다. 누적값은 집계 행에, 접속자 수는 원본에서 얻는다.
+--   접속은 단위별 테이블 없이 stats_access_hourly 하나를 GROUP BY 해 일·주·월·학기·연을 만든다.
+--   가입만 스냅샷을 남긴다 — 탈퇴 90일 정리 배치가 users 행을 물리 삭제해 과거 수치가 소급 감소하고,
+--   member_type 도 졸업 시 바뀌기 때문에 지금 고정하지 않으면 소실된다.
+CREATE TABLE `stats_access_hourly` (
+  `user_id`     bigint   NOT NULL COMMENT '접속 회원 (FK 없음 — 탈퇴 후에도 통계 보존)',
+  `access_hour` datetime NOT NULL COMMENT '시간 버킷 (분·초 절삭, 예: 2026-08-18 21:00:00)',
+  PRIMARY KEY (`user_id`,`access_hour`),
+  KEY `idx_stats_access_hourly_hour` (`access_hour`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='회원 접속 기록 (시간 버킷당 1행)';
+
+CREATE TABLE `stats_signup_weekly` (
+  `stat_week`     date     NOT NULL COMMENT '주 시작일(월요일)',
+  `signup_count`  int      NOT NULL DEFAULT 0 COMMENT '신규가입 수 (탈퇴자 포함 — 가입 사실은 변하지 않는다)',
+  `student_count` int      NOT NULL DEFAULT 0 COMMENT '그중 재학생 (집계 시점 member_type 스냅샷)',
+  `alumni_count`  int      NOT NULL DEFAULT 0 COMMENT '그중 졸업생',
+  `captured_at`   datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '이 행을 집계한 시각',
+  PRIMARY KEY (`stat_week`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='주간 신규가입 통계 (8주치 백필 완료)';
+
+-- stats_post_hourly: 구간 집계 + 급상승 판정. 변화가 적재 컷 이상인 글만 행이 생긴다(행 폭증 방지).
+--   read_scope 는 집계 당시 스냅샷 — 조회 API 가 게시판 권한 필터를 걸 때 boards 재조인 없이 쓰기 위한 것.
+CREATE TABLE `stats_post_hourly` (
+  `stat_hour`      datetime      NOT NULL COMMENT '집계 구간 시작 (시간 버킷)',
+  `post_id`        bigint        NOT NULL COMMENT '대상 게시글 (FK 없음 — 통계 보존)',
+  `board_id`       bigint        NOT NULL COMMENT '대상 게시판 (→boards)',
+  `read_scope`     varchar(20)   NOT NULL COMMENT '집계 당시 열람 범위 스냅샷: MEMBER / STUDENT / ALUMNI',
+  `view_count`     int           NOT NULL DEFAULT 0 COMMENT '집계 시점 누적 조회수 (다음 집계의 기준선)',
+  `like_count`     int           NOT NULL DEFAULT 0 COMMENT '집계 시점 좋아요 수',
+  `comment_count`  int           NOT NULL DEFAULT 0 COMMENT '집계 시점 공개 댓글 수 (state=normal, is_private=0)',
+  `view_delta`     int           NOT NULL DEFAULT 0 COMMENT '직전 행 이후 조회 증가분',
+  `like_delta`     int           NOT NULL DEFAULT 0 COMMENT '직전 행 이후 좋아요 순증 (취소 시 음수)',
+  `comment_delta`  int           NOT NULL DEFAULT 0 COMMENT '직전 행 이후 공개 댓글 순증',
+  `raw_score`      decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT '가중 합산 (조회×1 + 좋아요×5 + 댓글×3)',
+  `baseline_score` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT '평소 수준 = 직전 N구간 raw_score 의 SUM/N (행 평균 아님)',
+  `spike_ratio`    decimal(8,2)  DEFAULT NULL COMMENT '평소 대비 배수. NULL = 이력 없음(신규 글, 관문2 면제)',
+  `freshness`      decimal(6,4)  NOT NULL DEFAULT 1.0000 COMMENT '글 나이 감쇠 (1=방금, 0.5=하루 경과)',
+  `final_score`    decimal(12,4) NOT NULL DEFAULT 0.0000 COMMENT 'raw_score / 접속자수보정 × freshness',
+  `rank_no`        int           DEFAULT NULL COMMENT '구간 내 순위 (1위부터)',
+  `is_trending`    tinyint(1)    NOT NULL DEFAULT 0 COMMENT '급상승 선정 여부 (관문 1·2·3 통과)',
+  PRIMARY KEY (`stat_hour`,`post_id`),
+  KEY `idx_stats_post_hourly_selected` (`stat_hour`,`is_trending`,`rank_no`),
+  KEY `idx_stats_post_hourly_post` (`post_id`,`stat_hour`),
+  KEY `idx_stats_post_hourly_board` (`board_id`,`stat_hour`),
+  CONSTRAINT `fk_stats_post_hourly_board` FOREIGN KEY (`board_id`) REFERENCES `boards` (`board_id`) ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='게시글 구간 집계 + 급상승 판정 (변화가 기준치 이상인 글만 적재)';
+
+-- 집계 대상 게시판을 데이터로 고른다 (게시판 하드코딩 금지 규칙과 같은 이유 — 신설 게시판은 기본 포함)
+ALTER TABLE `boards`
+  ADD COLUMN `trending_enabled` tinyint(1) NOT NULL DEFAULT 1
+    COMMENT '급상승 집계 대상 여부 (1=포함, 0=제외). 신설 게시판은 기본 포함';
+
+-- [2026-08-18] 통계 정책 수치. 코드(StatsPolicy)에 동일 기본값이 있어 행이 없어도 동작한다 —
+--   행을 넣으면 재배포 없이 값만 바꿔 조정할 수 있다.
+INSERT INTO `policy_settings` (code, setting_value, description) VALUES
+('trending_interval_minutes',      '60',   '급상승 집계 주기(분). 다음 실행부터 반영'),
+('trending_post_max_age_hours',    '168',  '급상승 후보 최대 글 나이(시간, 기본 7일)'),
+('trending_min_delta_score',       '5',    '적재 컷 — raw_score 미달 구간은 행을 만들지 않는다'),
+('trending_baseline_windows',      '6',    '평소 수준 산출에 쓰는 직전 구간 수 (합/N, 행 평균 아님)'),
+('trending_min_score',             '10',   '급상승 관문1 — 절대 활동량 하한'),
+('trending_spike_ratio',           '3.0',  '급상승 관문2 — 평소 대비 배수. 이력 없는 신규 글은 면제'),
+('trending_top_n',                 '5',    '급상승 관문3 — 구간 내 상위 N'),
+('trending_weight_view',           '1',    'raw_score 조회 가중치'),
+('trending_weight_like',           '5',    'raw_score 좋아요 가중치'),
+('trending_weight_comment',        '3',    'raw_score 댓글 가중치 (공개 댓글만 집계)'),
+('trending_active_user_floor',     '5',    '점수 분모 하한 — 새벽 소수 접속 구간의 점수 폭등 방지'),
+('trending_freshness_scale_hours', '24',   'freshness = 1/(1 + 글나이/이 값). 이 시간 경과 시 0.5'),
+('signup_stats_recalc_weeks',      '2',    '주간 가입 통계 재집계 구간(주)'),
+('stats_retention_days',           '1825', '접속·게시글 집계 보존 일수(5년). 경과 행은 새벽 배치가 물리 삭제');
 ```
 - [x] events DDL 적용 (2026-08-14, location 값 전부 NULL 확인 후 제거)
+- [x] **통계 3종 테이블 + `boards.trending_enabled` 적용** (2026-08-18 PM). 수집·집계 코드는 `통계` 브랜치의 `com.back.stats`.
+  정책 14행은 **선택** — `StatsPolicy` 에 동일 기본값이 있어 넣지 않아도 동작하고, 넣으면 재배포 없이 조정된다.
+  조회 API 는 아직 없다(설계는 `SPEC-stats.md` §5).
 - [x] boards 권한 컬럼 DDL 적용 (#61 §1)
 - [x] ~~boards 컬럼 제거 (#70)~~ → 적용 후 **PM 지시로 원복 완료** (allow_comment/allow_attachment/category_mode 원값 유지)
 - [x] 적용 후 스키마 재검증 (DESCRIBE 확인)

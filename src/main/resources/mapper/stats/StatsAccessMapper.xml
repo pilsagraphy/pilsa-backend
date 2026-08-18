@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.stats.access.mapper.StatsAccessMapper">
+
+    <!-- 시간 버킷을 앱 시각이 아니라 DB 시각(NOW())으로 절삭한다 —
+         집계 배치의 구간 경계와 기록 시각이 같은 시계를 쓰게 해서 경계 어긋남을 막는다.
+         PK(user_id, access_hour) 충돌은 곧 "이미 이 시간대에 접속함"이므로 IGNORE 가 정답이다. -->
+    <insert id="recordAccess">
+        INSERT IGNORE INTO stats_access_hourly (user_id, access_hour)
+        VALUES (#{userId}, DATE_FORMAT(NOW(), '%Y-%m-%d %H:00:00'))
+    </insert>
+
+    <select id="countActiveUsers" resultType="int">
+        SELECT COUNT(DISTINCT user_id)
+        FROM stats_access_hourly
+        WHERE access_hour &gt;= #{from}
+          AND access_hour &lt; #{to}
+    </select>
+
+    <delete id="deleteOlderThan">
+        DELETE FROM stats_access_hourly
+        WHERE access_hour &lt; DATE_SUB(NOW(), INTERVAL #{retentionDays} DAY)
+    </delete>
+
+</mapper>
