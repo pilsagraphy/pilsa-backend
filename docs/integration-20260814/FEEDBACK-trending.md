@@ -94,3 +94,103 @@ LEFT JOIN (
 - trending_post 의 계산 근거 전 컬럼 보존 + 결정적 정렬(동점 처리)
 - 관문 1·2·3 구조와 policy_settings 조정 가이드(§1)
 - 순서 의존성 명시 (스냅샷 갱신은 집계 뒤) — 단 visit_log 재설계로 "만료 세션 마감 선행" 항목은 삭제됨
+
+---
+
+# 최종 반영본 (2026-08-18 PM 확정) — 이대로 수정본을 만들면 된다
+
+## 신규 테이블 4개
+
+```sql
+-- ① 접속 기록 (세션형 → 시간 버킷 재설계. JWT 필터가 인증 성공 시 INSERT IGNORE)
+CREATE TABLE `visit_log` (
+  `user_id`      bigint   NOT NULL COMMENT '접속 회원 (FK 없음 — 탈퇴 후에도 통계 보존)',
+  `visited_hour` datetime NOT NULL COMMENT '시간 버킷 (분·초 절삭, 예: 2026-08-18 21:00:00)',
+  PRIMARY KEY (`user_id`,`visited_hour`),
+  KEY `idx_visit_log_hour` (`visited_hour`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='회원 접속 기록 (시간 버킷당 1행. 세션성 — 물리 삭제 예외)';
+
+-- ② 게시글 지표 직전 스냅샷 (원안 그대로)
+CREATE TABLE `post_metric_snapshot` (
+  `post_id`       bigint   NOT NULL COMMENT '대상 게시글 (FK 없음 — 통계 기준선 보존)',
+  `view_count`    int      NOT NULL DEFAULT '0' COMMENT '스냅샷 시점의 누적 조회수',
+  `like_count`    int      NOT NULL DEFAULT '0' COMMENT '스냅샷 시점의 좋아요 수',
+  `comment_count` int      NOT NULL DEFAULT '0' COMMENT '스냅샷 시점의 공개 댓글 수 (state=normal, is_private=0)',
+  `captured_at`   datetime NOT NULL COMMENT '이 스냅샷을 찍은 시각',
+  PRIMARY KEY (`post_id`),
+  KEY `idx_snapshot_captured` (`captured_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='게시글 지표 직전 스냅샷 (증가분 계산 기준선)';
+
+-- ③ 집계 구간 (원안 그대로 — active_user_count 출처만 visit_log 시간 버킷으로)
+CREATE TABLE `trending_window` (
+  `window_id`         bigint   NOT NULL AUTO_INCREMENT COMMENT '집계 창 번호',
+  `window_start`      datetime NOT NULL COMMENT '구간 시작 (이상)',
+  `window_end`        datetime NOT NULL COMMENT '구간 종료 (미만)',
+  `interval_minutes`  int      NOT NULL COMMENT '구간 길이(분). 실행 당시 policy_settings 값 스냅샷',
+  `active_user_count` int      NOT NULL DEFAULT '0' COMMENT '구간 내 접속 회원 수 (visit_log 시간 버킷 기준, 점수 보정 분모)',
+  `candidate_count`   int      NOT NULL DEFAULT '0' COMMENT '점수가 계산된 후보 글 수',
+  `trending_count`    int      NOT NULL DEFAULT '0' COMMENT '급상승으로 선정된 글 수',
+  `created_at`        datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '집계 실행 시각',
+  PRIMARY KEY (`window_id`),
+  UNIQUE KEY `uq_trending_window` (`window_start`,`window_end`),
+  KEY `idx_trending_window_start` (`window_start`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='급상승 집계 창 (구간별 실행 기록)';
+
+-- ④ 구간별 점수·선정 결과 (원안에서 notified_at 만 제거 — 알림 미구현이라 쓰는 코드 없음)
+CREATE TABLE `trending_post` (
+  `window_id`      bigint        NOT NULL COMMENT '집계 창 (→trending_window)',
+  `post_id`        bigint        NOT NULL COMMENT '대상 게시글 (FK 없음 — 통계 보존)',
+  `board_id`       bigint        NOT NULL COMMENT '대상 게시판 (→boards)',
+  `read_scope`     varchar(20)   NOT NULL COMMENT '집계 당시 게시판 열람 범위 스냅샷: MEMBER / STUDENT / ALUMNI',
+  `view_delta`     int           NOT NULL DEFAULT '0' COMMENT '구간 내 조회 증가분',
+  `like_delta`     int           NOT NULL DEFAULT '0' COMMENT '구간 내 좋아요 순증 (취소 시 음수 가능)',
+  `comment_delta`  int           NOT NULL DEFAULT '0' COMMENT '구간 내 공개 댓글 순증',
+  `raw_score`      decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '가중 합산 점수 (조회×1 + 좋아요×5 + 댓글×3)',
+  `baseline_score` decimal(12,2) NOT NULL DEFAULT '0.00' COMMENT '평소 수준 = 직전 N개 구간 raw_score 의 SUM/N (행 평균 아님)',
+  `spike_ratio`    decimal(8,2)  DEFAULT NULL COMMENT '평소 대비 배수 = raw/baseline. NULL = 이력 없음(신규 글, 관문2 면제)',
+  `freshness`      decimal(6,4)  NOT NULL DEFAULT '1.0000' COMMENT '글 나이 감쇠 계수 (1=방금, 0.5=하루 경과)',
+  `final_score`    decimal(12,4) NOT NULL DEFAULT '0.0000' COMMENT '최종 점수 = raw_score / 접속자수보정 × freshness',
+  `rank_no`        int           DEFAULT NULL COMMENT '구간 내 최종 점수 순위 (1위부터)',
+  `is_trending`    tinyint(1)    NOT NULL DEFAULT '0' COMMENT '급상승 선정 여부 (관문 1·2·3 통과)',
+  PRIMARY KEY (`window_id`,`post_id`),
+  KEY `idx_trending_post_score` (`window_id`,`final_score`),
+  KEY `idx_trending_post_selected` (`window_id`,`is_trending`,`rank_no`),
+  KEY `idx_trending_post_post` (`post_id`,`window_id`),
+  KEY `idx_trending_post_board` (`board_id`,`window_id`),
+  CONSTRAINT `fk_trending_post_window` FOREIGN KEY (`window_id`) REFERENCES `trending_window` (`window_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_trending_post_board` FOREIGN KEY (`board_id`) REFERENCES `boards` (`board_id`) ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='급상승 인기글 집계 결과 (구간 × 게시글)';
+```
+
+## 수정되는 기존 테이블 — AS-IS / TO-BE
+
+| 테이블 | AS-IS | TO-BE |
+|---|---|---|
+| `boards` | `trending_enabled` 없음 | `ADD COLUMN trending_enabled tinyint(1) NOT NULL DEFAULT 1 COMMENT '급상승 집계 대상 여부 (1=포함). 신설 게시판 기본 포함' AFTER state` |
+| `notifications` | type 주석 COMMENT/REPLY/... | **변경 없음** — 원안 §6(TRENDING)은 알림 미구현으로 보류 |
+
+원안 대비: visit_log 세션형 → 시간 버킷 / trending_post.notified_at 제거 / notifications 무변경.
+
+## policy_settings 추가 12행 (소문자 snake_case)
+
+```sql
+INSERT IGNORE INTO `policy_settings` (`code`, `setting_value`, `description`) VALUES
+('trending_interval_minutes',   '60',  '급상승 집계 주기(분). 60=1시간'),
+('trending_weight_view',        '1',   '점수 가중치 — 조회 1건'),
+('trending_weight_like',        '5',   '점수 가중치 — 좋아요 1건'),
+('trending_weight_comment',     '3',   '점수 가중치 — 댓글 1건'),
+('trending_min_active_users',   '5',   '접속자수 보정 분모의 하한 (심야 소수 접속 시 점수 폭주 방지)'),
+('trending_halflife_hours',     '24',  '글 나이 감쇠 반감기(시간). 24=하루 지난 글은 계수 0.5'),
+('trending_min_score',          '10',  '관문1 — raw_score 최소 활동량'),
+('trending_spike_ratio',        '3.0', '관문2 — 평소 대비 몇 배 이상이어야 급상승인지 (신규 글 면제)'),
+('trending_baseline_windows',   '6',   '관문2 — 평소 수준 계산 구간 수 (SUM/N 고정 나눗셈)'),
+('trending_top_n',              '5',   '관문3 — 구간당 선정 최대 글 수'),
+('trending_post_max_age_hours', '168', '후보 글 최대 나이(시간). 168=7일'),
+('visit_log_retention_days',    '365', '접속 기록 보존 일수 — 경과 시 새벽 배치가 물리 삭제');
+```
+
+원안 13행 대비: 알림용 2행(trending_notify_*) 제외, visit_log_retention_days 추가.
