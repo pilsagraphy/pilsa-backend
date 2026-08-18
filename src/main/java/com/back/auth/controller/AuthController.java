@@ -36,8 +36,20 @@ public class AuthController {
 
                     ### 요청 예시
                     ```json
-                    {"loginId":"hong","password":"pw1234"}
+                    {"loginId":"hong","password":"pw1234","autoLogin":false}
                     ```
+
+                    ### 자동 로그인 (autoLogin)
+                    | autoLogin | refreshToken 쿠키 | 리프레시 토큰 만료 |
+                    |---|---|---|
+                    | 미전달 · false | 세션 쿠키 (브라우저 완전 종료 시 소멸) | 12시간 |
+                    | true | Max-Age = policy_settings.auto_login_days (기본 400일) | 같은 400일 |
+
+                    - 쿠키 수명과 토큰 만료를 같은 값으로 맞춘다 — 어긋나면 자동 로그인이 조용히 실패한다.
+                    - 400일이 상한인 이유: 브라우저가 쿠키 만료를 400일로 잘라낸다(Chrome 104+). 더 크게 줘도 의미 없음.
+                    - 재발급(`/token/access/refresh`)·연장(`/token/refresh/extend`) 시 원래 로그인의 autoLogin 을
+                      토큰 claim 에서 읽어 승계한다 — 승계하지 않으면 첫 재발급에서 12시간으로 깎인다.
+                    - 자동 로그인이어도 재발급 때마다 DB에서 회원 상태를 다시 확인하므로 정지 계정은 즉시 차단된다.
 
                     ### 응답 예시
                     ```json

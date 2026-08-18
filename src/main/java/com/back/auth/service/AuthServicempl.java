@@ -45,15 +45,39 @@ public class AuthServicempl implements AuthService {
     @Value("${jwt.cookie.secure:false}")
     private boolean cookieSecure;
 
-    // 리프레시 쿠키 설정 메서드
-    private void addRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
+    // policy_settings 행이 없거나 값이 깨졌을 때의 대비값 (브라우저 쿠키 만료 상한과 동일)
+    private static final int DEFAULT_AUTO_LOGIN_DAYS = 400;
+
+    /**
+     * 리프레시 쿠키 설정.
+     *
+     * autoLogin=false 면 Max-Age 를 주지 않는다(세션 쿠키) — 브라우저를 완전히 닫으면 소멸한다.
+     * autoLogin=true 면 policy_settings.auto_login_days 만큼 유지해 브라우저 재시작 후에도 복원되게 한다.
+     * 쿠키 수명과 리프레시 토큰 만료를 같은 값으로 맞춘다 — 어긋나면 "쿠키는 있는데 토큰이 만료"거나
+     * 그 반대가 되어 자동 로그인이 조용히 실패한다.
+     */
+    private void addRefreshTokenCookie(HttpServletResponse response, String refreshToken, boolean autoLogin) {
         Cookie cookie = new Cookie("refreshToken", refreshToken);
         cookie.setHttpOnly(true);
         cookie.setSecure(cookieSecure);
         cookie.setPath("/api/auth/token");
-        // 브라우저 창 닫아도 쿠키 유지 : 20분(리프레시 토큰 유지시간)
-        // cookie.setMaxAge(60 * 20);
+        if (autoLogin) {
+            cookie.setMaxAge(autoLoginDays() * 24 * 60 * 60);
+        }
+        // autoLogin 이 아니면 Max-Age 미설정 = 세션 쿠키 (기존 동작 유지)
         response.addCookie(cookie);
+    }
+
+    /**
+     * 자동 로그인 유지 일수 (policy_settings.auto_login_days, 기본 400).
+     * 400 이 상한인 이유: 브라우저가 쿠키 만료를 400일로 잘라내므로(Chrome 104+) 더 크게 줘도 의미가 없다.
+     */
+    private int autoLoginDays() {
+        try {
+            return Integer.parseInt(authMapper.findPolicySetting("auto_login_days"));
+        } catch (Exception e) {
+            return DEFAULT_AUTO_LOGIN_DAYS;
+        }
     }
 
     // 정지/영구차단 계정 로그인 차단 (만료된 임시정지는 통과 - 스케줄러가 캐시를 정리하기 전이라도 로그인 허용)
@@ -90,11 +114,14 @@ public class AuthServicempl implements AuthService {
         // 정지/영구차단 계정 로그인 차단
         checkNotBanned(user);
 
-        String accessToken = jwtUtil.generateAccessToken(user);
-        String refreshToken = jwtUtil.generateRefreshToken(user);
+        // 자동 로그인 체크 여부 — 미전달(null)이면 자동 로그인 아님
+        boolean autoLogin = Boolean.TRUE.equals(request.getAutoLogin());
 
-        // 리프레시 토큰을 쿠키에 저장
-        addRefreshTokenCookie(response, refreshToken);
+        String accessToken = jwtUtil.generateAccessToken(user);
+        String refreshToken = jwtUtil.generateRefreshToken(user, autoLogin, autoLoginDays());
+
+        // 리프레시 토큰을 쿠키에 저장 (자동 로그인이면 Max-Age 부여)
+        addRefreshTokenCookie(response, refreshToken, autoLogin);
 
         // Refresh Token exp 추출
         var claims = jwtUtil.validateRefreshToken(refreshToken);
@@ -462,9 +489,11 @@ public class AuthServicempl implements AuthService {
             }
             checkNotBanned(user);
 
-            // 3) 새 토큰 발급
+            // 3) 새 토큰 발급 — 원래 로그인의 autoLogin 여부를 claim 에서 읽어 승계한다
+            //    (승계하지 않으면 첫 연장에서 12시간으로 깎여 자동 로그인이 조용히 풀린다)
+            boolean autoLogin = jwtUtil.isAutoLogin(claims);
             String newAccessToken = jwtUtil.generateAccessToken(user);
-            String newRefreshToken = jwtUtil.generateRefreshToken(user);
+            String newRefreshToken = jwtUtil.generateRefreshToken(user, autoLogin, autoLoginDays());
 
 //            // 4) jti 회전 (열린 행만 대상)
 //            String oldJti = jwtUtil.extractJti(refreshToken);
@@ -479,7 +508,7 @@ public class AuthServicempl implements AuthService {
 //            }
 
             // 5) 쿠키 교체
-            addRefreshTokenCookie(response, newRefreshToken);
+            addRefreshTokenCookie(response, newRefreshToken, autoLogin);
 
             // 6) 응답
             var newClaims = jwtUtil.validateRefreshToken(newRefreshToken);
@@ -516,9 +545,11 @@ public class AuthServicempl implements AuthService {
             checkNotBanned(user);
 
             // 액세스 재발급 + 리프레시 토큰 회전(sliding): 재발급받을 때마다 refresh 쿠키도 새로 교체
+            // autoLogin 여부는 claim 에서 승계 — 회전 때마다 수명이 초기화되지 않게 한다
+            boolean autoLogin = jwtUtil.isAutoLogin(claims);
             String newAccessToken = jwtUtil.generateAccessToken(user);
-            String newRefreshToken = jwtUtil.generateRefreshToken(user);
-            addRefreshTokenCookie(response, newRefreshToken);
+            String newRefreshToken = jwtUtil.generateRefreshToken(user, autoLogin, autoLoginDays());
+            addRefreshTokenCookie(response, newRefreshToken, autoLogin);
 
             long refreshExp = jwtUtil.validateRefreshToken(newRefreshToken).getExpiration().getTime();
 

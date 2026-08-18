@@ -164,6 +164,11 @@ VALUES ('notification_list_months', '2', '알림함에 보여줄 기간(개월) 
 INSERT INTO `policy_settings` (code, setting_value, description)
 VALUES ('notification_retention_days', '365', '알림 보존 일수 — 경과 시 새벽 배치(04:40)가 물리 삭제 (읽음/삭제 여부 무관, 발생 시각 기준)');
 
+-- [2026-08-18] 자동 로그인 유지 일수 (FE 요청 — 브라우저 재시작 후 세션 복원)
+-- 400 이 상한: 브라우저가 쿠키 만료를 400일로 잘라낸다(Chrome 104+). 더 크게 줘도 의미 없음
+INSERT INTO `policy_settings` (code, setting_value, description)
+VALUES ('auto_login_days', '400', '자동 로그인 유지 일수 — refreshToken 쿠키 Max-Age 와 리프레시 토큰 만료에 함께 적용. 미체크 로그인은 세션 쿠키 + 12시간');
+
 -- [2026-08-18] 통계 3테이블 (PM 확정. 구현은 담당자 과제 — HANDOFF-stats.md)
 --   설계 경위·원안 대비 변경: FEEDBACK-trending.md
 CREATE TABLE `stats_access_hourly` (
