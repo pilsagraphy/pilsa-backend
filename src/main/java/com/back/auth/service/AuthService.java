@@ -38,4 +38,6 @@ public interface AuthService {
     AuthResponse extend(String refreshToken, HttpServletResponse response);
     // 엑세스 토큰 발급/재발급 (+ 리프레시 토큰 회전)
     AuthResponse refresh(String refreshToken, HttpServletResponse response);
+    // 모든 기기에서 로그아웃 (users.token_version 을 올려 기존 토큰 전부 무효화)
+    void logoutAllDevices(HttpServletRequest request, HttpServletResponse response);
 }

@@ -98,6 +98,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     return;
                 }
 
+                // 무효화된 토큰 차단 (비밀번호 변경 등으로 users.token_version 이 올라간 경우).
+                // 무상태 JWT 라 발급 후에는 취소할 방법이 이것뿐이다 — 자세한 배경은 JwtUtil 참고.
+                int tokenVersion = jwtUtil.tokenVersion(claims);
+                int currentVersion = user.getTokenVersion() == null ? 0 : user.getTokenVersion();
+                if (tokenVersion != currentVersion) {
+                    log.warn("무효화된 토큰 접근: {} (token ver={}, current ver={})", loginId, tokenVersion, currentVersion);
+                    // 만료와 같은 값("1")을 쓴다 — 프론트 인터셉터가 재발급을 시도하고,
+                    // 재발급도 token_version 에서 막히면서 logout() + /login 리다이렉트로 이어진다.
+                    // "0" 을 주면 인터셉터가 아무것도 하지 않아 사용자가 깨진 화면에 그대로 남는다.
+                    response.setHeader("X-Token-Expired", "1");
+                    writeJson(response, HttpServletResponse.SC_UNAUTHORIZED,
+                            "{\"message\":\"로그인 정보가 만료되었습니다. 다시 로그인해주세요.\"}");
+                    return;
+                }
+
                 // member_type + admin_level → Security 권한으로 변환 (DB 최신값 기준)
                 List<SimpleGrantedAuthority> authorities = new ArrayList<>();
                 // 알려진 member_type만 권한으로 매핑 (임의 문자열이 ROLE_로 승격되는 것 방지 - 이중 방어)
