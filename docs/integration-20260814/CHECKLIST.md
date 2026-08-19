@@ -229,6 +229,15 @@ CREATE TABLE `notification_devices` (
   CONSTRAINT `fk_notification_devices_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='알림 수신 기기 등록부 (웹 푸시. 세션성 데이터 — 물리 삭제 허용)';
 
+-- [2026-08-19] 세션 무효화용 토큰 버전 (PM 승인). 리프레시가 무상태 JWT 라 발급 후 취소가 불가능했고,
+-- 자동 로그인이 400일짜리라 비밀번호를 바꿔도 탈취된 토큰이 살아 있는 구멍이 있었다.
+-- 이 값이 바뀌면 그 사용자의 기존 액세스·리프레시 토큰이 전부 무효가 된다.
+-- 올라가는 시점: 비밀번호 초기화(updatePassword 쿼리가 함께 +1) / PATCH /api/user/mypage/logout-all.
+-- 탈퇴·차단은 JwtAuthenticationFilter 가 매 요청 DB 를 봐서 이미 즉시 막으므로 이 값과 무관하다.
+-- 기본값 0 + 구 토큰의 ver claim 부재를 0 으로 읽어, 배포 시점에 살아 있던 세션은 끊기지 않는다.
+ALTER TABLE `users`
+  ADD COLUMN `token_version` int NOT NULL DEFAULT 0 COMMENT '세션 무효화용 토큰 버전 — 올리면 그 회원의 기존 토큰 전부 무효';
+
 ```
 - [x] events DDL 적용 (2026-08-14, location 값 전부 NULL 확인 후 제거)
 - [x] boards 권한 컬럼 DDL 적용 (#61 §1)
