@@ -42,6 +42,7 @@ public class SecurityConfig {
                     "/api/quotes/current",   // 이 주의 문장
                     "/api/event",              // 일정(캘린더) 조회
                     "/api/event/calendar.ics", // 구글 캘린더 구독 피드 (구글 서버가 인증 없이 가져감)
+                    "/api/event/*.ics",        // 일정 1건 ICS — 안드로이드 "이 일정만 담기" (구독 경로가 없어서)
                     "/api/mail/**", // 인증번호 관련
                     "/swagger-ui/**", // 스웨거 관련
                     "/v3/api-docs/**", // 스웨거 관련
