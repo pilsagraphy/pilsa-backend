@@ -104,7 +104,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 int currentVersion = user.getTokenVersion() == null ? 0 : user.getTokenVersion();
                 if (tokenVersion != currentVersion) {
                     log.warn("무효화된 토큰 접근: {} (token ver={}, current ver={})", loginId, tokenVersion, currentVersion);
-                    response.setHeader("X-Token-Expired", "true"); // 프론트가 만료와 같은 흐름으로 처리하게 한다
+                    // 만료와 같은 값("1")을 쓴다 — 프론트 인터셉터가 재발급을 시도하고,
+                    // 재발급도 token_version 에서 막히면서 logout() + /login 리다이렉트로 이어진다.
+                    // "0" 을 주면 인터셉터가 아무것도 하지 않아 사용자가 깨진 화면에 그대로 남는다.
+                    response.setHeader("X-Token-Expired", "1");
                     writeJson(response, HttpServletResponse.SC_UNAUTHORIZED,
                             "{\"message\":\"로그인 정보가 만료되었습니다. 다시 로그인해주세요.\"}");
                     return;

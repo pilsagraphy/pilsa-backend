@@ -37,7 +37,8 @@ public class SessionController {
 
                     ### 처리 내용
                     - `users.token_version` 을 +1 → 그 전에 발급된 액세스·리프레시 토큰이 **전부 무효**가 된다
-                    - 다른 기기는 다음 요청에서 401 `X-Token-Expired: true` 를 받고 로그인 화면으로 떨어진다
+                    - 다른 기기는 다음 요청에서 401 `X-Token-Expired: 1` 을 받는다 → 프론트가 재발급을 시도하고,
+                      재발급도 막히면서 자동으로 로그아웃 + 로그인 화면으로 이동한다 (프론트 수정 불필요)
                     - 지금 이 기기의 refreshToken 쿠키도 함께 만료된다 (즉, 호출한 본인도 로그아웃된다)
 
                     > 비밀번호 변경(`PUT /api/auth/password/reset`)은 이 처리를 **자동으로** 수행하므로
