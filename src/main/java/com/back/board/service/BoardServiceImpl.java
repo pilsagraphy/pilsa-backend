@@ -5,6 +5,8 @@ import com.back.board.exception.BoardException;
 import com.back.board.mapper.BoardMapper;
 import com.back.global.security.AuthUtils;
 import com.back.global.util.FileStorageUtil;
+import com.back.mypage.notification.dto.NotificationType;
+import com.back.mypage.notification.service.NotificationPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -13,7 +15,9 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 게시판 통합 서비스.
@@ -34,6 +38,7 @@ public class BoardServiceImpl implements BoardService {
     private final BoardMapper boardMapper;
     private final BoardPolicyService boardPolicyService;
     private final FileStorageUtil fileStorageUtil;
+    private final NotificationPublisher notificationPublisher;
 
     /**
      * 게시판 카테고리 목록 (카테고리 미사용 게시판은 빈 목록).
@@ -301,11 +306,45 @@ public class BoardServiceImpl implements BoardService {
 
         boardMapper.insertComment(postId, userId, request);
 
-        // TODO(담당자 과제): 댓글·대댓글 알림 발행을 여기에 연결한다.
-        //   누구에게 알림이 가야 하고 누구에게는 가면 안 되는지부터 정리할 것.
-        //   과제 설명: docs/integration-20260814/HANDOFF-notification-tasks.md
+        // 댓글/답글 알림 발행 (부가기능 — 실패해도 댓글 등록은 성공해야 하므로 내부에서 예외를 삼킨다)
+        publishCommentNotifications(boardId, postId, userId, parentCommentId);
 
         return new CommentResponse("댓글이 성공적으로 등록되었습니다.");
+    }
+
+    /**
+     * 댓글/답글 알림 발행.
+     *
+     * 수신자 규칙(확정):
+     *  - 일반 댓글  → 글 작성자에게 COMMENT
+     *  - 답글       → 부모 댓글 작성자에게 REPLY + 글 작성자에게 COMMENT (답글도 그 글에 달린 반응이므로)
+     *  - 같은 사람이 둘 다면 REPLY 하나만 (더 구체적인 쪽 우선)
+     *  - 어떤 경우든 <b>지금 댓글을 단 본인에게는 발행하지 않는다</b>
+     *
+     * 알림은 부가기능이라 발행 실패가 본 기능(댓글 등록)을 롤백·500 시키면 안 된다 → 전체를 try/catch 로 감싸 로그만 남긴다.
+     * (외부 HTTP 푸시는 NotificationPushService 가 @Async 로 이미 분리되어 있어 지연·실패가 이 흐름에 영향을 주지 않는다.)
+     */
+    private void publishCommentNotifications(Long boardId, Long postId, Long actorId, Long parentCommentId) {
+        try {
+            // 수신자 → 알림유형. 삽입 순서(REPLY 먼저)를 유지해 동일인 중복 시 putIfAbsent 가 REPLY 를 남기게 한다.
+            Map<Long, NotificationType> recipients = new LinkedHashMap<>();
+            if (parentCommentId != null) {
+                Long parentAuthorId = boardMapper.findCommentAuthorId(parentCommentId);
+                if (parentAuthorId != null) {
+                    recipients.put(parentAuthorId, NotificationType.REPLY);
+                }
+            }
+            Long postAuthorId = boardMapper.findAuthorIdByPostId(postId);
+            if (postAuthorId != null) {
+                recipients.putIfAbsent(postAuthorId, NotificationType.COMMENT); // 이미 REPLY 로 잡혔으면 유지
+            }
+            recipients.remove(actorId); // 본인 제외 (내 글/내 댓글에 내가 달아도 나에겐 안 감)
+
+            recipients.forEach((receiverId, type) ->
+                    notificationPublisher.publish(receiverId, type, "post", postId, boardId));
+        } catch (Exception e) {
+            log.warn("댓글 알림 발행 실패 - postId: {}, parentCommentId: {}, {}", postId, parentCommentId, e.getMessage());
+        }
     }
 
     // 댓글 수정: 관리자이거나 작성자 본인일 경우 가능
