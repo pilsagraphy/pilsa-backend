@@ -36,8 +36,20 @@ public class AuthController {
 
                     ### 요청 예시
                     ```json
-                    {"loginId":"hong","password":"pw1234"}
+                    {"loginId":"hong","password":"pw1234","autoLogin":false}
                     ```
+
+                    ### 자동 로그인 (autoLogin)
+                    | autoLogin | refreshToken 쿠키 | 리프레시 토큰 만료 |
+                    |---|---|---|
+                    | 미전달 · false | 세션 쿠키 (브라우저 완전 종료 시 소멸) | 12시간 |
+                    | true | Max-Age = policy_settings.auto_login_days (기본 400일) | 같은 400일 |
+
+                    - 쿠키 수명과 토큰 만료를 같은 값으로 맞춘다 — 어긋나면 자동 로그인이 조용히 실패한다.
+                    - 400일이 상한인 이유: 브라우저가 쿠키 만료를 400일로 잘라낸다(Chrome 104+). 더 크게 줘도 의미 없음.
+                    - 재발급(`/token/access/refresh`)·연장(`/token/refresh/extend`) 시 원래 로그인의 autoLogin 을
+                      토큰 claim 에서 읽어 승계한다 — 승계하지 않으면 첫 재발급에서 12시간으로 깎인다.
+                    - 자동 로그인이어도 재발급 때마다 DB에서 회원 상태를 다시 확인하므로 정지 계정은 즉시 차단된다.
 
                     ### 응답 예시
                     ```json
@@ -46,11 +58,14 @@ public class AuthController {
 
                     실패: 401 {"message":"아이디 또는 비밀번호가 올바르지 않습니다."}
                     실패: 401 {"message":"승인되지 않은 계정입니다."}
-                    실패(정지): 403 {"message":"정지된 계정입니다.","banType":"temporary","bannedUntil":"2026-03-30T00:00:00"}
+                    실패(정지): 403 {"message":"정지된 계정입니다.","banType":"temporary","bannedUntil":"2026.03.30 00:00"}
                     실패(차단): 403 {"message":"영구적으로 차단된 계정입니다.","banType":"permanent","bannedUntil":null}
 
                     ※ 정지/차단 사유는 message로, 해제 일시는 bannedUntil 필드로 내려간다 —
                     프론트가 "2026.03.30 00:00 부터 다시 로그인 할 수 있습니다"를 그릴 수 있다.
+                    ※ bannedUntil 은 ISO 가 아니라 화면 표기 그대로 'yyyy.MM.dd HH:mm' 다 (2026-08-18 변경).
+                    이 안내 화면이 쓰는 형태가 하나뿐이라 프론트에 포맷 코드를 두지 않기 위함이며,
+                    관리자 화면(제재 목록·상세)은 표기가 달라 그쪽 응답은 ISO 를 유지한다 — 인증 거부 응답 한정 규칙.
                     """
     )
     @PostMapping("/login")

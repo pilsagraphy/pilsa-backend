@@ -159,6 +159,53 @@ VALUES ('정기모임', 1), ('MT', 2), ('행사', 3), ('스터디', 4), ('기타
 INSERT INTO `policy_settings` (code, setting_value, description)
 VALUES ('notification_list_months', '2', '알림함에 보여줄 기간(개월) — 목록은 페이징 없이 이 기간만 전체 반환');
 
+-- [2026-08-17] 알림 보존기간 (PM 확정: 1년 보존 후 물리 삭제 — 새벽 배치 04:40, NotificationRetentionScheduler)
+-- 알림은 수신자 본인만 보는 UI 편의 데이터라 소프트삭제 대전제의 예외 (notification_devices 와 같은 논리)
+INSERT INTO `policy_settings` (code, setting_value, description)
+VALUES ('notification_retention_days', '365', '알림 보존 일수 — 경과 시 새벽 배치(04:40)가 물리 삭제 (읽음/삭제 여부 무관, 발생 시각 기준)');
+
+-- [2026-08-18] 자동 로그인 유지 일수 (FE 요청 — 브라우저 재시작 후 세션 복원)
+-- 400 이 상한: 브라우저가 쿠키 만료를 400일로 잘라낸다(Chrome 104+). 더 크게 줘도 의미 없음
+INSERT INTO `policy_settings` (code, setting_value, description)
+VALUES ('auto_login_days', '400', '자동 로그인 유지 일수 — refreshToken 쿠키 Max-Age 와 리프레시 토큰 만료에 함께 적용. 미체크 로그인은 세션 쿠키 + 12시간');
+
+-- [2026-08-18] 통계 3테이블 (PM 확정. 구현은 담당자 과제 — HANDOFF-stats.md)
+--   설계 경위·원안 대비 변경: FEEDBACK-trending.md
+CREATE TABLE `stats_access_hourly` (
+  `user_id`     bigint   NOT NULL COMMENT '접속 회원 (FK 없음 — 탈퇴 후에도 통계 보존)',
+  `access_hour` datetime NOT NULL COMMENT '시간 버킷 (분·초 절삭)',
+  PRIMARY KEY (`user_id`,`access_hour`),
+  KEY `idx_stats_access_hourly_hour` (`access_hour`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='회원 접속 기록 (시간 버킷당 1행. 일·주·월·학기·연 통계는 이 테이블 GROUP BY 로 산출)';
+
+CREATE TABLE `stats_signup_weekly` (
+  `stat_week`     date     NOT NULL COMMENT '주 시작일(월요일)',
+  `signup_count`  int      NOT NULL DEFAULT '0' COMMENT '신규가입 수 (탈퇴자 포함)',
+  `student_count` int      NOT NULL DEFAULT '0' COMMENT '그중 재학생 (집계 시점 스냅샷)',
+  `alumni_count`  int      NOT NULL DEFAULT '0' COMMENT '그중 졸업생 (집계 시점 스냅샷)',
+  `captured_at`   datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '집계 시각',
+  PRIMARY KEY (`stat_week`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='주간 신규가입 통계 (탈퇴 행 물리삭제로 소급 변하는 값을 고정)';
+-- 기존 이력 8주치 백필 완료 (users.created_at 주 단위 집계)
+
+-- stats_post_hourly: 구간 × 게시글 집계 + 급상승 판정 (컬럼 상세는 DB 에서 확인)
+--   원안의 post_metric_snapshot·trending_window 를 흡수한 단일 테이블.
+--   누적값(view_count 등)을 함께 저장해 다음 집계가 직전 행을 기준선으로 쓰고,
+--   접속자 수는 stats_access_hourly 에서 그때그때 계산한다(중복 저장 안 함).
+ALTER TABLE `boards`
+  ADD COLUMN `trending_enabled` tinyint(1) NOT NULL DEFAULT '1'
+    COMMENT '급상승 집계 대상 여부 (1=포함, 0=제외). 신설 게시판은 기본 포함' AFTER `state`;
+
+-- 정책 14행: trending_* 12행 + stats_retention_days(1825=5년) + signup_stats_recalc_weeks(2)
+--   전 항목 policy_settings 조회. 하드코딩 금지.
+
+-- [2026-08-17] 알림 이동 정보를 targetType/targetId/boardId 로 확정 (PM) — linkUrl 폐기
+-- 저장돼 있던 값이 API 경로(/api/...)라 클릭 시 화면이 아닌 JSON 이 떴다. 화면 경로 조립은 프론트 몫.
+-- boardId 는 컬럼 없이 조회 시 JOIN 으로 파생 (post→board_id / comment→post→board_id)
+ALTER TABLE `notifications` DROP COLUMN `link_url`;
+
 -- [2026-08-16] api_endpoints 에 스웨거 실테스트 확정일 컬럼 추가 (PM 수동 기록용)
 ALTER TABLE `api_endpoints`
   ADD COLUMN `confirmed_at` date DEFAULT NULL
@@ -181,6 +228,15 @@ CREATE TABLE `notification_devices` (
   KEY `idx_notification_devices_user` (`user_id`),
   CONSTRAINT `fk_notification_devices_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='알림 수신 기기 등록부 (웹 푸시. 세션성 데이터 — 물리 삭제 허용)';
+
+-- [2026-08-19] 세션 무효화용 토큰 버전 (PM 승인). 리프레시가 무상태 JWT 라 발급 후 취소가 불가능했고,
+-- 자동 로그인이 400일짜리라 비밀번호를 바꿔도 탈취된 토큰이 살아 있는 구멍이 있었다.
+-- 이 값이 바뀌면 그 사용자의 기존 액세스·리프레시 토큰이 전부 무효가 된다.
+-- 올라가는 시점: 비밀번호 초기화(updatePassword 쿼리가 함께 +1) / PATCH /api/user/mypage/logout-all.
+-- 탈퇴·차단은 JwtAuthenticationFilter 가 매 요청 DB 를 봐서 이미 즉시 막으므로 이 값과 무관하다.
+-- 기본값 0 + 구 토큰의 ver claim 부재를 0 으로 읽어, 배포 시점에 살아 있던 세션은 끊기지 않는다.
+ALTER TABLE `users`
+  ADD COLUMN `token_version` int NOT NULL DEFAULT 0 COMMENT '세션 무효화용 토큰 버전 — 올리면 그 회원의 기존 토큰 전부 무효';
 
 ```
 - [x] events DDL 적용 (2026-08-14, location 값 전부 NULL 확인 후 제거)

@@ -1,0 +1,50 @@
+name: Deploy QA
+
+# dev 브랜치 push 시 QA(포트 8081, pilsa-qa.service)에 자동 배포
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend-qa
+  cancel-in-progress: false
+
+env:
+  DEPLOY_BRANCH: dev
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    timeout-minutes: 25
+    steps:
+      - name: Deploy backend to QA
+        run: |
+          set -euo pipefail
+
+          echo "===== [1/4] 소스 최신화 (origin/${DEPLOY_BRANCH}) ====="
+          cd ~/backend-qa
+          git fetch origin "${DEPLOY_BRANCH}"
+          git reset --hard "origin/${DEPLOY_BRANCH}"
+          git log --oneline -1
+
+          echo "===== [2/4] Gradle 빌드 ====="
+          chmod +x ./gradlew
+          ./gradlew build -x test
+
+          echo "===== [3/4] pilsa-qa 서비스 재시작 ====="
+          sudo systemctl restart pilsa-qa
+
+          echo "===== [4/4] 헬스체크 (포트 8081) ====="
+          for i in $(seq 1 30); do
+            sleep 2
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8081/actuator/health || true)
+            if [ "$code" != "000" ]; then
+              echo "QA 백엔드 응답 확인 (HTTP $code, 약 $((i*2))초 소요)"
+              sudo systemctl is-active pilsa-qa
+              exit 0
+            fi
+          done
+          echo "QA 백엔드가 기동하지 않았습니다. 최근 로그:"
+          sudo journalctl -u pilsa-qa -n 50 --no-pager
+          exit 1

@@ -28,6 +28,15 @@
         WHERE user_id = #{userId}
     </select>
 
+    <!-- 화면 응답용. p256dh/auth_secret 은 유출되면 그 기기로 임의 푸시를 보낼 수 있어 내려주지 않는다 -->
+    <select id="findSummaryByUserId" resultType="com.back.mypage.notification.dto.NotificationDeviceSummary">
+        SELECT endpoint,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS registeredAt
+        FROM notification_devices
+        WHERE user_id = #{userId}
+        ORDER BY created_at DESC
+    </select>
+
     <delete id="deleteById">
         DELETE FROM notification_devices WHERE device_id = #{deviceId}
     </delete>

@@ -14,4 +14,7 @@ public interface EventMapper {
 
     // 2. 캘린더 구독(ICS) 피드용 전체 일정
     List<EventCalendarRow> findAllForCalendar();
+
+    // 3. 단일 일정 ICS 용 — 없거나 삭제된 일정이면 null
+    EventCalendarRow findOneForCalendar(@Param("eventId") Long eventId);
 }

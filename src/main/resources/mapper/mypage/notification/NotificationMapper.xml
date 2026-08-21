@@ -97,4 +97,16 @@
           AND state = 'normal'
     </update>
 
+    <select id="findPolicySetting" resultType="string">
+        SELECT setting_value FROM policy_settings WHERE code = #{code}
+    </select>
+
+    <!-- 보존기간 경과 알림 물리 삭제.
+         알림은 수신자 본인만 보는 UI 편의 데이터라 증적 가치가 없다 — 소프트삭제 대전제의 예외.
+         읽음/삭제(state) 여부와 무관하게 발생 시각 기준으로만 자른다 -->
+    <delete id="deleteExpiredNotifications">
+        DELETE FROM notifications
+        WHERE created_at &lt; DATE_SUB(NOW(), INTERVAL #{retentionDays} DAY)
+    </delete>
+
 </mapper>
