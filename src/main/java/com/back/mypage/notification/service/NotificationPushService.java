@@ -71,8 +71,9 @@ public class NotificationPushService {
 
         byte[] payload;
         try {
-            // 프론트 Service Worker 의 push 핸들러가 그대로 showNotification 에 쓰는 형태
+            // 프론트 Service Worker 의 push 핸들러가 그대로 showNotification / 화면 경로 조립에 쓰는 형태
             Map<String, Object> json = new LinkedHashMap<>();
+            json.put("toastId", toastId);
             json.put("title", title);
             json.put("body", body != null ? body : title);
             json.put("toastId", toastId);
