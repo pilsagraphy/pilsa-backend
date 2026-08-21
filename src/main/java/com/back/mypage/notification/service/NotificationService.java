@@ -4,6 +4,8 @@ import com.back.mypage.notification.dto.NotificationDeviceRequest;
 import com.back.mypage.notification.dto.NotificationDeviceStatusResponse;
 import com.back.mypage.notification.dto.NotificationDeviceSummary;
 import com.back.mypage.notification.dto.NotificationDeviceToggleResponse;
+import com.back.mypage.notification.dto.NotificationListResponse;
+import com.back.mypage.notification.dto.NotificationReadResponse;
 import com.back.mypage.notification.exception.NotificationException;
 import com.back.mypage.notification.mapper.NotificationDeviceMapper;
 import com.back.mypage.notification.mapper.NotificationMapper;
@@ -14,7 +16,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 알림함 API(목록·뱃지·읽음·삭제) + 알림 수신 기기 등록부(웹 푸시 전달 채널).
