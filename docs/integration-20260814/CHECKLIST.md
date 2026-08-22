@@ -215,6 +215,16 @@ ALTER TABLE `api_endpoints`
 -- 비밀번호 해시는 wm5256 과 동일하게 복사 (동일 비밀번호로 로그인). 상황: 재학/졸업/관리자Lv1~3/정지중/영구차단/정지만료/탈퇴
 -- 상세는 docs/integration-20260814/TEST-PLAN.md §1
 
+-- [2026-08-22] 관리자 대시보드 "신규 가입자"/"신규 게시글" 집계 기간 (AdminDashboardMapper.xml 이 로드, 기본 1일=오늘)
+INSERT INTO `policy_settings` (code, setting_value, description) VALUES
+('dashboard_new_user_period_days', '1', '관리자 대시보드 신규 가입자 집계 기간(일)'),
+('dashboard_new_post_period_days', '1', '관리자 대시보드 신규 게시글 집계 기간(일)');
+
+-- [2026-08-22] 마이페이지 "이번 학기 활동 요약" 학기 기준월 (MyPageServiceImpl 이 로드, 기본 3월/9월 시작)
+INSERT INTO `policy_settings` (code, setting_value, description) VALUES
+('semester1_start_month', '3', '1학기 시작월 (마이페이지 이번 학기 활동 요약 기준)'),
+('semester2_start_month', '9', '2학기 시작월 (마이페이지 이번 학기 활동 요약 기준)');
+
 -- [2026-08-16] 알림 수신 기기 등록부 (웹 푸시 채널 — PM 지시로 2기 개발). 세션성 데이터라 물리삭제 예외
 CREATE TABLE `notification_devices` (
   `device_id`   bigint       NOT NULL AUTO_INCREMENT COMMENT '알림 수신 기기 고유 번호',
