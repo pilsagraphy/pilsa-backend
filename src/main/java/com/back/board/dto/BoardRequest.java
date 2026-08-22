@@ -48,4 +48,10 @@ public class BoardRequest {
 
     @Schema(description = "[서버 내부용] DB 저장 후 생성된 게시글 ID. 요청 시 입력 불필요", hidden = true)
     private Long postId;
+
+    // 임시저장에서 발행하는 경우에만 실린다. 발행 성공과 같은 트랜잭션에서 이 초안(+첨부 소유권 이관 후)이 삭제된다.
+    // 없거나 남의/다른 게시판 초안이면 무시하고 발행은 성공시킨다(발행을 막을 이유가 없음 — SPEC-A5 §2-6).
+    @Schema(description = "임시저장에서 발행할 때만 전달하는 초안 ID (선택). 발행 성공 시 해당 초안 자동 삭제 + 첨부 이관",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true, example = "7")
+    private Long draftId;
 }

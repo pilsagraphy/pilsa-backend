@@ -6,6 +6,27 @@
 
 ---
 
+## ✅ 구현 완료 (2026-08-22) — 최종 확정 사항
+
+`com.back.board.draft` 패키지로 구현. DDL 은 CHECKLIST.md [2026-08-22] 항목에 기록(레포 .sql 미커밋 컨벤션).
+
+- **상한 강제 방식**: PM 지시로 "**DB에서부터 5개 제한**" 채택 → 원안(§2 애플리케이션 count 검사)이 아니라
+  `drafts.slot_no`(1~5) + `UNIQUE(user_id, board_id, slot_no)` 로 물리 강제. 서비스는 `policy_settings.draft_max_count`
+  로 빈 슬롯을 1..N 탐색하고, 경합으로 슬롯이 겹치면 duplicate-key 를 **409** 로 변환한다.
+  상한 범위는 CHECKLIST 의 `draft_max_count` 설명("회원당 **게시판별**")대로 **게시판별 5개**로 확정.
+- **본문/첨부**: 본문은 마크다운 확정(2026-08-16)이라 원안 §3 의 "HTML 파싱 재조정"은 채택하지 않고,
+  프론트가 보내는 **`attachmentIds` 목록을 소유의 정본**으로 삼아 재조정한다. (§6-1 방식 A + 완화 CHECK)
+- **첨부 CHECK**: 완화형(`NOT(post_id IS NOT NULL AND draft_id IS NOT NULL)`) 채택 —
+  선업로드 대기(둘 다 NULL)를 허용하기 위함(엄격 XOR 아님). `attachments` 에 `attachment_type`('file'/'image'),
+  `uploaded_by`(대기분 소유 검증) 추가.
+- **선업로드 엔드포인트**: `POST .../posts/images`(본문 이미지) + `POST .../posts/attachments`(첨부) — 둘 다 `{attachmentId, url, ...}` 반환.
+- **발행 연동**: `POST .../posts` 에 `draftId` form 필드. 순서 엄수(UPDATE 이관 → DELETE 초안).
+- **청소 배치**: `OrphanAttachmentPurgeScheduler`(04:50) — 대기 첨부를 `draft_orphan_purge_hours`(기본 24h) 경과 시 물리 삭제.
+
+> 아래 원안 §1·§2 의 "slot_no 없음 / count 검사" 서술은 착수 전 초안이며, 최종 구현은 위 확정 사항을 따른다.
+
+---
+
 ## 1. DB 설계 (팀원이 DDL 작성 → PM 승인 후 qa_pilsa 수동 적용)
 
 **posts 테이블 재사용 금지.** `posts.state='draft'` 방식은 목록/조회수/신고/제재/관리자 화면 쿼리

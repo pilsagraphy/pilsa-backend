@@ -1,5 +1,6 @@
 package com.back.board.controller;
 
+import com.back.board.draft.dto.AttachmentUploadResponse;
 import com.back.board.dto.*;
 import com.back.board.service.BoardService;
 import jakarta.validation.Valid;
@@ -11,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -218,12 +220,15 @@ public class BoardController {
                     categoryId: 4
                     isAnonymous: false
                     files: 자료.pdf, 사진.png         ← 선택, 다중 첨부
+                    draftId: 7                       ← 선택, 임시저장에서 발행할 때만. 발행 성공 시 이 초안 자동 삭제 + 첨부 이관
                     ```
 
                     ### 응답 예시
                     ```json
                     {"message": "게시글이 성공적으로 등록되었습니다.", "postId": 185}
                     ```
+                    ※ draftId 를 넣으면 발행과 같은 트랜잭션에서 그 초안의 첨부가 이 글로 이관되고 초안은 삭제됩니다.
+                      없거나 남의/다른 게시판 초안이면 무시하고 발행은 성공합니다.
 
                     실패: 400 {"message":"제목은 필수입니다."}
                     실패: 400 {"message":"제목은 200자를 넘을 수 없습니다."}
@@ -236,6 +241,63 @@ public class BoardController {
             @Valid @ModelAttribute BoardRequest request) {
         log.info("게시글 등록 요청 - boardId: {}, title: {}", boardId, request.getTitle());
         return ResponseEntity.ok(boardService.createPost(boardId, request));
+    }
+
+    @Operation(summary = "본문 인라인 이미지 선업로드",
+            description = """
+                    리치/마크다운 에디터에서 본문에 이미지를 넣는 순간 호출합니다(multipart/form-data, 이미지 1장).
+                    표시할 URL 이 즉시 필요하므로 발행/임시저장 구분 없이 선업로드하며, 에디터는 받은 url 을 마크다운 ![](url) 로 삽입합니다.
+                    반환된 attachmentId 는 저장(POST/PUT .../drafts)·발행(POST .../posts) 시 attachmentIds 로 되돌려 보내 소유를 연결합니다.
+                    어디에도 연결되지 않은 채 방치된 업로드는 청소 배치가 자동 삭제합니다.
+
+                    ### 요청 예시
+                    ```
+                    POST /api/user/boards/2/posts/images    (multipart/form-data)
+                    file: 사진.png    ← 이미지 1장
+                    ```
+
+                    ### 응답 예시
+                    ```json
+                    {"attachmentId": 31, "url": "/uploads/board-2/inline/사진.png", "originName": "사진.png", "fileSize": 20480}
+                    ```
+
+                    실패: 400 {"message":"이미지 파일만 업로드할 수 있습니다."}
+                    실패: 403 {"message":"이 게시판에 글을 등록할 권한이 없습니다."}
+                    """)
+    @PostMapping(value = "/posts/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<AttachmentUploadResponse> uploadInlineImage(
+            @Parameter(description = BOARD_ID_DESC, example = "2") @PathVariable Long boardId,
+            @Parameter(description = "이미지 파일 1장") @RequestPart("file") MultipartFile file) {
+        log.info("본문 인라인 이미지 선업로드 요청 - boardId: {}", boardId);
+        return ResponseEntity.ok(boardService.uploadInlineImage(boardId, file));
+    }
+
+    @Operation(summary = "첨부파일 선업로드",
+            description = """
+                    임시저장/발행 전에 첨부파일을 미리 올릴 때 호출합니다(multipart/form-data, 파일 1개).
+                    반환된 attachmentId 를 저장/발행 시 attachmentIds 로 되돌려 보내 초안·게시글에 연결합니다.
+                    (게시글 등록 시 files 로 한 번에 올리는 기존 방식과 별개로, 임시저장에 첨부를 보존하려면 이 선업로드가 필요합니다.)
+
+                    ### 요청 예시
+                    ```
+                    POST /api/user/boards/2/posts/attachments    (multipart/form-data)
+                    file: 자료.pdf
+                    ```
+
+                    ### 응답 예시
+                    ```json
+                    {"attachmentId": 32, "url": "/uploads/board-2/files/자료.pdf", "originName": "자료.pdf", "fileSize": 12345}
+                    ```
+
+                    실패: 400 {"message":"이 게시판은 첨부파일을 사용하지 않습니다."}
+                    실패: 403 {"message":"이 게시판에 글을 등록할 권한이 없습니다."}
+                    """)
+    @PostMapping(value = "/posts/attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<AttachmentUploadResponse> uploadAttachment(
+            @Parameter(description = BOARD_ID_DESC, example = "2") @PathVariable Long boardId,
+            @Parameter(description = "첨부파일 1개") @RequestPart("file") MultipartFile file) {
+        log.info("첨부파일 선업로드 요청 - boardId: {}", boardId);
+        return ResponseEntity.ok(boardService.uploadAttachment(boardId, file));
     }
 
     @Operation(summary = "게시글 수정",

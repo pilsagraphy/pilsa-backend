@@ -1,5 +1,8 @@
 package com.back.board.service;
 
+import com.back.board.draft.dto.AttachmentUploadResponse;
+import com.back.board.draft.dto.PendingAttachment;
+import com.back.board.draft.mapper.DraftMapper;
 import com.back.board.dto.*;
 import com.back.board.exception.BoardException;
 import com.back.board.mapper.BoardMapper;
@@ -39,6 +42,8 @@ public class BoardServiceImpl implements BoardService {
     private final BoardPolicyService boardPolicyService;
     private final FileStorageUtil fileStorageUtil;
     private final NotificationPublisher notificationPublisher;
+    // 초안 첨부 이관·선업로드 등 attachments 소유 이전 쿼리를 draft 도메인과 공유한다
+    private final DraftMapper draftMapper;
 
     /**
      * 게시판 카테고리 목록 (카테고리 미사용 게시판은 빈 목록).
@@ -198,8 +203,85 @@ public class BoardServiceImpl implements BoardService {
         boardMapper.insertPost(request, userId, boardId, pinned);
         saveAttachments(policy, request.getPostId(), request.getFiles());
 
+        // 임시저장에서 발행한 경우: 초안 첨부를 이 게시글로 이관한 뒤 초안을 삭제한다(같은 트랜잭션)
+        publishFromDraftIfPresent(request.getDraftId(), userId, request.getPostId());
+
         // 생성 PK 반환 — 프론트가 등록 직후 상세 페이지로 이동하는 데 필요
         return new BoardResponse("게시글이 성공적으로 등록되었습니다.", request.getPostId());
+    }
+
+    /**
+     * 임시저장 → 발행 연동.
+     *
+     * 순서 절대 중요(SPEC-A5 §6-3): <b>첨부 소유권 이관(UPDATE) 먼저, 초안 삭제(DELETE) 나중.</b>
+     * 순서를 바꾸면 fk_attachments_draft 의 ON DELETE CASCADE 가 방금 발행한 글의 첨부를 통째로 지운다.
+     * 단일 UPDATE(post_id 세팅 + draft_id 비움)라 완화 CHECK(동시 소유 금지)도 만족한다.
+     *
+     * 없는/남의/다른 회원 초안이면 두 쿼리 모두 0행이 되어 조용히 무시된다 —
+     * 발행 자체를 막을 이유가 없기 때문(SPEC-A5 §2-6). draftId 가 없으면 아무 것도 하지 않는다.
+     */
+    private void publishFromDraftIfPresent(Long draftId, Long userId, Long postId) {
+        if (draftId == null) {
+            return;
+        }
+        draftMapper.transferDraftAttachmentsToPost(draftId, userId, postId); // ① 이관 먼저
+        draftMapper.deleteDraft(draftId, userId);                            // ② 초안 삭제 나중
+    }
+
+    /**
+     * 본문 인라인 이미지 선업로드.
+     * 이미지는 발행/임시저장 구분 없이 에디터에 넣는 순간 URL 이 필요하므로 선업로드한다(백로그 A-4).
+     * 업로드 대기 상태(post_id·draft_id 둘 다 NULL)로 저장하고, 저장/발행 시 attachmentId 로 소유가 연결된다.
+     * 초안·게시글 어디에도 연결되지 않은 채 방치되면 청소 배치가 물리 삭제한다.
+     */
+    @Override
+    @Transactional
+    public AttachmentUploadResponse uploadInlineImage(Long boardId, MultipartFile file) {
+        BoardPolicy policy = boardPolicyService.requireWritable(boardId);
+        Long userId = AuthUtils.currentUserId();
+
+        if (file == null || file.isEmpty()) {
+            throw new BoardException("업로드할 파일이 없습니다.", HttpStatus.BAD_REQUEST);
+        }
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.startsWith("image/")) {
+            throw new BoardException("이미지 파일만 업로드할 수 있습니다.", HttpStatus.BAD_REQUEST);
+        }
+        // 인라인 이미지는 본문 요소라 게시판의 첨부 허용 여부와 무관하게 허용한다
+        return storePendingAttachment(policy, userId, file, "image", "/inline");
+    }
+
+    /**
+     * 첨부파일 선업로드.
+     * 임시저장/발행 전에 올려두고 attachmentId 로 초안·게시글에 연결한다.
+     * 첨부를 사용하지 않는 게시판이면 400.
+     */
+    @Override
+    @Transactional
+    public AttachmentUploadResponse uploadAttachment(Long boardId, MultipartFile file) {
+        BoardPolicy policy = boardPolicyService.requireWritable(boardId);
+        Long userId = AuthUtils.currentUserId();
+
+        if (file == null || file.isEmpty()) {
+            throw new BoardException("업로드할 파일이 없습니다.", HttpStatus.BAD_REQUEST);
+        }
+        if (!policy.isAttachmentAllowed()) {
+            throw new BoardException("이 게시판은 첨부파일을 사용하지 않습니다.", HttpStatus.BAD_REQUEST);
+        }
+        return storePendingAttachment(policy, userId, file, "file", "/files");
+    }
+
+    // 선업로드 공통: 물리 저장 → 업로드 대기 첨부 행 등록 → {attachmentId, url, ...} 반환
+    private AttachmentUploadResponse storePendingAttachment(BoardPolicy policy, Long userId,
+                                                           MultipartFile file, String attachmentType, String subDir) {
+        String savedPath = fileStorageUtil.save(file, policy.uploadDir() + subDir);
+        // insertPendingAttachment 는 useGeneratedKeys 로 생성된 attachment_id 를 이 DTO 에 채워준다(insertPost 방식)
+        PendingAttachment pending = new PendingAttachment(
+                userId, file.getOriginalFilename(), savedPath, file.getSize(),
+                file.getContentType(), attachmentType);
+        draftMapper.insertPendingAttachment(pending);
+        return new AttachmentUploadResponse(pending.getAttachmentId(), savedPath,
+                file.getOriginalFilename(), file.getSize());
     }
 
     // 첨부 저장 (등록·수정 공통). 첨부를 쓰지 않는 게시판이면 조용히 무시한다

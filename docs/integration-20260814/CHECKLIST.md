@@ -257,7 +257,55 @@ CREATE TABLE `notification_devices` (
 ALTER TABLE `users`
   ADD COLUMN `token_version` int NOT NULL DEFAULT 0 COMMENT '세션 무효화용 토큰 버전 — 올리면 그 회원의 기존 토큰 전부 무효';
 
+-- [2026-08-22] 게시판 임시저장(Draft) — SPEC-A5. drafts 신규 + attachments 확장.
+--   상한 강제 방식: PM 지시로 "DB에서부터 5개 제한" 채택 → slot_no(1~5) + UNIQUE(user_id,board_id,slot_no)
+--     로 물리 강제(경합에도 6번째 INSERT 는 duplicate-key 로 실패 → 서비스가 409 로 변환).
+--     회원당 '게시판별' 5개 (policy_settings.draft_max_count 의 설명과 일치). 앱은 이 값으로 빈 슬롯을 1..N 탐색하되,
+--     최종 상한은 DB(UNIQUE + CHECK)가 보증한다 — draft_max_count 를 5 이외로 바꾸려면 아래 CHECK 범위도 함께 조정할 것.
+--   소프트삭제 대전제의 예외: 발행 전 개인 작업물이라 state 컬럼 없이 물리 DELETE (CLAUDE.md '세션성 데이터' 예외).
+CREATE TABLE `drafts` (
+  `draft_id`     bigint       NOT NULL AUTO_INCREMENT COMMENT '임시저장 고유 번호',
+  `user_id`      bigint       NOT NULL COMMENT '작성자 (→users)',
+  `slot_no`      tinyint unsigned NOT NULL COMMENT '임시저장 슬롯(1~5) — 게시판별 UNIQUE 로 최대 5개 물리 강제',
+  `board_id`     bigint       NOT NULL COMMENT '작성 중인 게시판 (→boards)',
+  `category_id`  bigint       DEFAULT NULL COMMENT '선택한 카테고리 (→categories, 미선택 가능)',
+  `title`        varchar(200) DEFAULT NULL COMMENT '제목 (작성 중이라 NULL 허용)',
+  `content`      longtext     DEFAULT NULL COMMENT '본문 마크다운 (작성 중이라 NULL 허용)',
+  `is_anonymous` tinyint(1)   NOT NULL DEFAULT '0' COMMENT '익명 게시 체크 여부 (정책 검증은 발행 시점)',
+  `created_at`   datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '최초 저장 일시',
+  `updated_at`   datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '마지막 저장 일시 (목록·단건이 내려주는 값 — 이어쓰기 판단 기준)',
+  PRIMARY KEY (`draft_id`),
+  UNIQUE KEY `uq_drafts_user_board_slot` (`user_id`,`board_id`,`slot_no`) COMMENT '회원×게시판당 슬롯 1~5 → 6번째 저장 물리 차단',
+  KEY `idx_drafts_user_board_updated` (`user_id`,`board_id`,`updated_at`) COMMENT '내 임시저장 목록(게시판별 최근순) 조회용',
+  CONSTRAINT `ck_drafts_slot_no` CHECK (`slot_no` BETWEEN 1 AND 5),
+  CONSTRAINT `fk_drafts_user`     FOREIGN KEY (`user_id`)     REFERENCES `users` (`user_id`)         ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_drafts_board`    FOREIGN KEY (`board_id`)    REFERENCES `boards` (`board_id`)       ON UPDATE CASCADE,
+  CONSTRAINT `fk_drafts_category` FOREIGN KEY (`category_id`) REFERENCES `categories` (`category_id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='글쓰기 임시저장 (발행 전 초안. 물리삭제 예외)';
+
+-- attachments 확장 (초안 첨부 + 본문 인라인 이미지 선업로드 지원). 완화 CHECK(방식 A) — '동시 소유'만 금지, 둘 다 NULL(업로드 대기)은 허용.
+ALTER TABLE `attachments`
+  MODIFY COLUMN `post_id` bigint NULL COMMENT '게시글 고유 번호 (초안/업로드 대기 상태면 NULL)',
+  ADD COLUMN `draft_id` bigint NULL COMMENT '임시저장 고유 번호 (발행되면 NULL 로 비움)' AFTER `post_id`,
+  ADD COLUMN `attachment_type` enum('file','image') NOT NULL DEFAULT 'file'
+    COMMENT 'file=첨부목록 노출 / image=에디터 본문 삽입 이미지(마크다운 안에서 참조)' AFTER `file_type`,
+  ADD COLUMN `uploaded_by` bigint NULL COMMENT '업로더 회원 (선업로드 대기분의 소유 검증·정리 배치용)' AFTER `attachment_type`,
+  ADD KEY `idx_attachments_draft` (`draft_id`),
+  ADD KEY `idx_attachments_pending` (`post_id`,`draft_id`,`created_at`) COMMENT '업로드 대기(둘 다 NULL) 청소 배치용',
+  ADD CONSTRAINT `fk_attachments_draft`    FOREIGN KEY (`draft_id`)    REFERENCES `drafts` (`draft_id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_attachments_uploader` FOREIGN KEY (`uploaded_by`) REFERENCES `users` (`user_id`)   ON DELETE SET NULL ON UPDATE CASCADE,
+  ADD CONSTRAINT `ck_attachments_owner` CHECK ( NOT (`post_id` IS NOT NULL AND `draft_id` IS NOT NULL) );
+
+-- [2026-08-22] 업로드 대기(post_id·draft_id 둘 다 NULL) 첨부 청소 배치 주기 — OrphanAttachmentPurgeScheduler 가 로드(하드코딩 금지)
+INSERT INTO `policy_settings` (code, setting_value, description)
+VALUES ('draft_orphan_purge_hours', '24', '선업로드 후 초안/게시글에 연결되지 않은 첨부(업로드 대기)를 물리 삭제하기까지의 시간(시간)');
+
 ```
+> **임시저장 DDL 적용 시 주의**
+> - `drafts` 를 **먼저** 만든 뒤 `attachments` 의 `fk_attachments_draft` 를 건다(참조 순서).
+> - 발행 트랜잭션 순서 **엄수**: `UPDATE attachments SET post_id=?, draft_id=NULL WHERE draft_id=?` **먼저**, `DELETE drafts` **나중**.
+>   (순서를 바꾸면 `ON DELETE CASCADE` 가 방금 발행한 글의 첨부를 통째로 지운다.)
+> - 롤백: `ALTER TABLE attachments DROP CHECK ck_attachments_owner, DROP FOREIGN KEY fk_attachments_draft, DROP FOREIGN KEY fk_attachments_uploader, DROP KEY idx_attachments_draft, DROP KEY idx_attachments_pending, DROP COLUMN uploaded_by, DROP COLUMN attachment_type, DROP COLUMN draft_id;` → `DELETE FROM attachments WHERE post_id IS NULL;` → `MODIFY post_id bigint NOT NULL;` → `DROP TABLE drafts;`
 - [x] events DDL 적용 (2026-08-14, location 값 전부 NULL 확인 후 제거)
 - [x] boards 권한 컬럼 DDL 적용 (#61 §1)
 - [x] ~~boards 컬럼 제거 (#70)~~ → 적용 후 **PM 지시로 원복 완료** (allow_comment/allow_attachment/category_mode 원값 유지)
