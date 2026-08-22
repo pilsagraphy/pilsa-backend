@@ -1,6 +1,6 @@
 package com.back.admin.post.service;
 
-import com.back.admin.common.AdminServiceSupport;
+import com.back.admin.post.support.PostAdminSupport;
 import com.back.admin.post.dto.AdminPostDetailResponse;
 import com.back.admin.post.dto.AdminPostListResponse;
 import com.back.admin.post.dto.AdminPostPageResponse;
@@ -25,8 +25,8 @@ public class AdminPostServiceImpl implements AdminPostService {
     @Override
     public AdminPostPageResponse getPostList(int page, int size, Long boardId, String keyword) {
         AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
-        page = AdminServiceSupport.clampPage(page);
-        size = AdminServiceSupport.clampSize(size);
+        page = PostAdminSupport.clampPage(page);
+        size = PostAdminSupport.clampSize(size);
 
         int totalCount = adminPostMapper.countPosts(boardId, keyword);
         int totalPages = (int) Math.ceil((double) totalCount / size);

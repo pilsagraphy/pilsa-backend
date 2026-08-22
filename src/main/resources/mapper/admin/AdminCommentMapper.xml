@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.admin.comment.mapper.AdminCommentMapper">
+
+    <!-- 공통 WHERE: deleted 제외 + 게시판 필터 + 내용/글쓴이 검색 -->
+    <sql id="listWhere">
+        WHERE c.state &lt;&gt; 'deleted'
+        <if test="boardId != null">
+            AND p.board_id = #{boardId}
+        </if>
+        <if test="keyword != null and keyword != ''">
+            AND (c.content LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\'
+                 OR u.name LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\')
+        </if>
+    </sql>
+
+    <select id="findComments" resultType="com.back.admin.comment.dto.AdminCommentListResponse">
+        SELECT
+            c.comment_id AS commentId,
+            c.post_id    AS postId,
+            p.board_id   AS boardId,
+            b.name       AS boardName,
+            u.name       AS authorName,
+            c.content,
+            c.created_at AS created,
+            c.state
+        FROM comments c
+        INNER JOIN posts  p ON c.post_id = p.post_id
+        INNER JOIN boards b ON p.board_id = b.board_id
+        INNER JOIN users  u ON c.user_id = u.user_id
+        <include refid="listWhere"/>
+        ORDER BY c.created_at DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countComments" resultType="int">
+        SELECT COUNT(*)
+        FROM comments c
+        INNER JOIN posts  p ON c.post_id = p.post_id
+        INNER JOIN users  u ON c.user_id = u.user_id
+        <include refid="listWhere"/>
+    </select>
+
+</mapper>

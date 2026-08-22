@@ -1,17 +1,16 @@
-package com.back.admin.common;
+package com.back.admin.post.support;
 
-import com.back.admin.common.exception.AdminException;
 import com.back.global.exception.BaseException;
-import org.springframework.http.HttpStatus;
 import com.back.global.security.AuthUtils;
 
-// 관리자 서비스 공통 헬퍼 (인증 주체 추출, 일괄 실패 메시지, 페이지 파라미터 보정).
-// 상태를 갖지 않는 정적 유틸.
-public final class AdminServiceSupport {
+// 게시글 관리 서비스 공통 헬퍼 (인증 주체 추출, 일괄 실패 메시지, 페이지 파라미터 보정).
+// 상태를 갖지 않는 정적 유틸. 이름은 도메인별로 유일해야 한다 —
+// mybatis.type-aliases-package=com.back 가 단순 클래스명으로 별칭을 등록하므로 중복명은 기동 실패를 유발한다.
+public final class PostAdminSupport {
 
     private static final int MAX_PAGE_SIZE = 100;
 
-    private AdminServiceSupport() {
+    private PostAdminSupport() {
     }
 
     // 현재 로그인한 관리자 user_id (/api/admin/** 는 SecurityConfig 에서 ADMIN 으로 이미 제한됨)

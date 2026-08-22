@@ -1,5 +1,6 @@
 package com.back.board.report.controller;
 
+import com.back.board.report.dto.ReportReasonResponse;
 import com.back.board.report.dto.ReportRequest;
 import com.back.board.report.dto.ReportResponse;
 import com.back.board.report.service.ReportService;
@@ -8,9 +9,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @Slf4j
 @RestController
@@ -21,6 +25,33 @@ import org.springframework.web.bind.annotation.RestController;
 public class ReportController {
 
     private final ReportService reportService;
+
+    // 신고 사유 카테고리 목록 (신고 모달 셀렉트바) — reasons 테이블 노출, FE 하드코딩 제거용
+    @Operation(summary = "신고 사유 카테고리 목록",
+            description = """
+                    게시글/댓글 신고 모달의 사유 셀렉트바를 그릴 때 호출한다. reasons 테이블을 노출 순서대로 내려주며,
+                    프론트가 사유 목록을 하드코딩하지 않도록 한다.
+
+                    ### 요청 예시
+                    ```
+                    GET /api/user/reports/reasons
+                    ```
+                    (본문 없음)
+
+                    ### 응답 예시
+                    ```json
+                    [
+                      {"reasonId":1,"code":"ABUSE","label":"욕설/비방","displayOrder":1},
+                      {"reasonId":8,"code":"ETC","label":"기타","displayOrder":8}
+                    ]
+                    ```
+                    ※ code=ETC 일 때만 신고 접수 시 detail 입력이 필요하다.
+                    """)
+    @GetMapping("/api/user/reports/reasons")
+    public ResponseEntity<List<ReportReasonResponse>> getReasons() {
+        log.info("신고 사유 카테고리 목록 조회");
+        return ResponseEntity.ok(reportService.getReasons());
+    }
 
     // 게시글/댓글 신고 접수
     // 경로에 stu/alu 구분을 두지 않는다 — 신고는 모든 회원 공통 기능이다

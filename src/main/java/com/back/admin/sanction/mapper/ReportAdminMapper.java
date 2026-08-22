@@ -9,9 +9,11 @@ import java.util.List;
 @Mapper
 public interface ReportAdminMapper {
 
-    // 신고된 게시글 목록 (대상별 그룹핑, 상태/게시판 필터, 정렬, 페이징)
+    // 신고된 게시글 목록 (대상별 그룹핑, 상태(state)/게시판/검색 필터, 정렬, 페이징)
+    // state: blind/deleted. 미지정 시 normal 제외(블라인드+삭제만) — 복구(복원)된 대상은 목록에서 빠진다.
     List<ReportedItemResponse> findReportedPosts(
-            @Param("status") String status,
+            @Param("state") String state,
+            @Param("keyword") String keyword,
             @Param("boardId") Long boardId,
             @Param("sort") String sort,
             @Param("offset") int offset,
@@ -19,13 +21,15 @@ public interface ReportAdminMapper {
     );
 
     int countReportedPosts(
-            @Param("status") String status,
+            @Param("state") String state,
+            @Param("keyword") String keyword,
             @Param("boardId") Long boardId
     );
 
-    // 신고된 댓글 목록
+    // 신고된 댓글 목록 (상태(state)/게시판/검색 필터). 미지정 시 normal 제외
     List<ReportedItemResponse> findReportedComments(
-            @Param("status") String status,
+            @Param("state") String state,
+            @Param("keyword") String keyword,
             @Param("boardId") Long boardId,
             @Param("sort") String sort,
             @Param("offset") int offset,
@@ -33,7 +37,8 @@ public interface ReportAdminMapper {
     );
 
     int countReportedComments(
-            @Param("status") String status,
+            @Param("state") String state,
+            @Param("keyword") String keyword,
             @Param("boardId") Long boardId
     );
 
