@@ -33,6 +33,9 @@ public class PasswordChangeController {
                     ```json
                     {"message":"비밀번호가 변경되었습니다."}
                     ```
+                    ⚠️ **성공 시 기존 토큰이 전부 무효화된다**(users.token_version +1) — 변경을 요청한 본인 세션도 포함이다.
+                    프론트는 이 응답을 받으면 저장한 토큰을 버리고 **로그인 화면으로 이동**시켜야 한다.
+                    그대로 두면 다음 요청에서 401(X-Token-Expired: 1)이 떨어진다.
                     실패: 400 {"message":"현재 비밀번호가 일치하지 않습니다."}
                     실패: 400 {"message":"새 비밀번호가 새 비밀번호 확인과 일치하지 않습니다."}
                     실패: 400 {"message":"비밀번호는 문자, 숫자, 특수문자를 포함한 8~20자여야 합니다."} (policy_settings.signup_password_regex)

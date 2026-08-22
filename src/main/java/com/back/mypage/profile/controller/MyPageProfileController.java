@@ -35,8 +35,9 @@ public class MyPageProfileController {
             ```
             - postCount/commentCount/likedCount: 전체 기간, 블라인드·삭제 글/댓글은 제외(state='normal').
             - semester: 이번 학기(policy_settings semester1_start_month/semester2_start_month, 기본 3월/9월 시작) 기준
-              작성한 글·댓글 수와, 이번 학기에 쓴 글이 받은 좋아요 수.
-              좋아요 자체엔 시간 기록이 없어 "받은 좋아요"는 글 작성 시점을 기준으로 집계한다.""")
+              작성한 글·댓글 수와, 이번 학기 동안 내 글이 받은 좋아요 수.
+              receivedLikes 는 post_likes.created_at(좋아요를 누른 시점) 기준이다 —
+              글 작성 시점으로 세면 지난 학기 글이 이번 학기에 받은 좋아요가 누락된다.""")
     @GetMapping("/api/user/mypage")
     public ResponseEntity<MyPageSummaryResponse> getSummary() {
         return ResponseEntity.ok(myPageService.getSummary());
