@@ -42,13 +42,14 @@
           AND created_at &gt;= #{from} AND created_at &lt; #{to}
     </select>
 
-    <!-- 좋아요엔 시간 기록이 없어 "이번 학기에 내가 쓴 글"의 created_at 기준으로 받은 좋아요를 센다 -->
+    <!-- 이번 학기 '동안 눌린' 좋아요를 센다 — 기준은 post_likes.created_at('좋아요 누른 일시').
+         글 작성 시점(p.created_at)으로 세면 지난 학기 글이 이번 학기에 받은 좋아요가 누락된다. -->
     <select id="countMyReceivedLikesInPeriod" resultType="int">
         SELECT COUNT(*)
         FROM posts p
         INNER JOIN post_likes pl ON pl.post_id = p.post_id
         WHERE p.user_id = #{userId} AND p.state = 'normal'
-          AND p.created_at &gt;= #{from} AND p.created_at &lt; #{to}
+          AND pl.created_at &gt;= #{from} AND pl.created_at &lt; #{to}
     </select>
 
     <select id="findPolicySetting" resultType="string">

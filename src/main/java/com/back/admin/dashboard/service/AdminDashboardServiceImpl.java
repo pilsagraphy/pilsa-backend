@@ -1,8 +1,8 @@
 package com.back.admin.dashboard.service;
 
 import com.back.admin.dashboard.dto.AdminDashboardResponse;
+import com.back.admin.dashboard.dto.RecentMemberResponse;
 import com.back.admin.dashboard.dto.RecentReportResponse;
-import com.back.admin.dashboard.dto.RecentUserResponse;
 import com.back.admin.dashboard.mapper.AdminDashboardMapper;
 import com.back.global.security.AuthUtils;
 import lombok.RequiredArgsConstructor;
@@ -17,21 +17,31 @@ import java.util.List;
 public class AdminDashboardServiceImpl implements AdminDashboardService {
 
     private static final int RECENT_LIST_SIZE = 5;
+    private static final String NEW_MEMBER_PERIOD_CODE = "dashboard_new_user_period_days";
+    private static final String NEW_POST_PERIOD_CODE = "dashboard_new_post_period_days";
 
     private final AdminDashboardMapper adminDashboardMapper;
 
     @Override
     public AdminDashboardResponse getDashboard() {
-        AuthUtils.requireAdmin();
+        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
 
-        int newUserCount = adminDashboardMapper.countNewUsers();
-        int pendingReportCount = adminDashboardMapper.countPendingReports();
-        int newPostCount = adminDashboardMapper.countNewPosts();
-        long totalUserCount = adminDashboardMapper.countTotalUsers();
-        List<RecentReportResponse> recentReports = adminDashboardMapper.findRecentReports(RECENT_LIST_SIZE);
-        List<RecentUserResponse> recentUsers = adminDashboardMapper.findRecentUsers(RECENT_LIST_SIZE);
+        return new AdminDashboardResponse(
+                adminDashboardMapper.countNewMembers(NEW_MEMBER_PERIOD_CODE),
+                adminDashboardMapper.countPendingReports(),
+                adminDashboardMapper.countNewPosts(NEW_POST_PERIOD_CODE),
+                adminDashboardMapper.countTotalMembers());
+    }
 
-        return new AdminDashboardResponse(newUserCount, pendingReportCount, newPostCount, totalUserCount,
-                recentReports, recentUsers);
+    @Override
+    public List<RecentReportResponse> getRecentReports() {
+        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
+        return adminDashboardMapper.findRecentReports(RECENT_LIST_SIZE);
+    }
+
+    @Override
+    public List<RecentMemberResponse> getRecentMembers() {
+        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
+        return adminDashboardMapper.findRecentMembers(RECENT_LIST_SIZE);
     }
 }

@@ -29,7 +29,7 @@ public interface MyPageMapper {
     int countMyCommentsInPeriod(@Param("userId") Long userId,
                                  @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
-    // 기간 내 작성한 글이 받은 좋아요 수 (좋아요 자체엔 시간 기록이 없어 글 작성 시점 기준)
+    // 기간 내 내 글이 받은 좋아요 수 — post_likes.created_at(좋아요 누른 시점) 기준
     int countMyReceivedLikesInPeriod(@Param("userId") Long userId,
                                       @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
