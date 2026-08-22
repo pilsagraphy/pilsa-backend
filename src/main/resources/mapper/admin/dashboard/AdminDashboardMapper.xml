@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.admin.dashboard.mapper.AdminDashboardMapper">
+
+    <!-- 기간은 policy_settings 에서 로드, 없으면 기본 1일(오늘). 영구차단·탈퇴 회원은 제외 -->
+    <select id="countNewUsers" resultType="int">
+        SELECT COUNT(*)
+        FROM users
+        WHERE is_deleted = 0
+          AND ban_status &lt;&gt; 'permanent'
+          AND created_at &gt;= DATE_SUB(NOW(), INTERVAL CAST(COALESCE(
+                (SELECT setting_value FROM policy_settings WHERE code = 'dashboard_new_user_period_days'), '1'
+              ) AS SIGNED) DAY)
+    </select>
+
+    <!-- 기간은 policy_settings 에서 로드, 없으면 기본 1일(오늘) -->
+    <select id="countNewPosts" resultType="int">
+        SELECT COUNT(*)
+        FROM posts
+        WHERE state &lt;&gt; 'deleted'
+          AND created_at &gt;= DATE_SUB(NOW(), INTERVAL CAST(COALESCE(
+                (SELECT setting_value FROM policy_settings WHERE code = 'dashboard_new_post_period_days'), '1'
+              ) AS SIGNED) DAY)
+    </select>
+
+    <!-- 처리 대기 신고 건수: 신고 로그를 대상 타입별로 게시글/댓글에 조인해 유효 대상만 집계 -->
+    <select id="countPendingReports" resultType="int">
+        SELECT COUNT(*)
+        FROM (
+            SELECT r.report_id
+            FROM reports_log r
+            INNER JOIN posts p ON r.target_type = 'post' AND r.target_id = p.post_id
+            WHERE r.status = 'pending'
+            UNION ALL
+            SELECT r.report_id
+            FROM reports_log r
+            INNER JOIN comments c ON r.target_type = 'comment' AND r.target_id = c.comment_id
+            WHERE r.status = 'pending'
+        ) pending
+    </select>
+
+    <select id="countTotalUsers" resultType="long">
+        SELECT COUNT(*)
+        FROM users
+        WHERE is_deleted = 0
+          AND ban_status &lt;&gt; 'permanent'
+    </select>
+
+    <!-- 게시글 신고 + 댓글 신고를 통합해 최신순 N건. 댓글 신고는 소속 게시글의 제목/게시판을 보여준다 -->
+    <select id="findRecentReports" resultType="com.back.admin.dashboard.dto.RecentReportResponse">
+        SELECT targetType, boardName, title, reportedAt
+        FROM (
+            SELECT 'post' AS targetType, b.name AS boardName, p.title AS title, r.created_at AS reportedAt
+            FROM reports_log r
+            INNER JOIN posts p ON r.target_type = 'post' AND r.target_id = p.post_id
+            INNER JOIN boards b ON p.board_id = b.board_id
+            UNION ALL
+            SELECT 'comment' AS targetType, b.name AS boardName, p2.title AS title, r.created_at AS reportedAt
+            FROM reports_log r
+            INNER JOIN comments c ON r.target_type = 'comment' AND r.target_id = c.comment_id
+            INNER JOIN posts p2 ON c.post_id = p2.post_id
+            INNER JOIN boards b ON p2.board_id = b.board_id
+        ) recent
+        ORDER BY reportedAt DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="findRecentUsers" resultType="com.back.admin.dashboard.dto.RecentUserResponse">
+        SELECT user_id AS userId, login_id AS loginId, name, member_type AS memberType, created_at AS createdAt
+        FROM users
+        WHERE is_deleted = 0
+        ORDER BY created_at DESC
+        LIMIT #{limit}
+    </select>
+
+</mapper>

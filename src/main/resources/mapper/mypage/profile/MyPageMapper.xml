@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.mypage.profile.mapper.MyPageMapper">
+
+    <select id="findBasicInfo" resultType="com.back.mypage.profile.dto.MyPageBasicInfoRow">
+        SELECT login_id AS loginId, name, created_at AS joinedAt
+        FROM users
+        WHERE user_id = #{userId} AND is_deleted = 0
+    </select>
+
+    <select id="countMyPosts" resultType="int">
+        SELECT COUNT(*)
+        FROM posts
+        WHERE user_id = #{userId} AND state = 'normal'
+    </select>
+
+    <select id="countMyComments" resultType="int">
+        SELECT COUNT(*)
+        FROM comments
+        WHERE user_id = #{userId} AND state = 'normal'
+    </select>
+
+    <!-- post_likes 는 소프트삭제 예외(좋아요 토글=행 삭제) -->
+    <select id="countMyLikedPosts" resultType="int">
+        SELECT COUNT(*)
+        FROM post_likes pl
+        INNER JOIN posts p ON pl.post_id = p.post_id
+        WHERE pl.user_id = #{userId} AND p.state = 'normal'
+    </select>
+
+    <select id="countMyPostsInPeriod" resultType="int">
+        SELECT COUNT(*)
+        FROM posts
+        WHERE user_id = #{userId} AND state = 'normal'
+          AND created_at &gt;= #{from} AND created_at &lt; #{to}
+    </select>
+
+    <select id="countMyCommentsInPeriod" resultType="int">
+        SELECT COUNT(*)
+        FROM comments
+        WHERE user_id = #{userId} AND state = 'normal'
+          AND created_at &gt;= #{from} AND created_at &lt; #{to}
+    </select>
+
+    <!-- 좋아요엔 시간 기록이 없어 "이번 학기에 내가 쓴 글"의 created_at 기준으로 받은 좋아요를 센다 -->
+    <select id="countMyReceivedLikesInPeriod" resultType="int">
+        SELECT COUNT(*)
+        FROM posts p
+        INNER JOIN post_likes pl ON pl.post_id = p.post_id
+        WHERE p.user_id = #{userId} AND p.state = 'normal'
+          AND p.created_at &gt;= #{from} AND p.created_at &lt; #{to}
+    </select>
+
+    <select id="findPolicySetting" resultType="string">
+        SELECT setting_value FROM policy_settings WHERE code = #{code}
+    </select>
+
+</mapper>

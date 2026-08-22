@@ -7,6 +7,7 @@ import com.back.auth.dto.WithdrawnBanInfo;
 import com.back.auth.exception.AuthException;
 import com.back.auth.mapper.WithdrawMapper;
 import com.back.auth.exception.BannedException;
+import com.back.global.security.AuthUtils;
 import com.back.global.security.JwtUtil;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
@@ -400,6 +401,38 @@ public class AuthServicempl implements AuthService {
         String encodedNewPassword = passwordEncoder.encode(request.getNewPassword());
         authMapper.updatePassword(user.getLoginId(), encodedNewPassword);
         redisTemplate.delete(verifiedKey); // 1회용 소진
+    }
+
+    // 마이페이지 비밀번호 변경 — 로그인 상태에서 현재 비밀번호를 재확인하므로 토큰 탈취만으로는 변경 불가
+    @Override
+    @Transactional
+    public void changePassword(PasswordChangeRequest request) {
+        Long userId = AuthUtils.currentUserId();
+        WithdrawTarget me = withdrawMapper.findWithdrawTarget(userId);
+        if (me == null) {
+            throw new AuthException("사용자 정보를 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
+        }
+
+        if (request.getCurrentPassword() == null
+                || !passwordEncoder.matches(request.getCurrentPassword(), me.getPasswordHash())) {
+            throw new AuthException("현재 비밀번호가 일치하지 않습니다.", HttpStatus.BAD_REQUEST);
+        }
+
+        String newPassword = request.getNewPassword();
+        if (newPassword == null || !newPassword.equals(request.getNewPasswordConfirm())) {
+            throw new AuthException("새 비밀번호가 새 비밀번호 확인과 일치하지 않습니다.", HttpStatus.BAD_REQUEST);
+        }
+
+        // 회원가입과 동일 규칙 재사용(policy_settings.signup_password_regex)
+        requireMatch(newPassword, "signup_password_regex",
+                "^(?=.*[A-Za-z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,20}$",
+                "비밀번호는 문자, 숫자, 특수문자를 포함한 8~20자여야 합니다.");
+
+        if (passwordEncoder.matches(newPassword, me.getPasswordHash())) {
+            throw new AuthException("새 비밀번호가 현재 비밀번호와 같습니다.", HttpStatus.BAD_REQUEST);
+        }
+
+        authMapper.updatePassword(me.getLoginId(), passwordEncoder.encode(newPassword));
     }
 
     // 이메일 찾기 - 학번+이름 일치 시 마스킹된 이메일 반환
