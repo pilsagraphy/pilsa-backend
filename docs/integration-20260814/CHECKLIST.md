@@ -225,6 +225,15 @@ INSERT INTO `policy_settings` (code, setting_value, description) VALUES
 ('semester1_start_month', '3', '1학기 시작월 (마이페이지 이번 학기 활동 요약 기준)'),
 ('semester2_start_month', '9', '2학기 시작월 (마이페이지 이번 학기 활동 요약 기준)');
 
+-- [2026-08-22] 위 policy_settings 4건 qa_pilsa 적용 완료 (setting_id 37~40).
+--   api_endpoints 5건도 planned → active 로 갱신하고 응답 정본을 코드 기준으로 정리했다.
+--   대시보드는 api_endpoints 정본대로 3개 엔드포인트로 분리(통계 / recent-reports / recent-members)했고,
+--   /api/user/mypage 의 기존 응답 예시는 한글 키 "전체통계"가 박힌 미완성본이라 코드 기준으로 재작성했다.
+UPDATE `api_endpoints` SET status = 'active', confirmed_at = '2026-08-22'
+WHERE endpoint_id IN (22, 33, 72, 124, 125);
+-- (endpoint_id 22 /api/user/mypage, 33 /api/admin/dashboard, 72 /api/user/mypage/password/reset,
+--  124 /recent-reports, 125 /recent-members — response_example·note 도 함께 갱신. 상세 SQL 은 커밋 b90149a 이후 후속 커밋 참조)
+
 -- [2026-08-16] 알림 수신 기기 등록부 (웹 푸시 채널 — PM 지시로 2기 개발). 세션성 데이터라 물리삭제 예외
 CREATE TABLE `notification_devices` (
   `device_id`   bigint       NOT NULL AUTO_INCREMENT COMMENT '알림 수신 기기 고유 번호',

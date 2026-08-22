@@ -480,7 +480,15 @@ public class AuthServicempl implements AuthService {
         }
 
         String newPassword = request.getNewPassword();
-        if (newPassword == null || !newPassword.equals(request.getNewPasswordConfirm())) {
+        if (newPassword == null || newPassword.isBlank()) {
+            throw new AuthException("새 비밀번호를 입력해주세요.", HttpStatus.BAD_REQUEST);
+        }
+
+        // 새 비밀번호 재입력(확인)은 api_endpoints 정본대로 프론트 검증이라 API 필수값이 아니다.
+        // 필수로 두면 정본대로 2개 필드만 보내는 클라이언트가 전부 400 을 맞는다.
+        // 다만 보내온 경우엔 서버에서도 대조한다(보내놓고 안 맞는 걸 통과시킬 이유는 없다).
+        String newPasswordConfirm = request.getNewPasswordConfirm();
+        if (newPasswordConfirm != null && !newPassword.equals(newPasswordConfirm)) {
             throw new AuthException("새 비밀번호가 새 비밀번호 확인과 일치하지 않습니다.", HttpStatus.BAD_REQUEST);
         }
 

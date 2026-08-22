@@ -10,7 +10,7 @@ public interface AdminDashboardService {
 
     AdminDashboardResponse getDashboard();
 
-    List<RecentReportResponse> getRecentReports();
+    List<RecentReportResponse> getRecentReports(int size);
 
-    List<RecentMemberResponse> getRecentMembers();
+    List<RecentMemberResponse> getRecentMembers(int size);
 }

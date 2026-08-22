@@ -26,8 +26,10 @@ public class PasswordChangeController {
 
                     ### 요청 예시
                     ```json
-                    { "currentPassword": "oldpw1234!", "newPassword": "newpw5678@", "newPasswordConfirm": "newpw5678@" }
+                    { "currentPassword": "oldpw1234!", "newPassword": "newpw5678@" }
                     ```
+                    새 비밀번호 재입력(확인)은 **프론트 검증**이라 API 로 보내지 않는다(api_endpoints 정본).
+                    호환을 위해 `newPasswordConfirm` 을 보내면 서버도 대조하지만, 필수값은 아니다.
 
                     ### 응답 예시
                     ```json

@@ -9,5 +9,7 @@ import lombok.Setter;
 public class PasswordChangeRequest {
     private String currentPassword;
     private String newPassword;
+    // 선택값 — api_endpoints 정본상 재입력 확인은 프론트 검증이라 API 로 보내지 않는다.
+    // 보내온 경우에만 서버가 대조한다.
     private String newPasswordConfirm;
 }
