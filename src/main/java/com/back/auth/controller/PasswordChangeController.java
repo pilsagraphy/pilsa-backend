@@ -29,7 +29,7 @@ public class PasswordChangeController {
                     { "currentPassword": "oldpw1234!", "newPassword": "newpw5678@" }
                     ```
                     새 비밀번호 재입력(확인)은 **프론트 검증**이라 API 로 보내지 않는다(api_endpoints 정본).
-                    호환을 위해 `newPasswordConfirm` 을 보내면 서버도 대조하지만, 필수값은 아니다.
+                    서버는 `newPasswordConfirm` 을 받지 않으며, 보내도 무시된다.
 
                     ### 응답 예시
                     ```json
@@ -39,7 +39,6 @@ public class PasswordChangeController {
                     프론트는 이 응답을 받으면 저장한 토큰을 버리고 **로그인 화면으로 이동**시켜야 한다.
                     그대로 두면 다음 요청에서 401(X-Token-Expired: 1)이 떨어진다.
                     실패: 400 {"message":"현재 비밀번호가 일치하지 않습니다."}
-                    실패: 400 {"message":"새 비밀번호가 새 비밀번호 확인과 일치하지 않습니다."}
                     실패: 400 {"message":"비밀번호는 문자, 숫자, 특수문자를 포함한 8~20자여야 합니다."} (policy_settings.signup_password_regex)
                     실패: 400 {"message":"새 비밀번호가 현재 비밀번호와 같습니다."}
                     실패: 401 (미인증)

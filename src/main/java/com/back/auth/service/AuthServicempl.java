@@ -484,13 +484,8 @@ public class AuthServicempl implements AuthService {
             throw new AuthException("새 비밀번호를 입력해주세요.", HttpStatus.BAD_REQUEST);
         }
 
-        // 새 비밀번호 재입력(확인)은 api_endpoints 정본대로 프론트 검증이라 API 필수값이 아니다.
-        // 필수로 두면 정본대로 2개 필드만 보내는 클라이언트가 전부 400 을 맞는다.
-        // 다만 보내온 경우엔 서버에서도 대조한다(보내놓고 안 맞는 걸 통과시킬 이유는 없다).
-        String newPasswordConfirm = request.getNewPasswordConfirm();
-        if (newPasswordConfirm != null && !newPassword.equals(newPasswordConfirm)) {
-            throw new AuthException("새 비밀번호가 새 비밀번호 확인과 일치하지 않습니다.", HttpStatus.BAD_REQUEST);
-        }
+        // 새 비밀번호 재입력(확인)은 서버가 받지 않는다 — api_endpoints 정본상 프론트 검증 항목이다.
+        // 같은 값을 두 번 받아 대조하는 건 오타 방지 UX 라 서버가 판정할 실익이 없다.
 
         // 회원가입과 동일 규칙 재사용(policy_settings.signup_password_regex)
         requireMatch(newPassword, "signup_password_regex",
