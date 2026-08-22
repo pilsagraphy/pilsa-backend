@@ -163,6 +163,10 @@ public class BoardController {
                     ※ 익명글: authorName="익명", userId=null (관리자·작성자 본인 제외)
                     ※ prevPost/nextPost: 첫 글·마지막 글이면 null
                     ※ 상세에서만 created(작성일)와 updated(수정일)가 함께 내려갑니다.
+                    ※ attachments 에는 **본문에 삽입된 이미지가 포함되지 않습니다** — 본문에 이미 보이는 이미지가
+                      첨부 목록에 중복 노출되지 않게 서버가 걸러냅니다(첨부 목록용 파일만).
+                    ※ 첨부 다운로드는 `GET /api/user/files/{attachmentId}` (인증형, 열람 권한 검사)를 쓰세요.
+                      응답의 fileUrl 은 정적 경로라 권한 검사가 없습니다.
                     """)
     @GetMapping("/posts/{postId}")
     public ResponseEntity<BoardDetailResponse> getPostDetail(
@@ -217,8 +221,19 @@ public class BoardController {
                     content: ## 마크다운 본문         ← 필수, 마크다운 문자열
                     categoryId: 4
                     isAnonymous: false
-                    files: 자료.pdf, 사진.png         ← 선택, 다중 첨부
+                    attachmentIds: 31, 32            ← 선택, 에디터에서 선업로드한 파일 연결 (권장)
+                    files: 자료.pdf, 사진.png         ← 선택, 이 요청에 함께 올리는 첨부(기존 방식, 계속 지원)
                     ```
+
+                    ### 파일 두 가지 방식
+                    | | 선업로드 `attachmentIds` | 발행 동시 업로드 `files` |
+                    |---|---|---|
+                    | 올리는 시점 | 에디터에서 파일을 고른 즉시(`POST .../files`) | 발행 요청과 함께 |
+                    | 본문 이미지 | **가능** (즉시 url 을 받아 마크다운에 삽입) | 불가 |
+                    | 용도 | 본문 이미지 + 첨부 | 첨부만 |
+
+                    본문에 `/api/user/files/{id}` 가 남아 있으면 attachmentIds 에 빠뜨려도 서버가 본문을 훑어 함께 연결합니다.
+                    연결되지 않은 선업로드 파일은 24시간 뒤 새벽 배치가 삭제합니다.
 
                     ### 응답 예시
                     ```json
@@ -255,8 +270,13 @@ public class BoardController {
                     categoryId: 4
                     isAnonymous: false
                     deleteAttachmentIds: 18, 19         ← 삭제할 기존 첨부 id만
-                    files: 새파일.pdf                   ← 새로 추가할 첨부만
+                    attachmentIds: 33                   ← 수정 중 새로 선업로드한 파일
+                    files: 새파일.pdf                   ← 이 요청에 함께 올리는 첨부(기존 방식)
                     ```
+
+                    ### 본문 이미지 정리
+                    수정 저장 시 **본문에서 지운 인라인 이미지는 서버가 함께 삭제**합니다(마크다운이 곧 기준).
+                    첨부 목록의 파일은 이 규칙과 무관하며 deleteAttachmentIds 로만 지워집니다.
 
                     ### 응답 예시
                     ```json

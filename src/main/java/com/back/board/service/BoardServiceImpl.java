@@ -1,5 +1,6 @@
 package com.back.board.service;
 
+import com.back.board.attachment.service.AttachmentService;
 import com.back.board.dto.*;
 import com.back.board.exception.BoardException;
 import com.back.board.mapper.BoardMapper;
@@ -38,6 +39,7 @@ public class BoardServiceImpl implements BoardService {
     private final BoardMapper boardMapper;
     private final BoardPolicyService boardPolicyService;
     private final FileStorageUtil fileStorageUtil;
+    private final AttachmentService attachmentService;
     private final NotificationPublisher notificationPublisher;
 
     /**
@@ -196,15 +198,19 @@ public class BoardServiceImpl implements BoardService {
         boolean pinned = resolvePinned(policy, request.getCategoryId());
 
         boardMapper.insertPost(request, userId, boardId, pinned);
-        saveAttachments(policy, request.getPostId(), request.getFiles());
+        saveAttachments(policy, userId, request.getPostId(), request.getFiles());
+        // 에디터에서 미리 올려 둔 파일(본문 이미지·첨부)을 이 글의 것으로 만든다.
+        // 본문 마크다운에 남아 있는 /api/user/files/{id} 도 함께 연결된다 — 연결되지 않은 파일은 정리 배치가 지운다
+        attachmentService.linkToPost(request.getPostId(), request.getAttachmentIds(), request.getContent());
 
         // 생성 PK 반환 — 프론트가 등록 직후 상세 페이지로 이동하는 데 필요
         return new BoardResponse("게시글이 성공적으로 등록되었습니다.", request.getPostId());
     }
 
-    // 첨부 저장 (등록·수정 공통). 첨부를 쓰지 않는 게시판이면 조용히 무시한다
+    // 발행 시점에 함께 올라온 첨부 저장 (등록·수정 공통). 첨부를 쓰지 않는 게시판이면 조용히 무시한다
     // 저장 경로는 uploads/board-{boardId}/{postId}/원본파일명 — 글 단위 폴더라 글끼리 이름이 겹칠 일이 없다
-    private void saveAttachments(BoardPolicy policy, Long postId, List<MultipartFile> files) {
+    // (선업로드분은 글 번호를 모르는 시점에 저장되므로 uploads/board-{boardId}/user-{userId}/ 에 들어간다)
+    private void saveAttachments(BoardPolicy policy, Long uploaderId, Long postId, List<MultipartFile> files) {
         if (!policy.isAttachmentAllowed() || CollectionUtils.isEmpty(files)) {
             return;
         }
@@ -214,7 +220,7 @@ public class BoardServiceImpl implements BoardService {
                 continue;
             }
             String savedPath = fileStorageUtil.save(file, dir);
-            boardMapper.insertAttachment(postId, file.getOriginalFilename(), savedPath,
+            boardMapper.insertAttachment(postId, uploaderId, file.getOriginalFilename(), savedPath,
                     file.getSize(), file.getContentType());
         }
     }
@@ -255,7 +261,11 @@ public class BoardServiceImpl implements BoardService {
             boardMapper.softDeleteAttachments(postId, request.getDeleteAttachmentIds());
             fileUrls.forEach(fileStorageUtil::delete);
         }
-        saveAttachments(policy, postId, request.getFiles());
+        saveAttachments(policy, currentUserId, postId, request.getFiles());
+        // 수정 중 새로 선업로드한 파일 연결 → 그다음 본문에서 사라진 인라인 이미지 정리.
+        // 순서가 중요하다: 연결을 먼저 해야 방금 넣은 이미지가 "본문에 없는 이미지"로 오인되지 않는다
+        attachmentService.linkToPost(postId, request.getAttachmentIds(), request.getContent());
+        attachmentService.syncInlineAttachments(postId, request.getContent(), request.getAttachmentIds());
         // 응답은 message 만 — 어차피 프론트가 상세로 이동하며 GET 을 한 번 더 하므로 상세 객체 반환은 낭비 (PM 합의)
         return new BoardResponse("게시글이 성공적으로 수정되었습니다.");
     }

@@ -257,11 +257,39 @@ CREATE TABLE `notification_devices` (
 ALTER TABLE `users`
   ADD COLUMN `token_version` int NOT NULL DEFAULT 0 COMMENT '세션 무효화용 토큰 버전 — 올리면 그 회원의 기존 토큰 전부 무효';
 
+-- [2026-08-23] 리치 에디터 선업로드 (백로그 A-4, 명세 id 13·147). 에디터에 이미지를 넣는 순간
+-- 화면에 보여줄 URL이 필요하므로 파일이 글보다 먼저 존재한다 → post_id 를 nullable 로 바꾸고,
+-- 그 상태의 소유자 판정 근거로 uploader_id 를 둔다(새 테이블 없음. SPEC-A5 §6-6 의 usage_type 안 채택).
+-- FK 는 걸지 않았다: 탈퇴 행 물리삭제 배치(withdrawn_purge_days)가 미연결 파일 때문에 실패하는 일을 막기 위함.
+ALTER TABLE `attachments`
+  MODIFY COLUMN `post_id` bigint NULL COMMENT '게시글 고유 번호 (NULL = 아직 글에 연결되지 않은 선업로드 파일)',
+  ADD COLUMN `uploader_id` bigint NULL COMMENT '업로더 user_id — 선업로드 파일 소유자 판정·정리 배치 기준' AFTER `post_id`,
+  ADD COLUMN `usage_type` varchar(20) NOT NULL DEFAULT 'attachment'
+    COMMENT 'attachment=첨부목록 노출 / inline=본문 삽입 이미지' AFTER `file_type`;
+-- 기존 18행 백필 후 NOT NULL 로 조인다 (컬럼명은 usage 가 아니라 usage_type — USAGE 는 MySQL 예약어)
+UPDATE `attachments` a JOIN `posts` p ON a.post_id = p.post_id
+   SET a.uploader_id = p.user_id WHERE a.uploader_id IS NULL;
+ALTER TABLE `attachments`
+  MODIFY COLUMN `uploader_id` bigint NOT NULL COMMENT '업로더 user_id — 선업로드 파일 소유자 판정·정리 배치 기준',
+  ADD KEY `idx_attachments_pending` (`uploader_id`, `post_id`, `created_at`);
+
+INSERT INTO `policy_settings` (`code`, `setting_value`, `description`) VALUES
+ ('upload_image_extensions', 'jpg,jpeg,png,gif,webp,bmp',
+  '본문 삽입 이미지 허용 확장자 (svg 제외 — 인라인 스크립트 실행 위험)'),
+ ('upload_file_extensions', 'pdf,doc,docx,xls,xlsx,ppt,pptx,txt,csv,md,zip,hwp,hwpx',
+  '첨부 허용 확장자 (이미지 외). 목록에 없는 확장자는 400'),
+ ('pending_upload_purge_hours', '24',
+  '글에 연결되지 않은 선업로드 파일 보존 시간 — 경과 시 새벽 배치(04:50)가 물리 삭제');
+
 ```
 - [x] events DDL 적용 (2026-08-14, location 값 전부 NULL 확인 후 제거)
 - [x] boards 권한 컬럼 DDL 적용 (#61 §1)
 - [x] ~~boards 컬럼 제거 (#70)~~ → 적용 후 **PM 지시로 원복 완료** (allow_comment/allow_attachment/category_mode 원값 유지)
 - [x] 적용 후 스키마 재검증 (DESCRIBE 확인)
+- [x] **attachments 선업로드 DDL 적용** (2026-08-23) — post_id nullable + uploader_id + usage_type,
+  기존 18행 uploader_id 백필 확인(posts.user_id 기준), policy_settings 3건 등록.
+  적용 전 attachments 전체 행 백업(SELECT 덤프) 후 실행. 검증: 선업로드→발행 연결→인증형 조회→
+  수정 시 본문에서 지운 이미지 정리까지 로컬 통합 테스트로 확인(테스트 트랜잭션 롤백, 잔여 행·파일 0).
 - [x] **api_endpoints 테이블 생성 + 95행 시드** (2026-08-14 PM 지시) — API 인벤토리 정본.
   `phase`(1기=6월 이전 / 2기) × `status`(active=구현·검증 완료 70 / planned=예정 25) × `auth`(PUBLIC/MEMBER/ADMIN).
   경로 변경 이력은 note 컬럼에 기록. 노션 명세와 동기 대상.

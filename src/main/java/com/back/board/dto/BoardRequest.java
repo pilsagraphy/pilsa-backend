@@ -42,9 +42,16 @@ public class BoardRequest {
             requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
     private Long categoryId;
 
-    @Schema(description = "첨부파일 목록 (선택). 미첨부 시 그대로 등록됨",
+    @Schema(description = "첨부파일 목록 (선택). 발행 시점에 함께 올리는 방식 — 선업로드(attachmentIds)와 병행 가능",
             requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
     private List<MultipartFile> files;
+
+    // 선업로드(POST .../files)로 이미 올린 파일을 이 글에 연결한다.
+    // 본문에 남아 있는 /api/user/files/{id} 는 서버가 본문을 훑어 자동으로 함께 연결하므로,
+    // 인라인 이미지 id 를 프론트가 빠뜨려도 고아가 되지 않는다 (AttachmentService.linkToPost)
+    @Schema(description = "선업로드한 파일의 attachmentId 목록 (선택). 에디터에서 미리 올린 이미지·첨부를 이 글에 연결",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+    private List<Long> attachmentIds;
 
     @Schema(description = "[서버 내부용] DB 저장 후 생성된 게시글 ID. 요청 시 입력 불필요", hidden = true)
     private Long postId;
