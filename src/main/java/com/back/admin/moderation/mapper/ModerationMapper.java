@@ -36,6 +36,13 @@ public interface ModerationMapper {
             @Param("sourceActionId") Long sourceActionId
     );
 
+    // 대상(target)에 아직 회수되지 않은 주의 포인트가 붙어 있는지.
+    // true = 관리자가 이미 삭제 조치한 대상 (작성자 자진삭제와 구분하는 기준)
+    boolean hasActivePenalty(
+            @Param("targetType") String targetType,
+            @Param("targetId") Long targetId
+    );
+
     // 대상(target)에 걸린 미회수 주의 포인트를 복원 조치로 회수(void)
     int voidPenaltiesByTarget(
             @Param("targetType") String targetType,

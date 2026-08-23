@@ -46,8 +46,9 @@ public interface SanctionMapper {
     // 특정 회원의 태그/제재 정보 단건 조회
     SanctionedUserResponse findSanctionedUserById(@Param("userId") Long userId);
 
-    // 해당 회원의 열린(미해제) ban_log 행을 모두 해제 처리 (liftedBy가 null이면 시스템 자동/대체)
-    void closeActiveBanLog(@Param("userId") Long userId, @Param("liftedBy") Long liftedBy);
+    // 해당 회원의 열린(미해제) ban_log 행을 모두 해제 처리 (liftedBy가 null이면 시스템 자동/대체).
+    // 반환값 = 실제로 닫힌(해제된) 행 수 → 0이면 열린 제재가 없었음(이미 해제/미제재).
+    int closeActiveBanLog(@Param("userId") Long userId, @Param("liftedBy") Long liftedBy);
 
     // 만료된 임시정지 대상 유저 ID 목록 (스케줄러용)
     List<Long> findExpiredTemporaryBanUserIds();
