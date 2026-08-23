@@ -1,7 +1,7 @@
 package com.back.admin.sanction.service;
 
 import com.back.admin.moderation.dto.ModerationState;
-import com.back.admin.sanction.support.SanctionAdminSupport;
+import com.back.admin.common.AdminServiceSupport;
 import com.back.admin.sanction.dto.BulkResultResponse;
 import com.back.admin.sanction.dto.ReportPageResponse;
 import com.back.admin.sanction.dto.ReportedItemResponse;
@@ -48,10 +48,10 @@ public class ReportAdminServiceImpl implements ReportAdminService {
     @Override
     public ReportPageResponse getReportedPosts(int page, int size, String state, String keyword, Long boardId, String sort) {
         AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
-        page = SanctionAdminSupport.clampPage(page);
-        size = SanctionAdminSupport.clampSize(size);
+        page = AdminServiceSupport.clampPage(page);
+        size = AdminServiceSupport.clampSize(size);
         state = normalizeState(state);                     // blind/deleted 만 허용, 그 외 기본(normal 제외)
-        keyword = SanctionAdminSupport.escapeLike(keyword);  // LIKE 와일드카드(%,_) 리터럴화
+        keyword = AdminServiceSupport.escapeLike(keyword);  // LIKE 와일드카드(%,_) 리터럴화
         int totalCount = reportAdminMapper.countReportedPosts(state, keyword, boardId);
         int totalPages = (int) Math.ceil((double) totalCount / size);
         int offset = (page - 1) * size;
@@ -62,10 +62,10 @@ public class ReportAdminServiceImpl implements ReportAdminService {
     @Override
     public ReportPageResponse getReportedComments(int page, int size, String state, String keyword, Long boardId, String sort) {
         AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
-        page = SanctionAdminSupport.clampPage(page);
-        size = SanctionAdminSupport.clampSize(size);
+        page = AdminServiceSupport.clampPage(page);
+        size = AdminServiceSupport.clampSize(size);
         state = normalizeState(state);                     // blind/deleted 만 허용, 그 외 기본(normal 제외)
-        keyword = SanctionAdminSupport.escapeLike(keyword);  // LIKE 와일드카드(%,_) 리터럴화
+        keyword = AdminServiceSupport.escapeLike(keyword);  // LIKE 와일드카드(%,_) 리터럴화
         int totalCount = reportAdminMapper.countReportedComments(state, keyword, boardId);
         int totalPages = (int) Math.ceil((double) totalCount / size);
         int offset = (page - 1) * size;
@@ -111,7 +111,7 @@ public class ReportAdminServiceImpl implements ReportAdminService {
         if (CollectionUtils.isEmpty(targetIds)) {
             throw new ReportAdminException(actionLabel + " 항목을 선택해 주세요.", HttpStatus.BAD_REQUEST);
         }
-        Long adminId = SanctionAdminSupport.currentAdminId();
+        Long adminId = AdminServiceSupport.currentAdminId();
 
         int successCount = 0;
         List<BulkResultResponse.FailureItem> failures = new ArrayList<>();
@@ -120,7 +120,7 @@ public class ReportAdminServiceImpl implements ReportAdminService {
                 action.run(adminId, targetId);
                 successCount++;
             } catch (Exception e) {
-                failures.add(new BulkResultResponse.FailureItem(targetId, SanctionAdminSupport.resolveFailureMessage(e)));
+                failures.add(new BulkResultResponse.FailureItem(targetId, AdminServiceSupport.resolveFailureMessage(e)));
             }
         }
         return new BulkResultResponse(successCount, failures);

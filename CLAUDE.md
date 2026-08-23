@@ -23,13 +23,15 @@ com.back
 ├── event           # 일정 조회(회원 달력, 공개) + 구글 캘린더 구독 피드(/api/event/calendar.ics)
 ├── donation        # 명예의전당 (donations)
 ├── admin           # 관리자 화면 전용 도메인
-│   ├── common      # AdminServiceSupport, BulkResultResponse(부분 성공)
+│   ├── common      # AdminServiceSupport (페이지 보정·LIKE 이스케이프 등 관리자 화면 공용 헬퍼)
 │   ├── event       # 일정 등록/수정/삭제 (AdminEventMapper — 관리 쿼리는 자기 패키지 소유)
 │   ├── board       # 게시판 관리 (생성/수정/권한 설정)
 │   ├── post        # 게시글 관리 (조회 전용 — 조치는 신고 관리 select-*)
+│   ├── comment     # 댓글 관리 (조회 전용 — 조치는 신고 관리 select-*, targetType=comment)
 │   ├── moderation  # 게시글·댓글 공통 조치(blind/restore/softDelete) + moderation_log/penalty_log
 │   ├── quote       # 이 주의 문장 — 공개 랜덤(/api/quotes/current)도 예외적으로 여기 소속(PM 허용)
 │   ├── sanction    # 제재 현황/해제 + 주의→경고→정지 에스컬레이션 + 신고 처리(ReportAdminService, select-*)
+│   │                 BulkResultResponse(부분 성공 응답)도 여기 소속
 │   └── user        # 회원 관리 (users)
 └── global          # 인프라 계층만: config, security(JWT·AuthUtils), util(FileStorageUtil), exception
 ```

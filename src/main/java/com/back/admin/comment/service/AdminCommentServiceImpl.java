@@ -3,7 +3,7 @@ package com.back.admin.comment.service;
 import com.back.admin.comment.dto.AdminCommentListResponse;
 import com.back.admin.comment.dto.AdminCommentPageResponse;
 import com.back.admin.comment.mapper.AdminCommentMapper;
-import com.back.admin.comment.support.CommentAdminSupport;
+import com.back.admin.common.AdminServiceSupport;
 import com.back.global.security.AuthUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -21,9 +21,9 @@ public class AdminCommentServiceImpl implements AdminCommentService {
     @Override
     public AdminCommentPageResponse getCommentList(int page, int size, Long boardId, String keyword) {
         AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
-        page = CommentAdminSupport.clampPage(page);
-        size = CommentAdminSupport.clampSize(size);
-        keyword = CommentAdminSupport.escapeLike(keyword); // LIKE 와일드카드(%,_) 리터럴화
+        page = AdminServiceSupport.clampPage(page);
+        size = AdminServiceSupport.clampSize(size);
+        keyword = AdminServiceSupport.escapeLike(keyword); // LIKE 와일드카드(%,_) 리터럴화
 
         int totalCount = adminCommentMapper.countComments(boardId, keyword);
         int totalPages = (int) Math.ceil((double) totalCount / size);
