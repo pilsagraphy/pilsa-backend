@@ -2,10 +2,13 @@ package com.back.global.util;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
 
 /**
  * 첨부파일 물리 저장/삭제.
@@ -30,10 +33,53 @@ public class FileStorageUtil {
             String savedName = uniquify(dir, sanitize(file.getOriginalFilename()));
             file.transferTo(new File(dir, savedName));
 
-            return "/" + relativeDir + "/" + savedName; // DB에 저장할 경로 반환
+            String fileUrl = "/" + relativeDir + "/" + savedName;
+            // 트랜잭션이 롤백되면 DB 행이 사라지는데 파일만 남으면 어떤 배치도 못 찾는 영구 고아가 된다
+            // (정리 배치는 attachments 행 기준으로 파일을 찾는다) → 롤백 시 방금 저장한 파일을 보상 삭제
+            registerRollbackCleanup(fileUrl);
+            return fileUrl; // DB에 저장할 경로 반환
         } catch (IOException e) {
             throw new RuntimeException("파일 저장 중 오류 발생", e);
         }
+    }
+
+    /** 현재 트랜잭션이 롤백되면 방금 저장한 파일을 지운다 (트랜잭션 밖에서 저장했으면 아무것도 안 한다) */
+    private void registerRollbackCleanup(String fileUrl) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_ROLLED_BACK) {
+                    log.info("트랜잭션 롤백 — 업로드 파일 보상 삭제: {}", fileUrl);
+                    delete(fileUrl);
+                }
+            }
+        });
+    }
+
+    /**
+     * 물리 파일 삭제를 **트랜잭션 커밋 후**로 미룬다.
+     * 트랜잭션 안에서 즉시 지우면, 이후 예외로 롤백될 때 DB 행(소프트삭제 취소 등)은 살아나는데
+     * 파일은 이미 사라져 "정상 첨부인데 다운로드는 영원히 404"가 된다.
+     * 트랜잭션이 없으면(배치 밖 등) 즉시 삭제한다. 삭제 실패는 delete() 규칙대로 로그만.
+     */
+    public void deleteAfterCommit(List<String> fileUrls) {
+        if (fileUrls == null || fileUrls.isEmpty()) {
+            return;
+        }
+        List<String> urls = List.copyOf(fileUrls);
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            urls.forEach(this::delete);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                urls.forEach(FileStorageUtil.this::delete);
+            }
+        });
     }
 
     /**
@@ -47,7 +93,7 @@ public class FileStorageUtil {
             File base = new File(new File("").getAbsolutePath(), "uploads").getCanonicalFile();
             File target = new File(new File("").getAbsolutePath(), fileUrl).getCanonicalFile();
             // 경로 이탈 방어: uploads 밖 파일은 내려주지 않는다 (조작된 file_url 대비)
-            if (!target.getPath().startsWith(base.getPath())) {
+            if (!isInside(target, base)) {
                 log.warn("uploads 밖 경로 조회 시도 차단 - {}", fileUrl);
                 return null;
             }
@@ -69,7 +115,7 @@ public class FileStorageUtil {
             File base = new File(new File("").getAbsolutePath(), "uploads").getCanonicalFile();
             File target = new File(new File("").getAbsolutePath(), fileUrl).getCanonicalFile();
             // 경로 이탈 방어: uploads 폴더 밖은 절대 지우지 않는다 (조작된 file_url 대비)
-            if (!target.getPath().startsWith(base.getPath())) {
+            if (!isInside(target, base)) {
                 log.warn("uploads 밖 경로 삭제 시도 차단 - {}", fileUrl);
                 return;
             }
@@ -89,7 +135,7 @@ public class FileStorageUtil {
      */
     private void deleteEmptyParents(File dir, File base) {
         while (dir != null
-                && dir.getPath().startsWith(base.getPath())
+                && isInside(dir, base)
                 && !dir.equals(base)) {
             String[] children = dir.list();
             if (children == null || children.length > 0 || !dir.delete()) {
@@ -97,6 +143,15 @@ public class FileStorageUtil {
             }
             dir = dir.getParentFile();
         }
+    }
+
+    /**
+     * target 이 base 디렉터리 안(자기 자신 포함)에 있는가.
+     * 문자열 접두사 비교는 형제 디렉터리(uploads-secret 등)를 통과시키므로
+     * 경로 세그먼트 단위로 비교한다 (Path.startsWith).
+     */
+    private boolean isInside(File target, File base) {
+        return target.toPath().startsWith(base.toPath());
     }
 
     /**

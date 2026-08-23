@@ -61,6 +61,13 @@ public interface AttachmentMapper {
                                     @Param("attachmentIds") List<Long> attachmentIds);
 
     /**
+     * 주어진 id 중 아직 존재하는 행의 id.
+     * 가드된 DELETE(초안·정리 배치)가 스킵한 행(그 사이 발행·초안 귀속된 것)의 물리 파일을
+     * 지우지 않기 위해, 삭제 후 생존 행을 확인해 차집합만 파일 삭제 대상으로 삼는 데 쓴다.
+     */
+    List<Long> findExistingIds(@Param("attachmentIds") List<Long> attachmentIds);
+
+    /**
      * 발행 이관: 초안 첨부의 소유권을 게시글로 넘긴다 (draft_id 를 비워 CASCADE 대상에서 제외).
      * ⚠ 반드시 초안 DELETE 보다 먼저 호출 — 순서를 바꾸면 CASCADE 가 방금 발행한 글의 첨부를 지운다.
      */

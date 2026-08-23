@@ -50,6 +50,10 @@ public class DraftServiceImpl implements DraftService {
 
     @Override
     public List<DraftListResponse> getDrafts(Long boardId, Integer limit) {
+        if (limit != null && limit < 1) {
+            // 음수 limit 는 SQL 오류(500)로 떨어지므로 계약대로 400 으로 막는다
+            throw new BoardException("limit 는 1 이상이어야 합니다.", HttpStatus.BAD_REQUEST);
+        }
         Long userId = AuthUtils.currentUserId();
         return draftMapper.findDrafts(userId, boardId, limit);
     }
@@ -69,15 +73,18 @@ public class DraftServiceImpl implements DraftService {
     @Transactional
     public DraftResponse createDraft(Long boardId, DraftRequest request) {
         // 쓰기 권한 없는 게시판(예: 공지사항)에 일반 회원이 초안 저장 → 403
-        boardPolicyService.requireWritable(boardId);
+        var policy = boardPolicyService.requireWritable(boardId);
         requireNotEmpty(request);
         Long userId = AuthUtils.currentUserId();
 
         int maxCount = resolveDraftMaxCount();
         Long draftId = insertIntoFreeSlot(userId, boardId, request, maxCount);
 
-        // 선업로드 파일(본문 이미지·첨부)을 이 초안에 귀속. 본문 마크다운도 함께 훑는다(발행과 같은 규칙)
-        attachmentService.reconcileDraftAttachments(draftId, request.getAttachmentIds(), request.getContent());
+        // 선업로드 파일(본문 이미지·첨부)을 이 초안에 귀속. 본문 마크다운도 함께 훑는다(발행과 같은 규칙).
+        // 파일 업로드를 쓰지 않는 게시판이면 귀속 자체를 건너뛴다 — 게시판 정책 우회 방지(발행 경로와 동일 게이트)
+        if (policy.isAttachmentAllowed()) {
+            attachmentService.reconcileDraftAttachments(draftId, request.getAttachmentIds(), request.getContent());
+        }
         return new DraftResponse("임시저장되었습니다.", draftId);
     }
 
@@ -87,14 +94,17 @@ public class DraftServiceImpl implements DraftService {
         requireNotEmpty(request);
         Long userId = AuthUtils.currentUserId();
 
-        // 본인 + 해당 게시판인 것만 갱신 (0행이면 없음/남의 것/다른 게시판 → 404)
+        // 본인 + 해당 게시판인 것만 갱신 (0행이면 없음/남의 것/다른 게시판 → 404).
+        // 이 UPDATE 가 drafts 행 락을 잡는다 — 삭제(lockDraft)와 락 순서(drafts → attachments)가 일치한다
         int updated = draftMapper.updateDraft(draftId, userId, boardId, request);
         if (updated == 0) {
             throw notFound();
         }
 
         // 재조정: 이번 저장의 keep(id 목록 ∪ 본문)에 없는 기존 첨부는 행·물리파일까지 삭제된다
-        attachmentService.reconcileDraftAttachments(draftId, request.getAttachmentIds(), request.getContent());
+        if (boardPolicyService.get(boardId).isAttachmentAllowed()) {
+            attachmentService.reconcileDraftAttachments(draftId, request.getAttachmentIds(), request.getContent());
+        }
         return new DraftResponse("임시저장되었습니다.");
     }
 
@@ -103,8 +113,11 @@ public class DraftServiceImpl implements DraftService {
     public DraftResponse deleteDraft(Long boardId, Long draftId) {
         Long userId = AuthUtils.currentUserId();
 
-        // 본인 + 해당 게시판 소속 확인 (아니면 404 — 존재 노출 방지)
-        if (draftMapper.findDraftDetail(draftId, userId, boardId) == null) {
+        // 본인 + 해당 게시판 소속 확인 겸 **drafts 행 잠금** (아니면 404 — 존재 노출 방지).
+        // 저장(updateDraft)이 drafts 행 락으로 시작하므로 삭제도 같은 순서로 잠가야
+        // 데드락(락 순서 역전)과 "삭제 직전 저장이 귀속한 새 첨부가 CASCADE 로만 지워져
+        // 파일이 고아로 남는" 경합이 사라진다 — 락을 잡은 뒤 읽는 첨부 목록이 최종본이다
+        if (draftMapper.lockDraft(draftId, userId, boardId) == null) {
             throw notFound();
         }
 
@@ -120,12 +133,16 @@ public class DraftServiceImpl implements DraftService {
 
     /**
      * 빈 슬롯을 찾아 INSERT. 상한이 꽉 찼으면 409.
-     * 동시 저장으로 같은 슬롯을 잡아 uq_drafts_user_board_slot 가 걸리면(duplicate-key)
-     * 빈 슬롯을 다시 계산해 재시도하고, 끝내 자리가 없으면 409 로 변환한다.
+     * 동시 저장으로 같은 슬롯을 잡아 uq_drafts_user_board_slot 가 걸리면(duplicate-key) 재시도하되,
+     * **실패한 슬롯은 로컬로 제외하고 다음 후보로 넘어간다** — REPEATABLE READ 스냅숏에서는
+     * 경쟁 트랜잭션이 커밋한 행이 findUsedSlots 재조회에 보이지 않아, 재계산 방식은
+     * 같은 슬롯만 계속 시도하다 빈 슬롯이 있는데도 409 를 내기 때문이다.
      */
     private Long insertIntoFreeSlot(Long userId, Long boardId, DraftRequest request, int maxCount) {
+        List<Integer> used = draftMapper.findUsedSlots(userId, boardId);
+        java.util.Set<Integer> unavailable = new java.util.HashSet<>(used);
         for (int attempt = 0; attempt < SLOT_RETRY; attempt++) {
-            Integer slot = findFreeSlot(userId, boardId, maxCount);
+            Integer slot = findFreeSlot(unavailable, maxCount);
             if (slot == null) {
                 throw slotFull(maxCount);
             }
@@ -134,7 +151,8 @@ public class DraftServiceImpl implements DraftService {
                 draftMapper.insertDraft(userId, boardId, slot, request);
                 return request.getDraftId();
             } catch (DuplicateKeyException e) {
-                // 동시 저장이 같은 슬롯을 잡은 경우 — 빈 슬롯을 다시 계산해 재시도
+                // 동시 저장이 같은 슬롯을 선점한 경우 — 이 슬롯을 제외하고 다음 후보로
+                unavailable.add(slot);
                 log.debug("초안 슬롯 경합 재시도 - userId:{}, boardId:{}, slot:{}, attempt:{}", userId, boardId, slot, attempt);
             }
         }
@@ -142,11 +160,10 @@ public class DraftServiceImpl implements DraftService {
         throw slotFull(maxCount);
     }
 
-    /** [1..maxCount] 중 가장 낮은 빈 슬롯. 없으면 null */
-    private Integer findFreeSlot(Long userId, Long boardId, int maxCount) {
-        List<Integer> used = draftMapper.findUsedSlots(userId, boardId);
+    /** [1..maxCount] 중 사용 불가 집합에 없는 가장 낮은 슬롯. 없으면 null */
+    private Integer findFreeSlot(java.util.Set<Integer> unavailable, int maxCount) {
         for (int slot = 1; slot <= maxCount; slot++) {
-            if (!used.contains(slot)) {
+            if (!unavailable.contains(slot)) {
                 return slot;
             }
         }

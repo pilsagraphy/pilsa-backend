@@ -30,7 +30,7 @@
 - **청소 배치**: 별도 배치를 두지 않고 기존 `PendingAttachmentPurgeScheduler`(04:50, `pending_upload_purge_hours` 24h)로
   통합 — 대상은 `post_id·draft_id 둘 다 NULL` 인 대기 첨부뿐, **초안에 묶인 파일은 보존시간과 무관하게 유지**된다.
 
-> 아래 원안 §1·§2 의 "slot_no 없음 / count 검사" 서술은 착수 전 초안이며, 최종 구현은 위 확정 사항을 따른다.
+> 아래 원안 §1~§3 의 서술(slot_no 없음 / count 검사 / 응답의 count 필드 / '저장할 내용이 없습니다' 메시지 등)은 착수 전 초안이며, 최종 구현·계약은 위 확정 사항과 api_endpoints 정본(id 15~19)을 따른다.
 
 ---
 

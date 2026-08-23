@@ -50,11 +50,24 @@ public interface DraftMapper {
                     @Param("request") DraftRequest request);
 
     /**
+     * 초안 행 잠금 조회 (SELECT ... FOR UPDATE). 삭제·발행 트랜잭션의 첫 단계 —
+     * 저장(updateDraft)이 drafts 행 UPDATE 로 시작하므로, 삭제도 drafts 행 락부터 잡아야
+     * 락 획득 순서가 일치해(drafts → attachments) 동시 저장·삭제 교차 시 데드락과
+     * "삭제 직전 새로 귀속된 첨부가 CASCADE 로만 지워져 파일이 고아로 남는" 경합이 사라진다.
+     */
+    Long lockDraft(@Param("draftId") Long draftId,
+                   @Param("userId") Long userId,
+                   @Param("boardId") Long boardId);
+
+    /**
      * 초안 물리 삭제 (본인 것만).
      * ⚠ 첨부는 이 쿼리 전에 AttachmentService.deleteDraftAttachments 로 행·물리파일을 먼저 지운다 —
      * FK CASCADE 는 백스톱일 뿐, CASCADE 에 맡기면 디스크 파일이 고아로 남는다.
      */
     int deleteDraft(@Param("draftId") Long draftId, @Param("userId") Long userId);
+
+    /** 회원의 모든 초안 id (탈퇴 시 초안·첨부 정리용) */
+    List<Long> findDraftIdsByUser(@Param("userId") Long userId);
 
     /** policy_settings 단건 (draft_max_count 등) */
     String findPolicySetting(@Param("code") String code);

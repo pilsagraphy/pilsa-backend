@@ -203,17 +203,20 @@ public class BoardServiceImpl implements BoardService {
         boardMapper.insertPost(request, userId, boardId, pinned);
         saveAttachments(policy, userId, request.getPostId(), request.getFiles());
 
-        // 임시저장에서 발행한 경우: 초안 첨부를 먼저 이 게시글로 이관하고 초안을 삭제한다(같은 트랜잭션).
-        // linkToPost 보다 먼저 실행해 초안 첨부가 "이 글의 것"이 된 상태에서 연결·정리가 이어지게 한다
-        boolean fromDraft = publishFromDraftIfPresent(request.getDraftId(), boardId, userId, request.getPostId());
+        // 선업로드 연결·초안 이관은 게시판이 파일 업로드를 허용할 때만 — 다른 게시판에서 올린
+        // attachmentId 를 첨부 금지 게시판에 실어 보내는 정책 우회를 막는다(saveAttachments 와 같은 게이트)
+        if (policy.isAttachmentAllowed()) {
+            // 임시저장에서 발행한 경우: 초안 첨부를 먼저 이 게시글로 이관하고 초안을 삭제한다(같은 트랜잭션).
+            // linkToPost 보다 먼저 실행해 초안 첨부가 "이 글의 것"이 된 상태에서 연결·정리가 이어지게 한다
+            publishFromDraftIfPresent(request.getDraftId(), boardId, userId, request.getPostId());
 
-        // 에디터에서 미리 올려 둔 파일(본문 이미지·첨부)을 이 글의 것으로 만든다.
-        // 본문 마크다운에 남아 있는 /api/user/files/{id} 도 함께 연결된다 — 연결되지 않은 파일은 정리 배치가 지운다
-        attachmentService.linkToPost(request.getPostId(), request.getAttachmentIds(), request.getContent());
+            // 에디터에서 미리 올려 둔 파일(본문 이미지·첨부)을 이 글의 것으로 만든다.
+            // 본문 마크다운에 남아 있는 /api/user/files/{id} 도 함께 연결된다 — 연결되지 않은 파일은 정리 배치가 지운다
+            attachmentService.linkToPost(request.getPostId(), request.getAttachmentIds(), request.getContent());
 
-        if (fromDraft) {
-            // 초안에 있었지만 발행 본문에서는 지워진 인라인 이미지 정리 (수정 저장과 같은 규칙 — 마크다운이 기준)
-            attachmentService.syncInlineAttachments(request.getPostId(), request.getContent(), request.getAttachmentIds());
+            // 연결됐지만 발행 본문에는 없는 인라인 이미지 정리 — 초안 이관분이든 attachmentIds 에
+            // 습관적으로 실려 온 id 든, "마크다운이 기준" 규칙 하나로 정리한다
+            attachmentService.syncInlineAttachments(request.getPostId(), request.getContent());
         }
 
         // 생성 PK 반환 — 프론트가 등록 직후 상세 페이지로 이동하는 데 필요
@@ -228,21 +231,19 @@ public class BoardServiceImpl implements BoardService {
      * 단일 UPDATE(post_id 세팅 + draft_id 비움)라 CHECK(동시 소유 금지)도 만족한다.
      *
      * 없는/남의/다른 게시판 초안이면 조용히 무시된다 — 발행 자체를 막을 이유가 없기 때문(SPEC-A5 §2-6).
-     *
-     * @return 실제로 이 발행이 초안에서 왔는가 (후속 인라인 이미지 정리 여부 판단용)
      */
-    private boolean publishFromDraftIfPresent(Long draftId, Long boardId, Long userId, Long postId) {
+    private void publishFromDraftIfPresent(Long draftId, Long boardId, Long userId, Long postId) {
         if (draftId == null) {
-            return false;
+            return;
         }
-        // 본인 + 이 게시판의 초안인지 먼저 확인 — 다른 게시판의 초안 id 가 실려 오면 무시한다
-        if (draftMapper.findDraftDetail(draftId, userId, boardId) == null) {
+        // 본인 + 이 게시판의 초안인지 확인 겸 drafts 행 잠금 — 다른 게시판의 초안 id 는 무시하고,
+        // 락 순서(drafts → attachments)를 저장·삭제 경로와 맞춰 동시 저장·삭제와의 경합을 직렬화한다
+        if (draftMapper.lockDraft(draftId, userId, boardId) == null) {
             log.info("발행 draftId 무시(없음/남의 것/다른 게시판) - draftId: {}, userId: {}", draftId, userId);
-            return false;
+            return;
         }
         attachmentService.transferDraftToPost(draftId, postId); // ① 첨부 이관 먼저
         draftMapper.deleteDraft(draftId, userId);               // ② 초안 삭제 나중
-        return true;
     }
 
     // 발행 시점에 함께 올라온 첨부 저장 (등록·수정 공통). 첨부를 쓰지 않는 게시판이면 조용히 무시한다
@@ -293,17 +294,21 @@ public class BoardServiceImpl implements BoardService {
         // 첨부는 증분 처리: 지운 것만 소프트삭제하고, 새로 올린 것만 추가한다
         if (!CollectionUtils.isEmpty(request.getDeleteAttachmentIds())) {
             // 물리 파일까지 지워 고아 파일이 디스크에 남지 않게 한다 (PM 결정 2026-08-16).
-            // 삭제할 경로를 먼저 확보한 뒤 행을 소프트삭제하고 파일을 지운다 —
+            // 삭제할 경로를 먼저 확보해 행을 소프트삭제하되, 파일은 **커밋 후** 지운다 —
+            // 이후 단계(새 첨부 저장 등)가 실패해 롤백되면 행은 normal 로 살아나는데
+            // 파일만 사라진 "정상 첨부인데 다운로드 404" 상태가 되기 때문이다.
             // 대상 글 소속인 것만 조회/삭제되므로 남의 첨부 id가 섞여도 무해하다
             List<String> fileUrls = boardMapper.findAttachmentUrls(postId, request.getDeleteAttachmentIds());
             boardMapper.softDeleteAttachments(postId, request.getDeleteAttachmentIds());
-            fileUrls.forEach(fileStorageUtil::delete);
+            fileStorageUtil.deleteAfterCommit(fileUrls);
         }
         saveAttachments(policy, currentUserId, postId, request.getFiles());
-        // 수정 중 새로 선업로드한 파일 연결 → 그다음 본문에서 사라진 인라인 이미지 정리.
-        // 순서가 중요하다: 연결을 먼저 해야 방금 넣은 이미지가 "본문에 없는 이미지"로 오인되지 않는다
-        attachmentService.linkToPost(postId, request.getAttachmentIds(), request.getContent());
-        attachmentService.syncInlineAttachments(postId, request.getContent(), request.getAttachmentIds());
+        if (policy.isAttachmentAllowed()) {
+            // 수정 중 새로 선업로드한 파일 연결 → 그다음 본문에서 사라진 인라인 이미지 정리.
+            // 순서가 중요하다: 연결을 먼저 해야 방금 넣은 이미지가 "본문에 없는 이미지"로 오인되지 않는다
+            attachmentService.linkToPost(postId, request.getAttachmentIds(), request.getContent());
+            attachmentService.syncInlineAttachments(postId, request.getContent());
+        }
         // 응답은 message 만 — 어차피 프론트가 상세로 이동하며 GET 을 한 번 더 하므로 상세 객체 반환은 낭비 (PM 합의)
         return new BoardResponse("게시글이 성공적으로 수정되었습니다.");
     }

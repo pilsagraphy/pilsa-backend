@@ -36,7 +36,7 @@ public class DraftRequest {
 
     /**
      * 이 초안이 현재 참조하는 첨부/본문이미지 attachment_id 목록.
-     * 선업로드(POST .../posts/images, .../posts/attachments)로 만들어진 id 를 프론트가 그대로 보낸다.
+     * 선업로드(POST /api/user/boards/{boardId}/files — 본문 이미지·첨부 공용, 명세 id 13)로 만들어진 id 를 프론트가 그대로 보낸다.
      * 저장 시 이 집합으로 재조정(reconcile)한다: 목록의 첨부는 이 초안에 귀속시키고,
      * 이전엔 이 초안에 묶였으나 목록에서 빠진 첨부는 DB·물리파일까지 삭제한다.
      * (본문은 마크다운으로 확정 — HTML 파싱이 아니라 이 명시적 목록을 소유의 정본으로 삼는다.)
@@ -48,7 +48,9 @@ public class DraftRequest {
     @Schema(description = "[서버 내부용] DB 저장 후 생성된 임시저장 ID. 요청 시 입력 불필요", hidden = true)
     private Long draftId;
 
-    // 제목·본문이 모두 비었는가 (양쪽 공백/누락이면 저장 거부)
+    // 제목·본문이 모두 비었는가 (양쪽 공백/누락이면 저장 거부).
+    // boolean getter 라 Jackson 이 'empty' 프로퍼티로 오인해 Swagger 요청 스키마에 노출되므로 숨긴다
+    @Schema(hidden = true)
     public boolean isEmpty() {
         return isBlank(title) && isBlank(content);
     }

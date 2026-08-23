@@ -131,7 +131,7 @@ public class AttachmentService {
         }
 
         if (row.getPostId() == null) {
-            // 아직 글에 연결되지 않은 선업로드 파일 — 올린 본인만 볼 수 있다(작성 중 미리보기)
+            // 아직 글에 연결되지 않은 선업로드 파일(초안 소속 포함) — 올린 본인만 볼 수 있다(작성 중 미리보기)
             if (!AuthUtils.currentUserId().equals(row.getUploaderId())) {
                 throw notFound();
             }
@@ -140,7 +140,14 @@ public class AttachmentService {
             if (!AuthUtils.isAdmin() && !"normal".equals(row.getPostState())) {
                 throw notFound();
             }
-            BoardPolicy policy = boardPolicyService.get(row.getBoardId());
+            BoardPolicy policy;
+            try {
+                policy = boardPolicyService.get(row.getBoardId());
+            } catch (BoardException e) {
+                // 게시판이 삭제된 경우 — "존재하지 않는 게시판(boardId: N)" 메시지가 새어 나가면
+                // 파일·게시판의 존재가 노출되므로 통일 404 로 바꿔 던진다
+                throw notFound();
+            }
             if (!policy.canRead(AuthUtils.memberType(), AuthUtils.adminLevel())) {
                 throw notFound();
             }
@@ -184,19 +191,23 @@ public class AttachmentService {
     }
 
     /**
-     * 수정 저장 시, 본문에서 사라진 인라인 이미지를 정리한다(소프트삭제 + 물리 파일 삭제).
+     * 저장 시, 본문에서 사라진 인라인 이미지를 정리한다(소프트삭제 + 커밋 후 물리 파일 삭제).
      * 첨부 목록용 파일(usage_type=attachment)은 대상이 아니다 — 그쪽은 deleteAttachmentIds 로만 지운다.
+     *
+     * keep 은 **본문 스캔만** 쓴다 — attachmentIds 를 합치면, 본문에서 이미 지운 인라인 id 를
+     * 프론트가 습관적으로 계속 실어 보낼 때 그 파일이 영영 정리되지 않는다("마크다운이 기준" 규칙 유지).
      */
     @Transactional
-    public void syncInlineAttachments(Long postId, String content, List<Long> attachmentIds) {
-        List<Long> keep = mergeIds(attachmentIds, extractInlineIds(content));
+    public void syncInlineAttachments(Long postId, String content) {
+        List<Long> keep = extractInlineIds(content);
         List<PendingAttachmentRow> removed = attachmentMapper.findUnreferencedInline(postId, keep);
         if (CollectionUtils.isEmpty(removed)) {
             return;
         }
         List<Long> ids = removed.stream().map(PendingAttachmentRow::getAttachmentId).toList();
         attachmentMapper.softDeleteByIds(ids);
-        removed.forEach(row -> fileStorageUtil.delete(row.getFileUrl()));
+        // 물리 파일은 커밋 후 삭제 — 트랜잭션이 나중에 롤백되면 행(normal)은 살아나는데 파일만 없는 사고 방지
+        fileStorageUtil.deleteAfterCommit(removed.stream().map(PendingAttachmentRow::getFileUrl).toList());
         log.info("본문에서 제거된 인라인 이미지 정리 - postId: {}, {}건", postId, ids.size());
     }
 
@@ -216,7 +227,12 @@ public class AttachmentService {
     public void reconcileDraftAttachments(Long draftId, List<Long> attachmentIds, String content) {
         List<Long> keep = mergeIds(attachmentIds, extractInlineIds(content));
         if (!keep.isEmpty()) {
-            attachmentMapper.linkToDraft(draftId, keep, AuthUtils.currentUserId());
+            int linked = attachmentMapper.linkToDraft(draftId, keep, AuthUtils.currentUserId());
+            if (linked < keep.size()) {
+                // 남의 파일·이미 발행된 파일·다른 초안의 파일은 조용히 지나가되 흔적은 남긴다
+                // (다른 초안/글의 마크다운을 복사해 온 경우 — 그 파일은 원소유자 정리에 딸려 지워질 수 있다)
+                log.info("초안 첨부 귀속 - 요청 {}건 중 {}건 귀속 (draftId: {})", keep.size(), linked, draftId);
+            }
         }
         List<PendingAttachmentRow> removed = attachmentMapper.findDraftAttachmentsExcept(draftId, keep);
         deleteDraftRows(draftId, removed);
@@ -244,20 +260,45 @@ public class AttachmentService {
         }
     }
 
-    /** 초안 첨부 행 + 물리 파일 삭제 공통 (행 삭제 → 파일 삭제 순서. 파일 삭제 실패는 로그만) */
+    /**
+     * 초안 첨부 행 + 물리 파일 삭제 공통.
+     * DELETE 는 draft_id 재확인 가드가 있어 "그 사이 발행(이관)된 행"을 건너뛴다 — 파일 삭제도
+     * 같은 보호를 받아야 하므로, **실제로 지워진 행만**(생존 행 차집합) 커밋 후에 파일을 지운다.
+     * 그러지 않으면 발행 경합 시 발행된 글의 행은 남는데 파일만 사라진다.
+     */
     private void deleteDraftRows(Long draftId, List<PendingAttachmentRow> rows) {
         if (CollectionUtils.isEmpty(rows)) {
             return;
         }
         List<Long> ids = rows.stream().map(PendingAttachmentRow::getAttachmentId).toList();
-        attachmentMapper.deleteDraftAttachmentsByIds(draftId, ids);
-        rows.forEach(row -> fileStorageUtil.delete(row.getFileUrl()));
-        log.info("초안 첨부 정리 - draftId: {}, {}건 (행+물리파일)", draftId, ids.size());
+        int deleted = attachmentMapper.deleteDraftAttachmentsByIds(draftId, ids);
+        fileStorageUtil.deleteAfterCommit(urlsOfDeletedRows(rows, deleted));
+        log.info("초안 첨부 정리 - draftId: {}, {}건 (행+물리파일)", draftId, deleted);
+    }
+
+    /** 가드된 DELETE 가 실제로 지운 행의 파일 경로만 추린다 (스킵된 행 = 생존 행은 제외) */
+    private List<String> urlsOfDeletedRows(List<PendingAttachmentRow> snapshot, int deleted) {
+        if (deleted == snapshot.size()) {
+            return snapshot.stream().map(PendingAttachmentRow::getFileUrl).toList();
+        }
+        List<Long> ids = snapshot.stream().map(PendingAttachmentRow::getAttachmentId).toList();
+        Set<Long> survived = new LinkedHashSet<>(attachmentMapper.findExistingIds(ids));
+        List<String> urls = snapshot.stream()
+                .filter(row -> !survived.contains(row.getAttachmentId()))
+                .map(PendingAttachmentRow::getFileUrl)
+                .toList();
+        log.info("가드된 삭제와 스냅숏 불일치 - 스냅숏 {}건 중 {}건만 삭제(나머지는 발행/귀속됨), 파일 삭제 {}건",
+                snapshot.size(), deleted, urls.size());
+        return urls;
     }
 
     // ---------------------------------------------------------------- 정리 배치
 
-    /** 글에 연결되지 않은 채 보존시간이 지난 선업로드 파일을 지운다 (DB 행 → 물리 파일 순서) */
+    /**
+     * 글·초안 어디에도 연결되지 않은 채 보존시간이 지난 선업로드 파일을 지운다 (DB 행 → 물리 파일 순서).
+     * DELETE 는 post_id·draft_id NULL 재확인 가드가 있어 그 사이 발행/초안 귀속된 행을 건너뛴다 —
+     * 파일 삭제도 실제 지워진 행만 대상으로 한다(스킵된 행의 파일을 지우면 살아 있는 글의 이미지가 깨진다).
+     */
     @Transactional
     public int purgeExpiredPending(int hours) {
         List<PendingAttachmentRow> expired = attachmentMapper.findExpiredPending(hours);
@@ -266,7 +307,7 @@ public class AttachmentService {
         }
         List<Long> ids = expired.stream().map(PendingAttachmentRow::getAttachmentId).toList();
         int deleted = attachmentMapper.deletePendingByIds(ids);
-        expired.forEach(row -> fileStorageUtil.delete(row.getFileUrl()));
+        fileStorageUtil.deleteAfterCommit(urlsOfDeletedRows(expired, deleted));
         return deleted;
     }
 
@@ -362,12 +403,22 @@ public class AttachmentService {
     /**
      * 저장할 MIME 타입. 브라우저가 이미지에 octet-stream 을 보내는 경우가 있어
      * 이미지는 확장자로 보정한다 — 그러지 않으면 조회 시 img 태그가 렌더링하지 못한다.
+     * 클라이언트가 보낸 값은 형식 검증을 통과한 것만 저장한다 — 조작된 값("a/b/c" 등)을 그대로 두면
+     * 이후 그 파일을 조회할 때마다 MediaType 파싱이 깨져 500 이 난다.
      */
     private String contentType(MultipartFile file, boolean isImage, String extension) {
         String given = file.getContentType();
         if (isImage && (given == null || !given.startsWith("image/"))) {
             return "image/" + ("jpg".equals(extension) ? "jpeg" : extension);
         }
-        return given == null || given.isBlank() ? FALLBACK_CONTENT_TYPE : given;
+        if (given == null || given.isBlank()) {
+            return FALLBACK_CONTENT_TYPE;
+        }
+        try {
+            org.springframework.http.MediaType.parseMediaType(given);
+            return given;
+        } catch (RuntimeException e) {
+            return FALLBACK_CONTENT_TYPE;
+        }
     }
 }

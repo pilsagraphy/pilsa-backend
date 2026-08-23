@@ -82,15 +82,20 @@ public class AttachmentController {
 
                     ### 업로드한 파일은 언제 글의 것이 되는가
                     발행(`POST .../posts`)·수정(`PUT .../posts/{postId}`) 요청의 **attachmentIds** 에 넣으면 그 글에 연결됩니다.
-                    본문에 `/api/user/files/{id}` 가 남아 있으면 attachmentIds 에 빠뜨려도 서버가 본문을 훑어 함께 연결하므로,
+                    **임시저장(`POST/PUT .../drafts`)의 attachmentIds 에 넣으면 초안에 귀속**되어 발행 시 글로 이관됩니다.
+                    본문에 `/api/user/files/{id}` 가 남아 있으면 attachmentIds 에 빠뜨려도 서버가 본문을 훑어 함께 연결·귀속하므로,
                     인라인 이미지는 프론트가 따로 목록을 관리하지 않아도 됩니다.
-                    **글에 연결되지 않은 파일은 24시간 뒤 새벽 배치가 삭제합니다**(policy_settings.pending_upload_purge_hours).
+                    **글이나 초안 어디에도 연결되지 않은 파일만 24시간 뒤 새벽 배치가 삭제합니다**
+                    (policy_settings.pending_upload_purge_hours). 초안에 귀속된 파일은 보존시간과 무관하게 유지되며,
+                    초안을 삭제하면 그 파일도 함께 삭제됩니다.
 
                     실패: 400 {"message":"허용되지 않는 파일 형식입니다."} (policy_settings.upload_image_extensions / upload_file_extensions)
                     실패: 400 {"message":"업로드할 파일이 없습니다."}
                     실패: 400 {"message":"본문에 삽입할 수 있는 것은 이미지 파일뿐입니다."} (usage=inline + 비이미지)
+                    실패: 400 {"message":"usage 는 inline 또는 attachment 만 사용할 수 있습니다."} (usage 에 그 외 값)
                     실패: 403 {"message":"이 게시판에 글을 등록할 권한이 없습니다."}
                     실패: 403 {"message":"이 게시판은 파일 업로드를 사용하지 않습니다."}
+                    실패: 404 {"message":"존재하지 않는 게시판입니다. (boardId: N)"}
                     실패: 413 요청 크기 초과 (spring.servlet.multipart 한도 30MB)
                     """)
     @PostMapping(value = "/api/user/boards/{boardId}/files", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -113,7 +118,7 @@ public class AttachmentController {
                     | 대상 | 열람 가능한 사람 |
                     |---|---|
                     | 글에 연결된 파일 | 그 게시판을 열람할 수 있는 회원 (관리자 포함) |
-                    | 아직 연결되지 않은 선업로드 파일 | 올린 본인만 (작성 중 미리보기) |
+                    | 아직 글에 연결되지 않은 파일 (선업로드 대기·**임시저장 귀속** 포함) | 올린 본인만 (작성 중 미리보기) |
                     | 블라인드·삭제된 글의 첨부 | 관리자만 |
 
                     이미지는 `Content-Disposition: inline`(브라우저에 바로 표시), 그 외 파일은 `attachment`(원본 파일명으로 다운로드)로 내려갑니다.
