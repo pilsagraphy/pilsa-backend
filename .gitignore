@@ -39,3 +39,7 @@ out/
 **/*.properties
 # 문서 작업 중 임시 백업 폴더
 docs/**/_backup-*/
+
+# 런타임 업로드(게시글 첨부 등) — 버전관리 대상 아님. 명예의전당 시드 이미지(uploads/Honor)만 추적 유지
+/uploads/*
+!/uploads/Honor

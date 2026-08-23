@@ -1,7 +1,8 @@
 package com.back.admin.sanction.service;
 
+import com.back.admin.moderation.dto.ModerationState;
 import com.back.admin.common.AdminServiceSupport;
-import com.back.admin.common.dto.BulkResultResponse;
+import com.back.admin.sanction.dto.BulkResultResponse;
 import com.back.admin.sanction.dto.ReportPageResponse;
 import com.back.admin.sanction.dto.ReportedItemResponse;
 import com.back.admin.sanction.exception.ReportAdminException;
@@ -35,27 +36,40 @@ public class ReportAdminServiceImpl implements ReportAdminService {
         }
     }
 
+    // 상태 필터 화이트리스트: blind/deleted 만 허용. 그 외(오타·normal·null)는 null 로 정규화 →
+    // 매퍼가 기본 분기(반려된 신고만 제외, pending·blind·deleted 노출)를 타므로 잘못된 state 값이 SQL 로 새지 않는다.
+    private String normalizeState(String state) {
+        if (ModerationState.BLIND.dbValue().equals(state) || ModerationState.DELETED.dbValue().equals(state)) {
+            return state;
+        }
+        return null;
+    }
+
     @Override
-    public ReportPageResponse getReportedPosts(int page, int size, String status, Long boardId, String sort) {
+    public ReportPageResponse getReportedPosts(int page, int size, String state, String keyword, Long boardId, String sort) {
         AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
         page = AdminServiceSupport.clampPage(page);
         size = AdminServiceSupport.clampSize(size);
-        int totalCount = reportAdminMapper.countReportedPosts(status, boardId);
+        state = normalizeState(state);                     // blind/deleted 만 허용, 그 외 기본(normal 제외)
+        keyword = AdminServiceSupport.escapeLike(keyword);  // LIKE 와일드카드(%,_) 리터럴화
+        int totalCount = reportAdminMapper.countReportedPosts(state, keyword, boardId);
         int totalPages = (int) Math.ceil((double) totalCount / size);
         int offset = (page - 1) * size;
-        List<ReportedItemResponse> items = reportAdminMapper.findReportedPosts(status, boardId, sort, offset, size);
+        List<ReportedItemResponse> items = reportAdminMapper.findReportedPosts(state, keyword, boardId, sort, offset, size);
         return toPage(totalPages, totalCount, items);
     }
 
     @Override
-    public ReportPageResponse getReportedComments(int page, int size, String status, Long boardId, String sort) {
+    public ReportPageResponse getReportedComments(int page, int size, String state, String keyword, Long boardId, String sort) {
         AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
         page = AdminServiceSupport.clampPage(page);
         size = AdminServiceSupport.clampSize(size);
-        int totalCount = reportAdminMapper.countReportedComments(status, boardId);
+        state = normalizeState(state);                     // blind/deleted 만 허용, 그 외 기본(normal 제외)
+        keyword = AdminServiceSupport.escapeLike(keyword);  // LIKE 와일드카드(%,_) 리터럴화
+        int totalCount = reportAdminMapper.countReportedComments(state, keyword, boardId);
         int totalPages = (int) Math.ceil((double) totalCount / size);
         int offset = (page - 1) * size;
-        List<ReportedItemResponse> items = reportAdminMapper.findReportedComments(status, boardId, sort, offset, size);
+        List<ReportedItemResponse> items = reportAdminMapper.findReportedComments(state, keyword, boardId, sort, offset, size);
         return toPage(totalPages, totalCount, items);
     }
 

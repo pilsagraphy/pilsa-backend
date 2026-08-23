@@ -1,6 +1,6 @@
 package com.back.admin.sanction.controller;
 
-import com.back.admin.common.dto.BulkResultResponse;
+import com.back.admin.sanction.dto.BulkResultResponse;
 import com.back.admin.sanction.dto.ReportBulkRequest;
 import com.back.admin.sanction.dto.ReportPageResponse;
 import com.back.admin.sanction.service.ReportAdminService;
@@ -28,16 +28,18 @@ public class ReportAdminController {
 
     private final ReportAdminService reportAdminService;
 
-    // 게시글 신고 목록 (status: pending/rejected/resolved, 프론트 표기 블라인드/반려/삭제)
+    // 게시글 신고 목록 (state 필터=블라인드/삭제, 미지정 시 normal 제외)
     @Operation(
             summary = "신고된 게시글 목록 (관리자)",
             description = """
-                    신고관리 페이지 진입 시와 필터(처리 상태/게시판/정렬) 변경 시 호출된다.
+                    신고관리 페이지 진입 시와 필터(상태/게시판/검색/정렬) 변경 시 호출된다.
                     동일 게시글에 대한 중복 신고는 대상 단위로 그룹핑되어 reportCount로 합산된다.
+                    상태(state) 필터로 블라인드/삭제된 대상만 조회할 수 있고, 미지정 시 기본은 반려(복구)된 신고만 제외하고
+                    pending(미조치)·blind·deleted 를 모두 내려준다. → 복원(복구=반려)된 대상만 이 목록에서 제외된다(신규 신고는 계속 노출).
 
                     ### 요청 예시
                     ```
-                    GET /api/admin/reports/posts?page=1&size=10&status=pending&boardId=2&sort=latest
+                    GET /api/admin/reports/posts?page=1&size=10&state=blind&boardId=2&keyword=홍길동&sort=latest
                     ```
 
                     ### 응답 예시
@@ -50,7 +52,7 @@ public class ReportAdminController {
                         "preview": "본문 앞부분 30자", "boardId": 2, "boardName": "자유게시판",
                         "authorName": "홍길동", "reasonLabel": "욕설/비방",
                         "firstReportedAt": "2026-08-14T10:00:00", "reportCount": 3,
-                        "state": "normal"
+                        "state": "blind"
                       }]
                     }
                     ```
@@ -64,27 +66,31 @@ public class ReportAdminController {
             @RequestParam(value = "page", defaultValue = "1") int page,
             @Parameter(description = "페이지 크기", example = "10")
             @RequestParam(value = "size", defaultValue = "10") int size,
-            @Parameter(description = "신고 처리 상태 필터 (pending/rejected/resolved). 미지정 시 전체", example = "pending")
-            @RequestParam(value = "status", required = false) String status,
+            @Parameter(description = "상태 필터 (blind/deleted). 미지정 시 반려(복구)된 신고만 제외 — pending·blind·deleted 노출", example = "blind")
+            @RequestParam(value = "state", required = false) String state,
+            @Parameter(description = "검색어 (본문 또는 글쓴이명 부분일치)", example = "홍길동")
+            @RequestParam(value = "keyword", required = false) String keyword,
             @Parameter(description = "게시판 ID 필터. 미지정 시 전체 게시판", example = "2")
             @RequestParam(value = "boardId", required = false) Long boardId,
             @Parameter(description = "정렬 방식 (latest=최신순)", example = "latest")
             @RequestParam(value = "sort", defaultValue = "latest") String sort) {
-        log.info("[관리자] 게시글 신고 목록 - status:{}, boardId:{}, sort:{}", status, boardId, sort);
-        return ResponseEntity.ok(reportAdminService.getReportedPosts(page, size, status, boardId, sort));
+        log.info("[관리자] 게시글 신고 목록 - state:{}, keyword:{}, boardId:{}, sort:{}", state, keyword, boardId, sort);
+        return ResponseEntity.ok(reportAdminService.getReportedPosts(page, size, state, keyword, boardId, sort));
     }
 
-    // 댓글 신고 목록
+    // 댓글 신고 목록 (state 필터=블라인드/삭제, 미지정 시 normal 제외, 내용+글쓴이 검색)
     @Operation(
             summary = "신고된 댓글 목록 (관리자)",
             description = """
                     신고관리 페이지의 댓글 탭 진입 시와 필터 변경 시 호출된다.
                     댓글은 원문으로 이동할 수 있도록 소속 게시글의 postId가 함께 내려간다.
                     동일 댓글에 대한 중복 신고는 대상 단위로 그룹핑되어 reportCount로 합산된다.
+                    상태(state) 필터로 블라인드/삭제된 댓글만 조회할 수 있고, 미지정 시 기본은 반려(복구)된 신고만 제외하고
+                    pending(미조치)·blind·deleted 를 모두 내려준다. → 복원(복구=반려)된 댓글만 이 목록에서 제외된다(신규 신고는 계속 노출).
 
                     ### 요청 예시
                     ```
-                    GET /api/admin/reports/comments?page=1&size=10&status=pending&boardId=2&sort=latest
+                    GET /api/admin/reports/comments?page=1&size=10&state=deleted&boardId=2&keyword=홍길동&sort=latest
                     ```
 
                     ### 응답 예시
@@ -97,7 +103,7 @@ public class ReportAdminController {
                         "preview": "댓글 앞부분", "boardId": 2, "boardName": "자유게시판",
                         "authorName": "홍길동", "reasonLabel": "광고/홍보",
                         "firstReportedAt": "2026-08-14T10:05:00", "reportCount": 1,
-                        "state": "normal"
+                        "state": "deleted"
                       }]
                     }
                     ```
@@ -112,14 +118,16 @@ public class ReportAdminController {
             @RequestParam(value = "page", defaultValue = "1") int page,
             @Parameter(description = "페이지 크기", example = "10")
             @RequestParam(value = "size", defaultValue = "10") int size,
-            @Parameter(description = "신고 처리 상태 필터 (pending/rejected/resolved). 미지정 시 전체", example = "pending")
-            @RequestParam(value = "status", required = false) String status,
+            @Parameter(description = "상태 필터 (blind/deleted). 미지정 시 반려(복구)된 신고만 제외 — pending·blind·deleted 노출", example = "blind")
+            @RequestParam(value = "state", required = false) String state,
+            @Parameter(description = "검색어 (댓글 내용 또는 글쓴이명 부분일치)", example = "홍길동")
+            @RequestParam(value = "keyword", required = false) String keyword,
             @Parameter(description = "게시판 ID 필터. 미지정 시 전체 게시판", example = "2")
             @RequestParam(value = "boardId", required = false) Long boardId,
             @Parameter(description = "정렬 방식 (latest=최신순)", example = "latest")
             @RequestParam(value = "sort", defaultValue = "latest") String sort) {
-        log.info("[관리자] 댓글 신고 목록 - status:{}, boardId:{}, sort:{}", status, boardId, sort);
-        return ResponseEntity.ok(reportAdminService.getReportedComments(page, size, status, boardId, sort));
+        log.info("[관리자] 댓글 신고 목록 - state:{}, keyword:{}, boardId:{}, sort:{}", state, keyword, boardId, sort);
+        return ResponseEntity.ok(reportAdminService.getReportedComments(page, size, state, keyword, boardId, sort));
     }
 
     // 선택 복원 (=신고 반려). 사유를 받지 않는다

@@ -38,7 +38,19 @@ public class ModerationServiceImpl implements ModerationService {
 
     @Override
     public Long softDelete(String targetType, Long targetId, Long actorId, Long reasonId, String detail) {
-        if (!changeState(targetType, targetId, ModerationState.DELETED)) return null; // 이미 deleted면 no-op (벌점 중복 방지)
+        boolean stateChanged = changeState(targetType, targetId, ModerationState.DELETED);
+        // 대상에 아직 살아있는 주의 포인트가 있다 = 관리자가 이미 삭제 조치한 대상.
+        // 이 값으로 "관리자 재삭제"와 "작성자가 먼저 지운 글"을 구분한다 — state 만으로는 둘이 똑같이 deleted 라 갈리지 않는다.
+        boolean alreadyPenalized = moderationMapper.hasActivePenalty(targetType, targetId);
+
+        // 이미 deleted 인데 벌점도 붙어 있으면 할 일이 없다 → no-op (벌점 중복 부과 방지)
+        if (!stateChanged && alreadyPenalized) {
+            return null;
+        }
+        // 여기까지 오는 경우는 둘 중 하나다
+        //  ① 정상 삭제 (stateChanged = true)
+        //  ② 작성자가 신고를 눈치채고 먼저 지운 글에 관리자가 삭제 조치 (stateChanged = false, 벌점 없음)
+        //     → 상태는 이미 deleted 라 그대로지만, 조치 이력과 벌점은 남겨 책임을 묻는다
         ModerationLogEntry entry = writeLog(targetType, targetId, ModerationState.DELETED, reasonId, detail, actorId);
 
         Long authorId = findAuthorId(targetType, targetId);
