@@ -43,13 +43,17 @@ public class ReportBulkExecutor {
     public void deleteItem(String targetType, Long targetId, Long adminId, Long reasonId, String detail) {
         // actionId: 이번 호출로 실제 삭제됐으면 그 조치 id, 이미 삭제 상태였다면 null (softDelete 의 state<>deleted 가드 — 벌점 중복 방지)
         Long actionId = moderationService.softDelete(targetType, targetId, adminId, resolveReasonId(targetType, targetId, reasonId), detail);
-        if (actionId == null) {
-            // 이미 삭제된 대상 재삭제 — 상태 변화·벌점 없이 no-op 이었음을 실패 사유로 관리자에게 알린다(부분 성공 응답의 failures 로 노출)
+        // 신고 종료를 먼저 한다 — 작성자가 먼저 지운 글(state 이미 deleted, actionId=null)도 pending 신고는 정상 종료돼야 한다.
+        int resolved = reportAdminMapper.updatePendingReportsStatus(
+                targetType, targetId, ReportStatus.RESOLVED.dbValue(), actionId);
+
+        // 상태 변화도 없고(이미 삭제됨) 종료한 신고도 없으면 진짜 no-op → 실패 사유로 관리자에게 알린다(부분 성공 응답의 failures 로 노출).
+        // (같은 글 두 번 삭제: 첫 삭제에서 신고가 이미 종료돼 두 번째는 resolved=0 → 여기서 실패. 벌점 중복은 softDelete 가드가 막는다.)
+        if (actionId == null && resolved == 0) {
             throw new ReportAdminException(
                     TARGET_POST.equals(targetType) ? "이미 삭제된 게시글입니다." : "이미 삭제된 댓글입니다.",
                     HttpStatus.CONFLICT);
         }
-        reportAdminMapper.updatePendingReportsStatus(targetType, targetId, ReportStatus.RESOLVED.dbValue(), actionId);
     }
 
     // 블라인드: state=blind + 조치이력. 벌점은 부과하지 않는다(삭제와의 차이).
