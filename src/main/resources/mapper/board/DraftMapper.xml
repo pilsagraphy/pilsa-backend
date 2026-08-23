@@ -43,7 +43,8 @@
         SELECT attachment_id AS attachmentId,
                file_name     AS originName,
                file_size     AS fileSize,
-               file_url      AS fileUrl
+               <!-- 물리 경로 대신 인증형 조회 API 주소 (정적 서빙 폐지 — 초안 파일은 어차피 업로더 본인만 열람) -->
+               CONCAT('/api/user/files/', attachment_id) AS fileUrl
         FROM attachments
         WHERE draft_id = #{draftId}
           AND usage_type = 'attachment'

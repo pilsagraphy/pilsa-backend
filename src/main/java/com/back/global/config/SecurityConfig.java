@@ -46,7 +46,10 @@ public class SecurityConfig {
                     "/api/mail/**", // 인증번호 관련
                     "/swagger-ui/**", // 스웨거 관련
                     "/v3/api-docs/**", // 스웨거 관련
-                    "/uploads/**" // 파일 경로
+                    // 첨부 정적 서빙(/uploads/**) 공개는 폐지(2026-08-23 PM 결정) — 예측 가능한
+                    // 원본 파일명 경로로 비로그인 열람이 가능해 read_scope 판정이 통째로 우회됐다.
+                    // 첨부 접근은 인증형 GET /api/user/files/{fileId} 만. 명예의전당 사진만 공개 유지
+                    "/uploads/Honor/**" // 명예의전당 사진 (공개 화면 전용 시드 이미지)
                 ).permitAll()
                 
                 // 관리자 화면 전용 경로만 URL 레벨에서 막는다 (admin_level>=1 → ROLE_ADMIN)

@@ -83,7 +83,7 @@ public class AdminPostController {
                       "isAnonymous":false,"isPinned":false,"viewCount":15,"likeCount":2,
                       "commentCount":4,"state":"blind",
                       "created":"2026-08-14T10:12:30","updated":"2026-08-14T11:00:00",
-                      "attachments":[{"attachmentId":18,"originName":"파일1.png","fileSize":12345,"fileUrl":"/uploads/board-2/uuid.png"}],
+                      "attachments":[{"attachmentId":18,"originName":"파일1.png","fileSize":12345,"fileUrl":"/api/user/files/18"}],
                       "comments":[{"commentId":200,"content":"댓글","userId":84,"authorName":"관리자",
                         "isAnonymous":false,"isPrivate":false,"state":"normal",
                         "created":"2026-08-14T10:30:00","updated":null}]

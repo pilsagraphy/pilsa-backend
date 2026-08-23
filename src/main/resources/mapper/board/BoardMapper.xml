@@ -244,7 +244,9 @@
         SELECT attachment_id AS attachmentId,
                file_name     AS originName,
                file_size     AS fileSize,
-               file_url      AS fileUrl
+               <!-- 물리 경로(file_url) 대신 인증형 조회 API 주소를 내린다 — 정적 서빙(/uploads/board-*) 폐지.
+                    프론트는 이 값을 fetch(+Authorization) → blob 으로 표시/다운로드한다 -->
+               CONCAT('/api/user/files/', attachment_id) AS fileUrl
         FROM attachments
         WHERE post_id = #{postId}
           AND state = 'normal'

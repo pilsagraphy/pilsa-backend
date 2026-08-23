@@ -156,7 +156,7 @@ public class BoardController {
                       "created": "2026-08-14T10:12:30", "updated": "2026-08-14T11:02:11",
                       "prevPost": {"postId": 159, "title": "이전 글 제목", "categoryName": "질문", "created": "2026-08-13T09:20:00"},
                       "nextPost": {"postId": 172, "title": "다음 글 제목", "categoryName": "일상", "created": "2026-08-14T15:40:00"},
-                      "attachments": [{"attachmentId": 18, "originName": "파일.pdf", "fileUrl": "uploads/board-2/uuid.pdf", "fileSize": 12345}],
+                      "attachments": [{"attachmentId": 18, "originName": "파일.pdf", "fileUrl": "/api/user/files/18", "fileSize": 12345}],
                       "attachmentCount": 1
                     }
                     ```
@@ -165,8 +165,8 @@ public class BoardController {
                     ※ 상세에서만 created(작성일)와 updated(수정일)가 함께 내려갑니다.
                     ※ attachments 에는 **본문에 삽입된 이미지가 포함되지 않습니다** — 본문에 이미 보이는 이미지가
                       첨부 목록에 중복 노출되지 않게 서버가 걸러냅니다(첨부 목록용 파일만).
-                    ※ 첨부 다운로드는 `GET /api/user/files/{attachmentId}` (인증형, 열람 권한 검사)를 쓰세요.
-                      응답의 fileUrl 은 정적 경로라 권한 검사가 없습니다.
+                    ※ attachments 의 fileUrl 은 인증형 조회 API 주소(/api/user/files/{id})입니다 — fetch 에
+                      Authorization 헤더를 붙여 blob 으로 표시/다운로드하세요(정적 /uploads 첨부 서빙은 폐지됨).
                     """)
     @GetMapping("/posts/{postId}")
     public ResponseEntity<BoardDetailResponse> getPostDetail(

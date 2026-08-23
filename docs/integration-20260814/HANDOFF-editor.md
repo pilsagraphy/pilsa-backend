@@ -78,8 +78,10 @@ replaceText(placeholder, markdown);
 ```
 GET /api/user/files/{fileId}        ← 업로드 응답의 url. Authorization 헤더 필요
 ```
-정적 경로(`/uploads/**`)와 달리 이 API 는 **파일 → 글 → 게시판을 타고 열람 권한(read_scope)을 검사**한다.
-열람 권한이 없으면 404(존재 자체를 알려주지 않는다). 아직 글에 연결되지 않은 파일은 올린 본인만 볼 수 있다.
+이 API 가 **첨부 파일 접근의 유일한 경로**다 — 첨부 정적 서빙(`/uploads/board-*`)은 폐지됐다(2026-08-23 PM 결정.
+URL 만 알면 비로그인도 열리던 구멍. 명예의전당 사진 `/uploads/Honor/**` 만 공개 정적 서빙 유지).
+파일 → 글 → 게시판을 타고 열람 권한(read_scope)을 검사하며, 권한이 없으면 404(존재 자체를 알려주지 않는다).
+아직 글에 연결되지 않은 파일(초안 포함)은 올린 본인만 볼 수 있다.
 
 `img` 태그는 Authorization 헤더를 붙일 수 없으므로, 마크다운을 그릴 때 **이미지 컴포넌트를 갈아끼워
 한 번 fetch 한 뒤 blob URL 로 표시**한다(첨부 다운로드도 같은 방식).
@@ -152,10 +154,10 @@ DELETE .../drafts/{draftId}      → 물리 삭제 (선업로드된 본문 이�
 - **상세와 댓글 분리**: 상세(`GET .../posts/{postId}`)에는 `commentCount` 만 옴.
   댓글 본문은 `GET .../posts/{postId}/comments` 별도 호출 (블라인드·삭제 댓글은 서버가 제외, 익명/비밀댓글 마스킹도 서버 책임).
 - **날짜 규칙**: 목록 = `created`(작성일)만 / 상세 = `created`+`updated` / 임시저장 = `updatedAt`만.
-- **첨부 파일명**: 서버가 원본 파일명 그대로 저장하므로(발행 동시 업로드는 `uploads/board-{id}/{postId}/원본명.pdf`,
-  선업로드는 글 번호를 모르는 시점이라 `uploads/board-{id}/user-{userId}/원본명.pdf`)
-  파일명이 원본으로 떨어진다. 목록의 `originName` 은 표시용.
-  다운로드는 `GET /api/user/files/{attachmentId}` 를 쓴다 — 상세 응답의 `fileUrl` 은 정적 경로라 권한 검사가 없다.
+- **응답의 `fileUrl` 은 인증형 API 주소다** (2026-08-23 변경): 상세·초안·관리자 상세의 attachments 가 내려주는
+  `fileUrl` 값이 물리 경로가 아니라 `/api/user/files/{attachmentId}` 로 바뀌었다. **이 값으로 fetch(+Authorization)**
+  하면 된다(§2-1 blob 방식). 다운로드 시 `Content-Disposition: attachment; filename="원본명"` 으로 원본 파일명이 떨어진다.
+  `originName` 은 표시용.
 - **상세의 `attachments`**: 본문에 삽입된 인라인 이미지는 포함되지 않는다(첨부 목록용 파일만).
   목록의 `hasAttachment`(클립 아이콘)도 같은 기준이다.
 - **에러 형식**: 전부 `{"message": "..."}` JSON. 미인증 401 / 권한부족 403.

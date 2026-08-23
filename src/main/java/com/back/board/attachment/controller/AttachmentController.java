@@ -112,7 +112,8 @@ public class AttachmentController {
     @Operation(summary = "파일 조회/다운로드 (인증형)",
             description = """
                     업로드 응답의 `url`(= 본문 마크다운에 심긴 주소)이 가리키는 API입니다.
-                    정적 경로와 달리 **열람 권한을 검사**합니다 — 파일 → 글 → 게시판을 타고
+                    **열람 권한을 검사하는 유일한 파일 접근 경로**입니다(첨부 정적 서빙 /uploads/board-* 는 폐지됨) —
+                    파일 → 글 → 게시판을 타고
                     boards.read_scope 를 판정하므로, 열람 권한이 없는 게시판의 첨부는 URL을 알아도 열리지 않습니다.
 
                     | 대상 | 열람 가능한 사람 |

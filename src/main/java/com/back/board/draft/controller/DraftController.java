@@ -70,14 +70,14 @@ public class DraftController {
             description = """
                     목록에서 초안을 선택해 글쓰기 폼에 복원할 때 호출합니다. 본인 것만 가능하며, 아니면 404입니다.
                     첨부는 일반 첨부(attachments)만 내려갑니다 — 본문 인라인 이미지는 이미 content 마크다운 안에 있습니다.
-                    파일 표시/다운로드는 `GET /api/user/files/{attachmentId}`(인증형)를 쓰세요 — 초안 파일은 글 미연결 상태라
-                    올린 본인만 열람되며, 응답의 fileUrl 은 정적 경로라 권한 검사가 없습니다.
+                    attachments 의 fileUrl 은 인증형 조회 API 주소(/api/user/files/{id})입니다 — 초안 파일은
+                    글 미연결 상태라 올린 본인만 열람됩니다. fetch 에 Authorization 헤더를 붙여 blob 으로 표시하세요.
 
                     ### 응답 예시
                     ```json
                     {"draftId": 7, "title": "작성 중", "content": "본문", "categoryId": 4,
                      "isAnonymous": false, "updatedAt": "2026-08-14T21:30:00",
-                     "attachments": [{"attachmentId": 31, "originName": "자료.pdf", "fileUrl": "/uploads/board-2/user-85/자료.pdf", "fileSize": 12345}]}
+                     "attachments": [{"attachmentId": 31, "originName": "자료.pdf", "fileUrl": "/api/user/files/31", "fileSize": 12345}]}
                     ```
 
                     실패: 404 {"message":"존재하지 않는 임시저장입니다."} (남의 초안·다른 게시판)

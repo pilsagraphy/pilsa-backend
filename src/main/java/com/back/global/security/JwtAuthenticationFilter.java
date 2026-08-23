@@ -174,7 +174,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return path.startsWith("/api/mail/")
                 || path.startsWith("/swagger-ui")
                 || path.startsWith("/v3/api-docs")
-                || path.startsWith("/uploads/")
+                || path.startsWith("/uploads/Honor/") // 첨부 정적 서빙 폐지 — 명예의전당 사진만 공개
                 || path.equals("/api/donations")
                 || path.equals("/api/quotes/current")
                 || path.equals("/api/event")
