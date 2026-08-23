@@ -6,6 +6,34 @@
 
 ---
 
+## ✅ 구현 완료 (2026-08-22 PR #83 → 2026-08-23 dev 선업로드 체계와 통합) — 최종 확정 사항
+
+`com.back.board.draft` 패키지로 구현. DDL 은 CHECKLIST.md [2026-08-23] 임시저장 항목에 기록(레포 .sql 미커밋 컨벤션).
+
+- **상한 강제 방식**: PM 지시로 "**DB에서부터 5개 제한**" 채택 → 원안(§2 애플리케이션 count 검사)이 아니라
+  `drafts.slot_no`(1~5) + `UNIQUE(user_id, board_id, slot_no)` 로 물리 강제. 서비스는 `policy_settings.draft_max_count`
+  로 빈 슬롯을 1..N 탐색하고, 경합으로 슬롯이 겹치면 duplicate-key 를 **409** 로 변환한다.
+  상한 범위는 CHECKLIST 의 `draft_max_count` 설명("회원당 **게시판별**")대로 **게시판별 5개**로 확정.
+- **본문/첨부**: 본문은 마크다운 확정(2026-08-16). 소유 판정은 `attachmentIds` **∪ 본문 마크다운에 남은
+  `/api/user/files/{id}`** — 발행과 같은 규칙이라 프론트가 인라인 이미지 id 를 빠뜨려도 초안 첨부가 지워지지 않는다.
+- **첨부 스키마 (통합 확정)**: PR #83 원안의 `attachment_type`/`uploaded_by` 는 만들지 않고 dev 선업로드 체계의
+  `usage_type`('inline'/'attachment')/`uploader_id` 를 그대로 쓴다 — `attachments.draft_id` + FK(CASCADE)만 추가.
+  원안의 완화 CHECK 는 **MySQL 8 에서 적용 불가**(CASCADE FK 컬럼은 CHECK 금지, 에러 3823) — 코드가 불변식을 강제한다
+  (linkToPost/발행 이관이 post_id 세팅과 동시에 draft_id 를 비움).
+- **선업로드 엔드포인트 (통합 확정)**: 원안의 `POST .../posts/images`·`.../posts/attachments` 2종은 만들지 않는다 —
+  **`POST /api/user/boards/{boardId}/files` 하나**(본문 이미지·첨부 공용, 명세 id 13 정본)가 담당한다.
+  조회는 인증형 `GET /api/user/files/{fileId}`(id 147) — 초안에만 묶인 파일은 업로더 본인만 열람 가능.
+- **발행 연동**: `POST .../posts` 에 `draftId` form 필드. 순서 엄수(UPDATE 이관 → DELETE 초안).
+  본인+해당 게시판 초안인지 확인 후 진행, 아니면 무시(발행은 성공). 발행 본문에서 지워진 인라인 이미지는 이관 후 정리.
+- **초안 삭제 = 물리 삭제 (파일 포함)**: 초안 삭제·저장 재조정에서 빠진 첨부는 **행과 디스크 파일을 코드가 명시적으로
+  삭제**한다(AttachmentService). FK CASCADE 는 백스톱 — CASCADE 에만 맡기면 디스크 파일이 고아로 남는다(PM 지시 2026-08-23).
+- **청소 배치**: 별도 배치를 두지 않고 기존 `PendingAttachmentPurgeScheduler`(04:50, `pending_upload_purge_hours` 24h)로
+  통합 — 대상은 `post_id·draft_id 둘 다 NULL` 인 대기 첨부뿐, **초안에 묶인 파일은 보존시간과 무관하게 유지**된다.
+
+> 아래 원안 §1~§3 의 서술(slot_no 없음 / count 검사 / 응답의 count 필드 / '저장할 내용이 없습니다' 메시지 등)은 착수 전 초안이며, 최종 구현·계약은 위 확정 사항과 api_endpoints 정본(id 15~19)을 따른다.
+
+---
+
 ## 1. DB 설계 (팀원이 DDL 작성 → PM 승인 후 qa_pilsa 수동 적용)
 
 **posts 테이블 재사용 금지.** `posts.state='draft'` 방식은 목록/조회수/신고/제재/관리자 화면 쿼리

@@ -12,11 +12,13 @@
 |----|-----|------|
 | 5 | POST 게시글 등록 | **2기 확정.** 어제 합의(postId 응답·검증 400·isPinned 제거) 코드 반영 완료 |
 | 7 | PUT 게시글 수정 | **2기 확정.** 합의({message} 응답·증분 첨부·검증 400) 코드 반영 완료 |
-| 13 | POST 인라인 이미지 | **유일하게 검토 필요 유지** — 본문 포맷(HTML)·XSS 새니타이즈·첨부 방식 통일(①) 확정 대기 |
+| 13 | POST 인라인 이미지 | ~~검토 필요 유지~~ → **2기 확정·구현 완료(2026-08-23)**: 본문 포맷 마크다운 확정 + 첨부 방식 선업로드 통일(§4-1). 경로는 `/files` (본문 이미지·첨부 공용) |
 | 25~29 | 알림(toast) 5종 | **2기 확정.** 인앱 알림 API는 현행 그대로 유효. 웹앱 푸시·배지는 별개 전달 채널로 붙인다(PM 결정: 2기 범위) → [PUSH-NOTIFICATION-GUIDE.md](PUSH-NOTIFICATION-GUIDE.md) |
 | 39 | GET 관리자 게시글 상세 | **2기 확정.** 코드와 일치 확인. 첨부 예시를 실제 DTO 형태로 정정 |
 
 phase 분포: 1기 8 / 2기 70 / 3기 5 / 검토 필요 1 (id=13).
+
+> **2026-08-23 갱신**: id=13 도 해소되어 `검토 필요` 는 0건이 되었다 (§4-1 참조).
 
 ## 2. 어제 합의 → 코드 반영 (이번에 수정한 것 4건, 컴파일 통과)
 
@@ -35,15 +37,16 @@ phase 분포: 1기 8 / 2기 70 / 3기 5 / 검토 필요 1 (id=13).
 [글쓰기 화면에서 일어나는 일]
 
 1. 본문 작성        → content 는 **마크다운 문자열** (HTML 아님 — PM 확정 2026-08-16)
-2. 이미지 삽입      → 그 순간 POST .../posts/images 로 선업로드 → {url} 을 ![](url) 로 본문에 삽입
-                      (에디터에 표시할 URL이 즉시 필요하므로 발행/임시저장 구분 없이 선업로드 — 이 API가 A-4)
-3. 파일 첨부        → 발행 폼의 files[] 에 담아 두었다가 발행 multipart 에 함께 전송
+2. 이미지 삽입      → 그 순간 POST .../files 로 선업로드 → 응답의 markdown 을 본문에 삽입
+                      (경로 확정 2026-08-23: posts/images 아님. 응답 url 은 /api/user/files/{id})
+3. 파일 첨부        → 같은 POST .../files 에 usage=attachment (또는 발행 multipart 의 files[] — 둘 다 지원)
 4. 글 저장하기(임시) → POST .../drafts (2번째부터는 PUT .../drafts/{draftId} 덮어쓰기)
                       본문 속 이미지 URL은 마크다운 텍스트라 그대로 보존됨 (임시저장이어도 이미지는 이미 서버에 있음)
-5. 발행             → POST .../posts (multipart) + draftId 포함 시 초안 자동 삭제
+5. 발행             → POST .../posts (multipart) + attachmentIds, draftId 포함 시 초안 자동 삭제
                       응답의 postId 로 상세 페이지 이동
 6. 수정             → PUT .../posts/{postId} (multipart)
-                      첨부는 증분: 지울 것만 deleteAttachmentIds, 새 것만 files. 응답은 message만
+                      첨부는 증분: 지울 것만 deleteAttachmentIds, 새 것만 attachmentIds/files. 응답은 message만
+                      본문에서 지운 인라인 이미지는 서버가 함께 삭제
 ```
 
 - 검증: title 필수·200자, content 필수 — 위반 시 400 `{"message"}` (등록·수정 동일)
@@ -52,10 +55,15 @@ phase 분포: 1기 8 / 2기 70 / 3기 5 / 검토 필요 1 (id=13).
 
 ## 4. 결정 대기 (PM 확정 필요)
 
-1. **첨부 방식 통일 (합의문의 ①)**: 게시글=발행 시 multipart `files` vs 초안=`attachmentIds`(선업로드)로 갈라져 있음.
-   SPEC-A5 §6(attachments.draft_id 안)과 합의문의 attachmentIds 안도 서로 다름 — §6은 파일을 초안에 직접 귀속,
-   합의안은 별도 업로드 후 id 연결. **인라인 이미지는 어차피 선업로드가 강제**되므로, 업로드 엔드포인트가 생기는 김에
-   §6 + usage_type(§6-6)으로 한 번에 정리하는 안을 권장. 결정 나면 id 13·16·18 명세 확정 가능.
+1. ~~**첨부 방식 통일 (합의문의 ①)**~~ → **확정·구현 완료 (2026-08-23)**: 권고안대로 **선업로드 + id 연결**로 통일했다.
+   - 업로드 엔드포인트 하나(`POST /api/user/boards/{boardId}/files`, 명세 id 13)로 본문 이미지와 첨부를 함께 받고,
+     용도는 `attachments.usage_type`(inline/attachment — §6-6 안 채택)으로 가른다.
+   - `attachments.post_id` nullable + `uploader_id` 추가. 초안 귀속용 `draft_id`(SPEC-A5 §6 안)는 **넣지 않았다** —
+     초안은 선업로드 id 를 들고만 있으면 되므로 컬럼 없이 성립하고, CASCADE 로 첨부가 통째로 지워지는 위험(§6-3)도 없다.
+   - 발행·수정은 `attachmentIds` 로 연결하며, **본문 마크다운에 남아 있는 `/api/user/files/{id}` 도 서버가 훑어 함께 연결**한다.
+     기존 multipart `files` 방식은 그대로 지원(id 5·7 계약 유지, 프론트 전환 부담 없음).
+   - 미연결 파일은 24시간 뒤 새벽 배치(04:50)가 삭제. 조회는 인증형(`GET /api/user/files/{fileId}`, 명세 id 147).
+   - 명세 id 13·147 = active 로 갱신. id 16·18(초안)의 `attachmentIds` 는 이 결정대로 확정.
 2. ~~임시저장 보관 상한 N~~ → **5개 확정** (2026-08-16). policy_settings.draft_max_count=5 등록 — 구현 시 하드코딩 금지, 이 값을 로드할 것.
 3. ~~알림 발행 범위~~ → **확정 (2026-08-16)**: 내가 작성한 글에 달린 댓글(COMMENT) + 내가 작성한 댓글에 달린 대댓글(REPLY) **만** 발행한다.
    현재 코드가 정확히 이 동작이므로 변경 없음. REPORT_RESOLVED/SANCTION/NOTICE 는 발행하지 않는 것으로 확정.

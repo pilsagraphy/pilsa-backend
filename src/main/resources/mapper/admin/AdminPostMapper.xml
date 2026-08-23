@@ -67,6 +67,7 @@
         WHERE p.post_id = #{postId}
     </select>
 
+    <!-- 첨부 목록 (usage_type='attachment' 만 — 본문 인라인 이미지는 content 에 이미 있어 제외) -->
     <select id="findAttachments" resultType="com.back.admin.post.dto.AdminAttachmentResponse">
         SELECT attachment_id AS attachmentId,
                file_name     AS originName,
@@ -74,6 +75,7 @@
                file_url      AS fileUrl
         FROM attachments
         WHERE post_id = #{postId}
+          AND usage_type = 'attachment'
     </select>
 
     <!-- 댓글: state 필터 없음 (블라인드/삭제 댓글까지 관리자에게 노출) -->

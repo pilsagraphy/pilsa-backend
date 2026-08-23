@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.board.draft.mapper.DraftMapper">
+
+    <!-- drafts 테이블 쿼리만 소유한다. 첨부(attachments) 조작은 AttachmentMapper 소관. -->
+
+    <!-- 내 임시저장 목록 (게시판별, 최근 저장순).
+         preview 는 본문 앞 20자(LEFT). attachCnt 는 일반 첨부(attachment)만 — 본문 인라인 이미지는 세지 않는다.
+         count 필드는 내려주지 않는다(개수는 배열 길이). -->
+    <select id="findDrafts" resultType="com.back.board.draft.dto.DraftListResponse">
+        SELECT d.draft_id      AS draftId,
+               d.title,
+               LEFT(d.content, 20) AS preview,
+               (SELECT COUNT(*) FROM attachments a
+                 WHERE a.draft_id = d.draft_id AND a.usage_type = 'attachment') AS attachCnt,
+               d.updated_at    AS updatedAt
+        FROM drafts d
+        WHERE d.user_id = #{userId}
+          AND d.board_id = #{boardId}
+        ORDER BY d.updated_at DESC, d.slot_no ASC
+        <if test="limit != null">
+            LIMIT #{limit}
+        </if>
+    </select>
+
+    <!-- 단건 메타 (본인 + 해당 게시판인 것만 → 없거나 남의 것/다른 게시판이면 null 로 404).
+         날짜는 updatedAt 만 (이어쓰기 판단 기준). -->
+    <select id="findDraftDetail" resultType="com.back.board.draft.dto.DraftDetailResponse">
+        SELECT draft_id     AS draftId,
+               title,
+               content,
+               category_id  AS categoryId,
+               is_anonymous AS isAnonymous,
+               updated_at   AS updatedAt
+        FROM drafts
+        WHERE draft_id = #{draftId}
+          AND user_id  = #{userId}
+          AND board_id = #{boardId}
+    </select>
+
+    <!-- 단건 응답용 일반 첨부 목록 (본문 인라인 이미지는 content 마크다운에 이미 있어 제외) -->
+    <select id="findDraftFileAttachments" resultType="com.back.board.dto.AttachmentFileResponse">
+        SELECT attachment_id AS attachmentId,
+               file_name     AS originName,
+               file_size     AS fileSize,
+               file_url      AS fileUrl
+        FROM attachments
+        WHERE draft_id = #{draftId}
+          AND usage_type = 'attachment'
+        ORDER BY attachment_id ASC
+    </select>
+
+    <!-- 이 게시판에서 이 회원이 쓰고 있는 슬롯 번호 (빈 슬롯 탐색용) -->
+    <select id="findUsedSlots" resultType="int">
+        SELECT slot_no
+        FROM drafts
+        WHERE user_id = #{userId}
+          AND board_id = #{boardId}
+    </select>
+
+    <!-- 신규 저장. slot_no 는 서비스가 찾은 빈 슬롯.
+         상한(5개)은 uq_drafts_user_board_slot 가 물리 보증 — 경합 시 6번째 INSERT 는 duplicate-key 로 실패한다. -->
+    <insert id="insertDraft" useGeneratedKeys="true" keyProperty="request.draftId" keyColumn="draft_id">
+        INSERT INTO drafts (user_id, board_id, slot_no, category_id, title, content, is_anonymous, created_at, updated_at)
+        VALUES (#{userId}, #{boardId}, #{slotNo}, #{request.categoryId}, #{request.title}, #{request.content},
+                #{request.isAnonymous}, NOW(), NOW())
+    </insert>
+
+    <!-- 덮어쓰기. 본인 + 해당 게시판인 것만 (남의 것/다른 게시판은 0행 → 404). 슬롯 유지, updated_at 만 갱신(ON UPDATE) -->
+    <update id="updateDraft">
+        UPDATE drafts
+        SET title        = #{request.title},
+            content      = #{request.content},
+            category_id  = #{request.categoryId},
+            is_anonymous = #{request.isAnonymous}
+        WHERE draft_id = #{draftId}
+          AND user_id  = #{userId}
+          AND board_id = #{boardId}
+    </update>
+
+    <!-- 초안 행 잠금 (삭제·발행의 첫 단계 — 저장(UPDATE drafts 선행)과 락 순서를 맞춘다).
+         본인 + 해당 게시판인 것만 잠기며, 아니면 null → 404 -->
+    <select id="lockDraft" resultType="long">
+        SELECT draft_id
+        FROM drafts
+        WHERE draft_id = #{draftId}
+          AND user_id  = #{userId}
+          AND board_id = #{boardId}
+        FOR UPDATE
+    </select>
+
+    <!-- 초안 물리 삭제 (본인 것만).
+         첨부는 이 쿼리 전에 AttachmentService 가 행·물리파일을 명시적으로 지운다(CASCADE 는 백스톱). -->
+    <delete id="deleteDraft">
+        DELETE FROM drafts
+        WHERE draft_id = #{draftId}
+          AND user_id  = #{userId}
+    </delete>
+
+    <!-- 회원의 모든 초안 id (탈퇴 시 정리용) -->
+    <select id="findDraftIdsByUser" resultType="long">
+        SELECT draft_id
+        FROM drafts
+        WHERE user_id = #{userId}
+    </select>
+
+    <select id="findPolicySetting" resultType="string">
+        SELECT setting_value
+        FROM policy_settings
+        WHERE code = #{code}
+    </select>
+
+</mapper>

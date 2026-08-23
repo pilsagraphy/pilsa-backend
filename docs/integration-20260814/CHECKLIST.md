@@ -257,11 +257,86 @@ CREATE TABLE `notification_devices` (
 ALTER TABLE `users`
   ADD COLUMN `token_version` int NOT NULL DEFAULT 0 COMMENT '세션 무효화용 토큰 버전 — 올리면 그 회원의 기존 토큰 전부 무효';
 
+-- [2026-08-23] 리치 에디터 선업로드 (백로그 A-4, 명세 id 13·147). 에디터에 이미지를 넣는 순간
+-- 화면에 보여줄 URL이 필요하므로 파일이 글보다 먼저 존재한다 → post_id 를 nullable 로 바꾸고,
+-- 그 상태의 소유자 판정 근거로 uploader_id 를 둔다(새 테이블 없음. SPEC-A5 §6-6 의 usage_type 안 채택).
+-- FK 는 걸지 않았다: 탈퇴 행 물리삭제 배치(withdrawn_purge_days)가 미연결 파일 때문에 실패하는 일을 막기 위함.
+ALTER TABLE `attachments`
+  MODIFY COLUMN `post_id` bigint NULL COMMENT '게시글 고유 번호 (NULL = 아직 글에 연결되지 않은 선업로드 파일)',
+  ADD COLUMN `uploader_id` bigint NULL COMMENT '업로더 user_id — 선업로드 파일 소유자 판정·정리 배치 기준' AFTER `post_id`,
+  ADD COLUMN `usage_type` varchar(20) NOT NULL DEFAULT 'attachment'
+    COMMENT 'attachment=첨부목록 노출 / inline=본문 삽입 이미지' AFTER `file_type`;
+-- 기존 18행 백필 후 NOT NULL 로 조인다 (컬럼명은 usage 가 아니라 usage_type — USAGE 는 MySQL 예약어)
+UPDATE `attachments` a JOIN `posts` p ON a.post_id = p.post_id
+   SET a.uploader_id = p.user_id WHERE a.uploader_id IS NULL;
+ALTER TABLE `attachments`
+  MODIFY COLUMN `uploader_id` bigint NOT NULL COMMENT '업로더 user_id — 선업로드 파일 소유자 판정·정리 배치 기준',
+  ADD KEY `idx_attachments_pending` (`uploader_id`, `post_id`, `created_at`);
+
+INSERT INTO `policy_settings` (`code`, `setting_value`, `description`) VALUES
+ ('upload_image_extensions', 'jpg,jpeg,png,gif,webp,bmp',
+  '본문 삽입 이미지 허용 확장자 (svg 제외 — 인라인 스크립트 실행 위험)'),
+ ('upload_file_extensions', 'pdf,doc,docx,xls,xlsx,ppt,pptx,txt,csv,md,zip,hwp,hwpx',
+  '첨부 허용 확장자 (이미지 외). 목록에 없는 확장자는 400'),
+ ('pending_upload_purge_hours', '24',
+  '글에 연결되지 않은 선업로드 파일 보존 시간 — 경과 시 새벽 배치(04:50)가 물리 삭제');
+
+-- [2026-08-23] 게시판 임시저장(Draft) — SPEC-A5, PR #83 통합본. drafts 신규 + attachments.draft_id 추가.
+--   PR #83 원안의 uploaded_by/attachment_type/draft_orphan_purge_hours 는 만들지 않는다 —
+--   위 [2026-08-23] 선업로드 DDL 의 uploader_id/usage_type/pending_upload_purge_hours 가 이미 같은 역할을 한다
+--   (명세 id 13·147 정본이 그 표기로 확정됨). 두 체계를 병존시키면 정리 배치·권한 판정이 갈라진다.
+--   상한 강제 방식: PM 지시로 "DB에서부터 5개 제한" 채택 → slot_no(1~5) + UNIQUE(user_id,board_id,slot_no)
+--     로 물리 강제(경합에도 6번째 INSERT 는 duplicate-key 로 실패 → 서비스가 409 로 변환).
+--     회원당 '게시판별' 5개. draft_max_count 를 5 이외로 바꾸려면 아래 CHECK 범위도 함께 조정할 것.
+--   소프트삭제 대전제의 예외: 발행 전 개인 작업물이라 state 컬럼 없이 물리 DELETE. 초안 첨부도 같은 규칙.
+CREATE TABLE `drafts` (
+  `draft_id`     bigint       NOT NULL AUTO_INCREMENT COMMENT '임시저장 고유 번호',
+  `user_id`      bigint       NOT NULL COMMENT '작성자 (→users)',
+  `slot_no`      tinyint unsigned NOT NULL COMMENT '임시저장 슬롯(1~5) — 게시판별 UNIQUE 로 최대 5개 물리 강제',
+  `board_id`     bigint       NOT NULL COMMENT '작성 중인 게시판 (→boards)',
+  `category_id`  bigint       DEFAULT NULL COMMENT '선택한 카테고리 (→categories, 미선택 가능)',
+  `title`        varchar(200) DEFAULT NULL COMMENT '제목 (작성 중이라 NULL 허용)',
+  `content`      longtext     DEFAULT NULL COMMENT '본문 마크다운 (작성 중이라 NULL 허용)',
+  `is_anonymous` tinyint(1)   NOT NULL DEFAULT '0' COMMENT '익명 게시 체크 여부 (정책 검증은 발행 시점)',
+  `created_at`   datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '최초 저장 일시',
+  `updated_at`   datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '마지막 저장 일시 (목록·단건이 내려주는 값 — 이어쓰기 판단 기준)',
+  PRIMARY KEY (`draft_id`),
+  UNIQUE KEY `uq_drafts_user_board_slot` (`user_id`,`board_id`,`slot_no`) COMMENT '회원×게시판당 슬롯 1~5 → 6번째 저장 물리 차단',
+  KEY `idx_drafts_user_board_updated` (`user_id`,`board_id`,`updated_at`) COMMENT '내 임시저장 목록(게시판별 최근순) 조회용',
+  CONSTRAINT `ck_drafts_slot_no` CHECK (`slot_no` BETWEEN 1 AND 5),
+  CONSTRAINT `fk_drafts_user`     FOREIGN KEY (`user_id`)     REFERENCES `users` (`user_id`)         ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_drafts_board`    FOREIGN KEY (`board_id`)    REFERENCES `boards` (`board_id`)       ON UPDATE CASCADE,
+  CONSTRAINT `fk_drafts_category` FOREIGN KEY (`category_id`) REFERENCES `categories` (`category_id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='글쓰기 임시저장 (발행 전 초안. 물리삭제 예외)';
+
+-- attachments 에 초안 소속만 추가.
+-- PR #83 원안의 완화 CHECK(동시 소유 금지)는 적용 불가였다 — MySQL 8 은 CASCADE/SET NULL FK 에 쓰인 컬럼을
+-- CHECK 에 넣을 수 없다(에러 3823: post_id 가 fk_attachments_post 의 referential action 대상).
+-- 대신 코드가 불변식을 강제한다: linkToPost/transferDraftAttachmentsToPost 가 post_id 세팅과 동시에
+-- draft_id 를 비우고, linkToDraft 는 post_id IS NULL 인 행만 초안에 귀속한다 (AttachmentMapper.xml).
+ALTER TABLE `attachments`
+  ADD COLUMN `draft_id` bigint NULL COMMENT '임시저장 고유 번호 (발행되면 NULL 로 비움)' AFTER `post_id`,
+  ADD CONSTRAINT `fk_attachments_draft` FOREIGN KEY (`draft_id`) REFERENCES `drafts` (`draft_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
 ```
+> **임시저장 DDL 적용 시 주의**
+> - `drafts` 를 **먼저** 만든 뒤 `attachments` 의 `fk_attachments_draft` 를 건다(참조 순서).
+> - 발행 트랜잭션 순서 **엄수**: `UPDATE attachments SET post_id=?, draft_id=NULL WHERE draft_id=?` **먼저**, `DELETE drafts` **나중**.
+>   (순서를 바꾸면 `ON DELETE CASCADE` 가 방금 발행한 글의 첨부를 통째로 지운다.)
+> - 초안 삭제·저장 재조정 시 첨부는 **코드가 행·물리파일을 명시적으로 지운다**(AttachmentService) —
+>   CASCADE 는 백스톱일 뿐, CASCADE 에 맡기면 디스크 파일이 고아로 남는다.
+> - 롤백: `ALTER TABLE attachments DROP FOREIGN KEY fk_attachments_draft, DROP COLUMN draft_id;` → `DROP TABLE drafts;`
 - [x] events DDL 적용 (2026-08-14, location 값 전부 NULL 확인 후 제거)
 - [x] boards 권한 컬럼 DDL 적용 (#61 §1)
 - [x] ~~boards 컬럼 제거 (#70)~~ → 적용 후 **PM 지시로 원복 완료** (allow_comment/allow_attachment/category_mode 원값 유지)
 - [x] 적용 후 스키마 재검증 (DESCRIBE 확인)
+- [x] **attachments 선업로드 DDL 적용** (2026-08-23) — post_id nullable + uploader_id + usage_type,
+  기존 18행 uploader_id 백필 확인(posts.user_id 기준), policy_settings 3건 등록.
+  적용 전 attachments 전체 행 백업(SELECT 덤프) 후 실행. 검증: 선업로드→발행 연결→인증형 조회→
+  수정 시 본문에서 지운 이미지 정리까지 로컬 통합 테스트로 확인(테스트 트랜잭션 롤백, 잔여 행·파일 0).
+- [x] **임시저장 DDL 적용** (2026-08-23, PR #83 통합) — drafts 테이블 + attachments.draft_id/FK/CHECK.
+  PR #83 원안의 uploaded_by/attachment_type/draft_orphan_purge_hours 는 기존
+  uploader_id/usage_type/pending_upload_purge_hours 로 흡수(위 DDL 주석 참고) — 미적용이 맞다.
 - [x] **api_endpoints 테이블 생성 + 95행 시드** (2026-08-14 PM 지시) — API 인벤토리 정본.
   `phase`(1기=6월 이전 / 2기) × `status`(active=구현·검증 완료 70 / planned=예정 25) × `auth`(PUBLIC/MEMBER/ADMIN).
   경로 변경 이력은 note 컬럼에 기록. 노션 명세와 동기 대상.
