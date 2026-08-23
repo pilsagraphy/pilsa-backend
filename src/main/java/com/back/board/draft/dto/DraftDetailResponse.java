@@ -10,8 +10,8 @@ import java.util.List;
 /**
  * 임시저장 단건 (GET .../drafts/{draftId}) — "이어쓰기"용 전체 복원 데이터.
  *
- * 첨부는 일반 첨부(attachment_type='file')만 내려준다 —
- * 본문 인라인 이미지(attachment_type='image')는 이미 content 마크다운 안에 URL 로 박혀 있어 중복이다.
+ * 첨부는 일반 첨부(usage_type='attachment')만 내려준다 —
+ * 본문 인라인 이미지(usage_type='inline')는 이미 content 마크다운 안에 URL 로 박혀 있어 중복이다.
  * 날짜는 updatedAt(마지막 저장 시각)만 — 이어쓰기 판단 기준.
  */
 @Getter

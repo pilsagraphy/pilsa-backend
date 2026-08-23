@@ -37,6 +37,28 @@ public class FileStorageUtil {
     }
 
     /**
+     * DB에 저장된 file_url(/uploads/...)로 물리 파일을 읽는다 (인증형 파일 조회 API 용).
+     * 파일이 없거나 uploads 밖을 가리키면 null — 호출측이 404로 응답한다.
+     * 정적 서빙(/uploads/**)과 달리 이 경로는 권한 검사를 통과한 뒤에만 불린다.
+     */
+    public File load(String fileUrl) {
+        if (fileUrl == null || fileUrl.isBlank()) return null;
+        try {
+            File base = new File(new File("").getAbsolutePath(), "uploads").getCanonicalFile();
+            File target = new File(new File("").getAbsolutePath(), fileUrl).getCanonicalFile();
+            // 경로 이탈 방어: uploads 밖 파일은 내려주지 않는다 (조작된 file_url 대비)
+            if (!target.getPath().startsWith(base.getPath())) {
+                log.warn("uploads 밖 경로 조회 시도 차단 - {}", fileUrl);
+                return null;
+            }
+            return target.isFile() ? target : null;
+        } catch (IOException e) {
+            log.warn("물리 파일 조회 중 오류 - {}: {}", fileUrl, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
      * DB에 저장된 file_url(/uploads/...)로 물리 파일을 삭제한다.
      * 첨부를 교체/삭제할 때 디스크에 고아 파일이 남지 않게 하는 용도 (PM 결정 2026-08-16).
      * 삭제 실패는 로그만 남긴다 — 파일이 이미 없어도 요청 자체는 성공해야 한다.

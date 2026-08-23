@@ -18,6 +18,6 @@ public class DraftListResponse {
     private Long draftId;
     private String title;      // 저장 당시 제목 (없으면 null)
     private String preview;    // 본문 앞 20자 미리보기 (LEFT(content, 20)). 없으면 null
-    private Integer attachCnt; // 일반 첨부(attachment_type='file') 개수. 본문 인라인 이미지는 제외
+    private Integer attachCnt; // 일반 첨부(usage_type='attachment') 개수. 본문 인라인 이미지는 제외
     private LocalDateTime updatedAt;
 }

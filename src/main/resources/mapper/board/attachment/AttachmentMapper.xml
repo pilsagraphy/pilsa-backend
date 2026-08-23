@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.board.attachment.mapper.AttachmentMapper">
+
+    <!-- 선업로드: post_id 는 NULL (글이 아직 없다). uploader_id 가 소유자 판정 근거가 된다 -->
+    <insert id="insertPending" useGeneratedKeys="true" keyProperty="attachmentId">
+        INSERT INTO attachments (post_id, uploader_id, file_name, file_url, file_type, usage_type, file_size, created_at)
+        VALUES (NULL, #{uploaderId}, #{fileName}, #{fileUrl}, #{fileType}, #{usageType}, #{fileSize}, NOW())
+    </insert>
+
+    <!-- 파일 조회 권한 판정용 1행.
+         경로(/api/user/files/{fileId})에 boardId 가 없으므로 글을 타고 게시판까지 조인해
+         read_scope 를 판정할 재료를 함께 가져온다. 선업로드 파일은 postState/boardId 가 null 이다 -->
+    <select id="findFileRow" resultType="com.back.board.attachment.dto.AttachmentFileRow">
+        SELECT a.attachment_id AS attachmentId,
+               a.post_id       AS postId,
+               a.uploader_id   AS uploaderId,
+               a.file_url      AS fileUrl,
+               a.file_name     AS fileName,
+               a.file_type     AS fileType,
+               a.usage_type    AS usageType,
+               a.file_size     AS fileSize,
+               a.state         AS state,
+               p.state         AS postState,
+               p.board_id      AS boardId
+        FROM attachments a
+        LEFT JOIN posts p ON a.post_id = p.post_id
+        WHERE a.attachment_id = #{fileId}
+    </select>
+
+    <!-- 선업로드 파일 → 글 연결. 내 것이고 아직 글에 연결되지 않은 행만 바뀐다.
+         draft_id 도 함께 비운다 — 초안에 묶인 파일을 draftId 없이 발행 본문에 실어 보내면
+         비우지 않는 한 글·초안 이중 소유가 되어, 나중에 그 초안을 지울 때 CASCADE 가 발행 글의 첨부를 지운다 -->
+    <update id="linkToPost">
+        UPDATE attachments
+        SET post_id = #{postId}, draft_id = NULL
+        WHERE post_id IS NULL
+          AND uploader_id = #{uploaderId}
+          AND state = 'normal'
+          AND attachment_id IN
+          <foreach collection="attachmentIds" item="id" open="(" separator="," close=")">
+              #{id}
+          </foreach>
+    </update>
+
+    <!-- 수정 후 본문에서 사라진 인라인 이미지 (첨부 목록용 파일은 deleteAttachmentIds 로만 지운다) -->
+    <select id="findUnreferencedInline" resultType="com.back.board.attachment.dto.PendingAttachmentRow">
+        SELECT attachment_id AS attachmentId,
+               file_url      AS fileUrl
+        FROM attachments
+        WHERE post_id = #{postId}
+          AND usage_type = 'inline'
+          AND state = 'normal'
+        <if test="keepIds != null and keepIds.size() > 0">
+          AND attachment_id NOT IN
+          <foreach collection="keepIds" item="id" open="(" separator="," close=")">
+              #{id}
+          </foreach>
+        </if>
+    </select>
+
+    <update id="softDeleteByIds">
+        UPDATE attachments
+        SET state = 'deleted'
+        WHERE state = 'normal'
+          AND attachment_id IN
+          <foreach collection="attachmentIds" item="id" open="(" separator="," close=")">
+              #{id}
+          </foreach>
+    </update>
+
+    <!-- ===================== 임시저장(draft) 연동 ===================== -->
+
+    <!-- 선업로드 파일 → 초안 귀속. 내 것 + 게시글 미연결 + (대기중 or 이미 이 초안)만 바뀐다 -->
+    <update id="linkToDraft">
+        UPDATE attachments
+        SET draft_id = #{draftId}
+        WHERE uploader_id = #{uploaderId}
+          AND post_id IS NULL
+          AND (draft_id IS NULL OR draft_id = #{draftId})
+          AND state = 'normal'
+          AND attachment_id IN
+          <foreach collection="attachmentIds" item="id" open="(" separator="," close=")">
+              #{id}
+          </foreach>
+    </update>
+
+    <!-- 저장 시 재조정: 이 초안에 묶였으나 keepIds 에 없는 첨부 (keepIds 가 비면 전체가 대상) -->
+    <select id="findDraftAttachmentsExcept" resultType="com.back.board.attachment.dto.PendingAttachmentRow">
+        SELECT attachment_id AS attachmentId,
+               file_url      AS fileUrl
+        FROM attachments
+        WHERE draft_id = #{draftId}
+        <if test="keepIds != null and keepIds.size() > 0">
+          AND attachment_id NOT IN
+          <foreach collection="keepIds" item="id" open="(" separator="," close=")">
+              #{id}
+          </foreach>
+        </if>
+    </select>
+
+    <!-- 초안 삭제 전, 이 초안의 모든 첨부 (행·물리파일을 명시적으로 지우기 위한 목록) -->
+    <select id="findDraftAttachments" resultType="com.back.board.attachment.dto.PendingAttachmentRow">
+        SELECT attachment_id AS attachmentId,
+               file_url      AS fileUrl
+        FROM attachments
+        WHERE draft_id = #{draftId}
+    </select>
+
+    <!-- 초안 첨부 물리 삭제 — 발행 전 개인 작업물이라 소프트삭제 대전제의 예외(drafts 와 같은 논리).
+         draft_id 조건을 다시 걸어 그 사이 발행(이관)된 행이 지워지는 것을 막는다 -->
+    <delete id="deleteDraftAttachmentsByIds">
+        DELETE FROM attachments
+        WHERE draft_id = #{draftId}
+          AND attachment_id IN
+          <foreach collection="attachmentIds" item="id" open="(" separator="," close=")">
+              #{id}
+          </foreach>
+    </delete>
+
+    <!-- 발행 이관: draft_id 를 비워 CASCADE 대상에서 뺀다. ⚠ 반드시 초안 DELETE 보다 먼저(같은 트랜잭션) -->
+    <update id="transferDraftAttachmentsToPost">
+        UPDATE attachments
+        SET post_id = #{postId}, draft_id = NULL
+        WHERE draft_id = #{draftId}
+          AND uploader_id = #{uploaderId}
+    </update>
+
+    <!-- ===================== 정리 배치 ===================== -->
+
+    <!-- 보존기간이 지난 미연결 파일. 글에 붙었거나(post_id) 초안에 묶인(draft_id) 파일은 절대 대상이 아니다 -->
+    <select id="findExpiredPending" resultType="com.back.board.attachment.dto.PendingAttachmentRow">
+        SELECT attachment_id AS attachmentId,
+               file_url      AS fileUrl
+        FROM attachments
+        WHERE post_id IS NULL
+          AND draft_id IS NULL
+          AND created_at &lt; DATE_SUB(NOW(), INTERVAL #{hours} HOUR)
+    </select>
+
+    <!-- 물리 삭제 — 글에 속한 적이 없는 파일이라 소프트삭제 대전제의 예외(초안과 같은 논리).
+         post_id·draft_id 조건을 다시 걸어, 그 사이 발행되거나 초안에 묶인 파일이 지워지는 것을 막는다 -->
+    <delete id="deletePendingByIds">
+        DELETE FROM attachments
+        WHERE post_id IS NULL
+          AND draft_id IS NULL
+          AND attachment_id IN
+          <foreach collection="attachmentIds" item="id" open="(" separator="," close=")">
+              #{id}
+          </foreach>
+    </delete>
+
+    <select id="findPolicySetting" resultType="string">
+        SELECT setting_value FROM policy_settings WHERE code = #{code}
+    </select>
+</mapper>

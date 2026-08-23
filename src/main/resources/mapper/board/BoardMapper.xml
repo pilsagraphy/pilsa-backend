@@ -150,8 +150,12 @@
         p.is_pinned AS isPinned,
         p.created_at AS created,
         c.name AS categoryName,
-        EXISTS (SELECT 1 FROM attachments a WHERE a.post_id = p.post_id
-                  AND a.attachment_type = 'file' AND a.state = 'normal') AS hasAttachment,
+        <!-- 목록의 첨부 아이콘: 첨부 목록에 노출되는 파일이 살아 있을 때만 true.
+             본문 인라인 이미지(inline)와 삭제된 첨부는 아이콘 근거가 아니다 (상세의 attachments 와 같은 기준) -->
+        EXISTS (SELECT 1 FROM attachments a
+                 WHERE a.post_id = p.post_id
+                   AND a.state = 'normal'
+                   AND a.usage_type = 'attachment') AS hasAttachment,
         (SELECT COUNT(*) FROM comments cm WHERE cm.post_id = p.post_id AND cm.state = 'normal') AS commentCount,
         (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.post_id) AS likeCount
         FROM posts p
@@ -234,8 +238,8 @@
     </select>
 
     <!-- 첨부파일 목록 조회.
-         attachment_type='file' 만 — 본문 인라인 이미지(image)는 content 마크다운에 이미 있어 첨부목록에서 제외한다.
-         (선업로드 도입 전 행은 attachment_type 기본값이 'file' 이라 그대로 노출된다) -->
+         본문에 삽입된 인라인 이미지(usage_type='inline')는 제외한다 — 이미 본문에 보이는 이미지가
+         첨부 목록에 한 번 더 나오면 화면이 중복된다(리치 에디터 도입 시 결정) -->
     <select id="findAttachmentsByPostId" resultType="com.back.board.dto.AttachmentFileResponse">
         SELECT attachment_id AS attachmentId,
                file_name     AS originName,
@@ -244,7 +248,7 @@
         FROM attachments
         WHERE post_id = #{postId}
           AND state = 'normal'
-          AND attachment_type = 'file'
+          AND usage_type = 'attachment'
     </select>
 
     <!-- 노출 대상 댓글 수 (블라인드/삭제 제외) — 목록 count 와 같은 기준 -->
@@ -311,9 +315,11 @@
                 #{request.categoryId}, #{request.isAnonymous}, #{isPinned}, NOW())
     </insert>
 
+    <!-- 발행 시점에 함께 올린 첨부. 선업로드 경로(AttachmentMapper.insertPending)와 달리
+         글이 이미 있으므로 post_id 를 바로 넣고, 용도는 항상 첨부 목록('attachment')이다 -->
     <insert id="insertAttachment">
-        INSERT INTO attachments (post_id, file_name, file_url, file_size, file_type, created_at)
-        VALUES (#{postId}, #{originName}, #{fileUrl}, #{fileSize}, #{fileType}, NOW())
+        INSERT INTO attachments (post_id, uploader_id, file_name, file_url, file_size, file_type, usage_type, created_at)
+        VALUES (#{postId}, #{uploaderId}, #{originName}, #{fileUrl}, #{fileSize}, #{fileType}, 'attachment', NOW())
     </insert>
 
     <!-- 작성자 ID 조회 (수정/삭제 권한 확인용) -->

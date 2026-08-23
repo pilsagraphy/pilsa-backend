@@ -1,5 +1,6 @@
 package com.back.board.draft.service;
 
+import com.back.board.attachment.service.AttachmentService;
 import com.back.board.draft.dto.DraftDetailResponse;
 import com.back.board.draft.dto.DraftListResponse;
 import com.back.board.draft.dto.DraftRequest;
@@ -8,14 +9,12 @@ import com.back.board.draft.mapper.DraftMapper;
 import com.back.board.exception.BoardException;
 import com.back.board.service.BoardPolicyService;
 import com.back.global.security.AuthUtils;
-import com.back.global.util.FileStorageUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.CollectionUtils;
 
 import java.util.List;
 
@@ -23,12 +22,14 @@ import java.util.List;
  * 임시저장 서비스 구현.
  *
  * 설계 원칙
- *  - 소프트삭제 예외: 초안은 발행 전 개인 작업물이라 물리 DELETE(state 컬럼 없음).
+ *  - 소프트삭제 예외: 초안은 발행 전 개인 작업물이라 물리 DELETE(state 컬럼 없음). 첨부도 같은 규칙.
  *  - 남의/없는/다른 게시판 초안 접근은 전부 404(존재 노출 방지) — 모든 쿼리에 user_id(+board_id)를 함께 건다.
  *  - 게시판 정책(익명 허용·카테고리 유효성)은 저장 시점에 보정하지 않고 발행 시점에만 검증(SPEC-A5 §1).
  *    저장 시 검사하는 것은 "쓰기 권한(create 만)"과 "제목·본문 동시 공백"뿐.
  *  - 상한은 DB(uq_drafts_user_board_slot)가 물리 강제 — 앱은 draft_max_count 로 빈 슬롯을 탐색하고,
  *    경합으로 슬롯이 겹치면 duplicate-key 를 409 로 변환한다.
+ *  - 첨부는 선업로드(POST .../files) 체계와 한 몸 — 재조정·삭제·발행 이관은 전부 AttachmentService 가 담당한다.
+ *    초안 삭제 시 선업로드된 파일(본문 이미지·첨부)이 행·물리파일까지 함께 지워진다.
  */
 @Slf4j
 @Service
@@ -45,7 +46,7 @@ public class DraftServiceImpl implements DraftService {
 
     private final DraftMapper draftMapper;
     private final BoardPolicyService boardPolicyService;
-    private final FileStorageUtil fileStorageUtil;
+    private final AttachmentService attachmentService;
 
     @Override
     public List<DraftListResponse> getDrafts(Long boardId, Integer limit) {
@@ -75,7 +76,8 @@ public class DraftServiceImpl implements DraftService {
         int maxCount = resolveDraftMaxCount();
         Long draftId = insertIntoFreeSlot(userId, boardId, request, maxCount);
 
-        reconcileAttachments(draftId, userId, request.getAttachmentIds());
+        // 선업로드 파일(본문 이미지·첨부)을 이 초안에 귀속. 본문 마크다운도 함께 훑는다(발행과 같은 규칙)
+        attachmentService.reconcileDraftAttachments(draftId, request.getAttachmentIds(), request.getContent());
         return new DraftResponse("임시저장되었습니다.", draftId);
     }
 
@@ -91,7 +93,8 @@ public class DraftServiceImpl implements DraftService {
             throw notFound();
         }
 
-        reconcileAttachments(draftId, userId, request.getAttachmentIds());
+        // 재조정: 이번 저장의 keep(id 목록 ∪ 본문)에 없는 기존 첨부는 행·물리파일까지 삭제된다
+        attachmentService.reconcileDraftAttachments(draftId, request.getAttachmentIds(), request.getContent());
         return new DraftResponse("임시저장되었습니다.");
     }
 
@@ -105,11 +108,10 @@ public class DraftServiceImpl implements DraftService {
             throw notFound();
         }
 
-        // CASCADE 로 attachments 행이 사라지기 전에 물리 경로를 먼저 확보한다
-        List<String> fileUrls = draftMapper.findDraftAttachmentUrls(draftId);
+        // 선업로드된 첨부(본문 이미지 포함)를 행·물리파일까지 먼저 지운다 —
+        // FK CASCADE 에 맡기면 DB 행만 사라지고 디스크 파일이 고아로 남는다
+        attachmentService.deleteDraftAttachments(draftId);
         draftMapper.deleteDraft(draftId, userId);
-        // DB 정리(트랜잭션 커밋 대상) 후 디스크 파일 삭제 — 삭제 실패는 로그만(FileStorageUtil)
-        fileUrls.forEach(fileStorageUtil::delete);
 
         return new DraftResponse("삭제되었습니다.");
     }
@@ -149,23 +151,6 @@ public class DraftServiceImpl implements DraftService {
             }
         }
         return null;
-    }
-
-    /**
-     * 저장 시 첨부 재조정.
-     *  ① attachmentIds 를 이 초안에 귀속 (내가 올린 대기/이 초안 것만)
-     *  ② 이전엔 이 초안에 묶였으나 이번 목록에 없는 첨부는 DB·물리파일까지 삭제
-     * 순서 중요: 먼저 링크해야 새로 넣은 첨부가 ②의 삭제 대상에서 빠진다.
-     */
-    private void reconcileAttachments(Long draftId, Long userId, List<Long> attachmentIds) {
-        List<Long> keepIds = attachmentIds;
-        if (!CollectionUtils.isEmpty(keepIds)) {
-            draftMapper.linkAttachmentsToDraft(draftId, userId, keepIds);
-        }
-        // 삭제 대상 물리 경로를 행 삭제 전에 확보
-        List<String> removedUrls = draftMapper.findDraftAttachmentUrlsExcept(draftId, keepIds);
-        draftMapper.deleteDraftAttachmentsExcept(draftId, keepIds);
-        removedUrls.forEach(fileStorageUtil::delete);
     }
 
     private void requireNotEmpty(DraftRequest request) {

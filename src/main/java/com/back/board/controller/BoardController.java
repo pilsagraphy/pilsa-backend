@@ -1,6 +1,5 @@
 package com.back.board.controller;
 
-import com.back.board.draft.dto.AttachmentUploadResponse;
 import com.back.board.dto.*;
 import com.back.board.service.BoardService;
 import jakarta.validation.Valid;
@@ -12,7 +11,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -165,6 +163,10 @@ public class BoardController {
                     ※ 익명글: authorName="익명", userId=null (관리자·작성자 본인 제외)
                     ※ prevPost/nextPost: 첫 글·마지막 글이면 null
                     ※ 상세에서만 created(작성일)와 updated(수정일)가 함께 내려갑니다.
+                    ※ attachments 에는 **본문에 삽입된 이미지가 포함되지 않습니다** — 본문에 이미 보이는 이미지가
+                      첨부 목록에 중복 노출되지 않게 서버가 걸러냅니다(첨부 목록용 파일만).
+                    ※ 첨부 다운로드는 `GET /api/user/files/{attachmentId}` (인증형, 열람 권한 검사)를 쓰세요.
+                      응답의 fileUrl 은 정적 경로라 권한 검사가 없습니다.
                     """)
     @GetMapping("/posts/{postId}")
     public ResponseEntity<BoardDetailResponse> getPostDetail(
@@ -219,9 +221,20 @@ public class BoardController {
                     content: ## 마크다운 본문         ← 필수, 마크다운 문자열
                     categoryId: 4
                     isAnonymous: false
-                    files: 자료.pdf, 사진.png         ← 선택, 다중 첨부
+                    attachmentIds: 31, 32            ← 선택, 에디터에서 선업로드한 파일 연결 (권장)
+                    files: 자료.pdf, 사진.png         ← 선택, 이 요청에 함께 올리는 첨부(기존 방식, 계속 지원)
                     draftId: 7                       ← 선택, 임시저장에서 발행할 때만. 발행 성공 시 이 초안 자동 삭제 + 첨부 이관
                     ```
+
+                    ### 파일 두 가지 방식
+                    | | 선업로드 `attachmentIds` | 발행 동시 업로드 `files` |
+                    |---|---|---|
+                    | 올리는 시점 | 에디터에서 파일을 고른 즉시(`POST .../files`) | 발행 요청과 함께 |
+                    | 본문 이미지 | **가능** (즉시 url 을 받아 마크다운에 삽입) | 불가 |
+                    | 용도 | 본문 이미지 + 첨부 | 첨부만 |
+
+                    본문에 `/api/user/files/{id}` 가 남아 있으면 attachmentIds 에 빠뜨려도 서버가 본문을 훑어 함께 연결합니다.
+                    연결되지 않은 선업로드 파일은 24시간 뒤 새벽 배치가 삭제합니다.
 
                     ### 응답 예시
                     ```json
@@ -243,62 +256,8 @@ public class BoardController {
         return ResponseEntity.ok(boardService.createPost(boardId, request));
     }
 
-    @Operation(summary = "본문 인라인 이미지 선업로드",
-            description = """
-                    리치/마크다운 에디터에서 본문에 이미지를 넣는 순간 호출합니다(multipart/form-data, 이미지 1장).
-                    표시할 URL 이 즉시 필요하므로 발행/임시저장 구분 없이 선업로드하며, 에디터는 받은 url 을 마크다운 ![](url) 로 삽입합니다.
-                    반환된 attachmentId 는 저장(POST/PUT .../drafts)·발행(POST .../posts) 시 attachmentIds 로 되돌려 보내 소유를 연결합니다.
-                    어디에도 연결되지 않은 채 방치된 업로드는 청소 배치가 자동 삭제합니다.
-
-                    ### 요청 예시
-                    ```
-                    POST /api/user/boards/2/posts/images    (multipart/form-data)
-                    file: 사진.png    ← 이미지 1장
-                    ```
-
-                    ### 응답 예시
-                    ```json
-                    {"attachmentId": 31, "url": "/uploads/board-2/inline/사진.png", "originName": "사진.png", "fileSize": 20480}
-                    ```
-
-                    실패: 400 {"message":"이미지 파일만 업로드할 수 있습니다."}
-                    실패: 403 {"message":"이 게시판에 글을 등록할 권한이 없습니다."}
-                    """)
-    @PostMapping(value = "/posts/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<AttachmentUploadResponse> uploadInlineImage(
-            @Parameter(description = BOARD_ID_DESC, example = "2") @PathVariable Long boardId,
-            @Parameter(description = "이미지 파일 1장") @RequestPart("file") MultipartFile file) {
-        log.info("본문 인라인 이미지 선업로드 요청 - boardId: {}", boardId);
-        return ResponseEntity.ok(boardService.uploadInlineImage(boardId, file));
-    }
-
-    @Operation(summary = "첨부파일 선업로드",
-            description = """
-                    임시저장/발행 전에 첨부파일을 미리 올릴 때 호출합니다(multipart/form-data, 파일 1개).
-                    반환된 attachmentId 를 저장/발행 시 attachmentIds 로 되돌려 보내 초안·게시글에 연결합니다.
-                    (게시글 등록 시 files 로 한 번에 올리는 기존 방식과 별개로, 임시저장에 첨부를 보존하려면 이 선업로드가 필요합니다.)
-
-                    ### 요청 예시
-                    ```
-                    POST /api/user/boards/2/posts/attachments    (multipart/form-data)
-                    file: 자료.pdf
-                    ```
-
-                    ### 응답 예시
-                    ```json
-                    {"attachmentId": 32, "url": "/uploads/board-2/files/자료.pdf", "originName": "자료.pdf", "fileSize": 12345}
-                    ```
-
-                    실패: 400 {"message":"이 게시판은 첨부파일을 사용하지 않습니다."}
-                    실패: 403 {"message":"이 게시판에 글을 등록할 권한이 없습니다."}
-                    """)
-    @PostMapping(value = "/posts/attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<AttachmentUploadResponse> uploadAttachment(
-            @Parameter(description = BOARD_ID_DESC, example = "2") @PathVariable Long boardId,
-            @Parameter(description = "첨부파일 1개") @RequestPart("file") MultipartFile file) {
-        log.info("첨부파일 선업로드 요청 - boardId: {}", boardId);
-        return ResponseEntity.ok(boardService.uploadAttachment(boardId, file));
-    }
+    // 선업로드 엔드포인트는 여기 두지 않는다 — 본문 이미지·첨부 공용 POST .../files 가 정본이다
+    // (api_endpoints id 13, AttachmentController). PR #83 초안의 /posts/images·/posts/attachments 는 통합 시 흡수.
 
     @Operation(summary = "게시글 수정",
             description = """
@@ -317,8 +276,13 @@ public class BoardController {
                     categoryId: 4
                     isAnonymous: false
                     deleteAttachmentIds: 18, 19         ← 삭제할 기존 첨부 id만
-                    files: 새파일.pdf                   ← 새로 추가할 첨부만
+                    attachmentIds: 33                   ← 수정 중 새로 선업로드한 파일
+                    files: 새파일.pdf                   ← 이 요청에 함께 올리는 첨부(기존 방식)
                     ```
+
+                    ### 본문 이미지 정리
+                    수정 저장 시 **본문에서 지운 인라인 이미지는 서버가 함께 삭제**합니다(마크다운이 곧 기준).
+                    첨부 목록의 파일은 이 규칙과 무관하며 deleteAttachmentIds 로만 지워집니다.
 
                     ### 응답 예시
                     ```json
