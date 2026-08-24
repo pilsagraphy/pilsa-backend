@@ -159,6 +159,53 @@ VALUES ('정기모임', 1), ('MT', 2), ('행사', 3), ('스터디', 4), ('기타
 INSERT INTO `policy_settings` (code, setting_value, description)
 VALUES ('notification_list_months', '2', '알림함에 보여줄 기간(개월) — 목록은 페이징 없이 이 기간만 전체 반환');
 
+-- [2026-08-17] 알림 보존기간 (PM 확정: 1년 보존 후 물리 삭제 — 새벽 배치 04:40, NotificationRetentionScheduler)
+-- 알림은 수신자 본인만 보는 UI 편의 데이터라 소프트삭제 대전제의 예외 (notification_devices 와 같은 논리)
+INSERT INTO `policy_settings` (code, setting_value, description)
+VALUES ('notification_retention_days', '365', '알림 보존 일수 — 경과 시 새벽 배치(04:40)가 물리 삭제 (읽음/삭제 여부 무관, 발생 시각 기준)');
+
+-- [2026-08-18] 자동 로그인 유지 일수 (FE 요청 — 브라우저 재시작 후 세션 복원)
+-- 400 이 상한: 브라우저가 쿠키 만료를 400일로 잘라낸다(Chrome 104+). 더 크게 줘도 의미 없음
+INSERT INTO `policy_settings` (code, setting_value, description)
+VALUES ('auto_login_days', '400', '자동 로그인 유지 일수 — refreshToken 쿠키 Max-Age 와 리프레시 토큰 만료에 함께 적용. 미체크 로그인은 세션 쿠키 + 12시간');
+
+-- [2026-08-18] 통계 3테이블 (PM 확정. 구현은 담당자 과제 — HANDOFF-stats.md)
+--   설계 경위·원안 대비 변경: FEEDBACK-trending.md
+CREATE TABLE `stats_access_hourly` (
+  `user_id`     bigint   NOT NULL COMMENT '접속 회원 (FK 없음 — 탈퇴 후에도 통계 보존)',
+  `access_hour` datetime NOT NULL COMMENT '시간 버킷 (분·초 절삭)',
+  PRIMARY KEY (`user_id`,`access_hour`),
+  KEY `idx_stats_access_hourly_hour` (`access_hour`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='회원 접속 기록 (시간 버킷당 1행. 일·주·월·학기·연 통계는 이 테이블 GROUP BY 로 산출)';
+
+CREATE TABLE `stats_signup_weekly` (
+  `stat_week`     date     NOT NULL COMMENT '주 시작일(월요일)',
+  `signup_count`  int      NOT NULL DEFAULT '0' COMMENT '신규가입 수 (탈퇴자 포함)',
+  `student_count` int      NOT NULL DEFAULT '0' COMMENT '그중 재학생 (집계 시점 스냅샷)',
+  `alumni_count`  int      NOT NULL DEFAULT '0' COMMENT '그중 졸업생 (집계 시점 스냅샷)',
+  `captured_at`   datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '집계 시각',
+  PRIMARY KEY (`stat_week`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='주간 신규가입 통계 (탈퇴 행 물리삭제로 소급 변하는 값을 고정)';
+-- 기존 이력 8주치 백필 완료 (users.created_at 주 단위 집계)
+
+-- stats_post_hourly: 구간 × 게시글 집계 + 급상승 판정 (컬럼 상세는 DB 에서 확인)
+--   원안의 post_metric_snapshot·trending_window 를 흡수한 단일 테이블.
+--   누적값(view_count 등)을 함께 저장해 다음 집계가 직전 행을 기준선으로 쓰고,
+--   접속자 수는 stats_access_hourly 에서 그때그때 계산한다(중복 저장 안 함).
+ALTER TABLE `boards`
+  ADD COLUMN `trending_enabled` tinyint(1) NOT NULL DEFAULT '1'
+    COMMENT '급상승 집계 대상 여부 (1=포함, 0=제외). 신설 게시판은 기본 포함' AFTER `state`;
+
+-- 정책 14행: trending_* 12행 + stats_retention_days(1825=5년) + signup_stats_recalc_weeks(2)
+--   전 항목 policy_settings 조회. 하드코딩 금지.
+
+-- [2026-08-17] 알림 이동 정보를 targetType/targetId/boardId 로 확정 (PM) — linkUrl 폐기
+-- 저장돼 있던 값이 API 경로(/api/...)라 클릭 시 화면이 아닌 JSON 이 떴다. 화면 경로 조립은 프론트 몫.
+-- boardId 는 컬럼 없이 조회 시 JOIN 으로 파생 (post→board_id / comment→post→board_id)
+ALTER TABLE `notifications` DROP COLUMN `link_url`;
+
 -- [2026-08-16] api_endpoints 에 스웨거 실테스트 확정일 컬럼 추가 (PM 수동 기록용)
 ALTER TABLE `api_endpoints`
   ADD COLUMN `confirmed_at` date DEFAULT NULL
@@ -167,6 +214,25 @@ ALTER TABLE `api_endpoints`
 -- [2026-08-16] 스웨거 전수 테스트용 계정 10개 시드 (t_stu ~ t_del, user_id 96~105)
 -- 비밀번호 해시는 wm5256 과 동일하게 복사 (동일 비밀번호로 로그인). 상황: 재학/졸업/관리자Lv1~3/정지중/영구차단/정지만료/탈퇴
 -- 상세는 docs/integration-20260814/TEST-PLAN.md §1
+
+-- [2026-08-22] 관리자 대시보드 "신규 가입자"/"신규 게시글" 집계 기간 (AdminDashboardMapper.xml 이 로드, 기본 1일=오늘)
+INSERT INTO `policy_settings` (code, setting_value, description) VALUES
+('dashboard_new_user_period_days', '1', '관리자 대시보드 신규 가입자 집계 기간(일)'),
+('dashboard_new_post_period_days', '1', '관리자 대시보드 신규 게시글 집계 기간(일)');
+
+-- [2026-08-22] 마이페이지 "이번 학기 활동 요약" 학기 기준월 (MyPageServiceImpl 이 로드, 기본 3월/9월 시작)
+INSERT INTO `policy_settings` (code, setting_value, description) VALUES
+('semester1_start_month', '3', '1학기 시작월 (마이페이지 이번 학기 활동 요약 기준)'),
+('semester2_start_month', '9', '2학기 시작월 (마이페이지 이번 학기 활동 요약 기준)');
+
+-- [2026-08-22] 위 policy_settings 4건 qa_pilsa 적용 완료 (setting_id 37~40).
+--   api_endpoints 5건도 planned → active 로 갱신하고 응답 정본을 코드 기준으로 정리했다.
+--   대시보드는 api_endpoints 정본대로 3개 엔드포인트로 분리(통계 / recent-reports / recent-members)했고,
+--   /api/user/mypage 의 기존 응답 예시는 한글 키 "전체통계"가 박힌 미완성본이라 코드 기준으로 재작성했다.
+UPDATE `api_endpoints` SET status = 'active', confirmed_at = '2026-08-22'
+WHERE endpoint_id IN (22, 33, 72, 124, 125);
+-- (endpoint_id 22 /api/user/mypage, 33 /api/admin/dashboard, 72 /api/user/mypage/password/reset,
+--  124 /recent-reports, 125 /recent-members — response_example·note 도 함께 갱신. 상세 SQL 은 커밋 b90149a 이후 후속 커밋 참조)
 
 -- [2026-08-16] 알림 수신 기기 등록부 (웹 푸시 채널 — PM 지시로 2기 개발). 세션성 데이터라 물리삭제 예외
 CREATE TABLE `notification_devices` (
@@ -254,6 +320,13 @@ INSERT INTO `policy_settings` (code, setting_value, description) VALUES
 ('signup_stats_recalc_weeks',      '2',    '주간 가입 통계 재집계 구간(주)'),
 ('stats_retention_days',           '1825', '접속·게시글 집계 보존 일수(5년). 경과 행은 새벽 배치가 물리 삭제');
 ```
+> **임시저장 DDL 적용 시 주의**
+> - `drafts` 를 **먼저** 만든 뒤 `attachments` 의 `fk_attachments_draft` 를 건다(참조 순서).
+> - 발행 트랜잭션 순서 **엄수**: `UPDATE attachments SET post_id=?, draft_id=NULL WHERE draft_id=?` **먼저**, `DELETE drafts` **나중**.
+>   (순서를 바꾸면 `ON DELETE CASCADE` 가 방금 발행한 글의 첨부를 통째로 지운다.)
+> - 초안 삭제·저장 재조정 시 첨부는 **코드가 행·물리파일을 명시적으로 지운다**(AttachmentService) —
+>   CASCADE 는 백스톱일 뿐, CASCADE 에 맡기면 디스크 파일이 고아로 남는다.
+> - 롤백: `ALTER TABLE attachments DROP FOREIGN KEY fk_attachments_draft, DROP COLUMN draft_id;` → `DROP TABLE drafts;`
 - [x] events DDL 적용 (2026-08-14, location 값 전부 NULL 확인 후 제거)
 - [x] **통계 3종 테이블 + `boards.trending_enabled` 적용** (2026-08-18 PM). 수집·집계 코드는 `통계` 브랜치의 `com.back.stats`.
   정책 14행은 **선택** — `StatsPolicy` 에 동일 기본값이 있어 넣지 않아도 동작하고, 넣으면 재배포 없이 조정된다.
@@ -261,6 +334,13 @@ INSERT INTO `policy_settings` (code, setting_value, description) VALUES
 - [x] boards 권한 컬럼 DDL 적용 (#61 §1)
 - [x] ~~boards 컬럼 제거 (#70)~~ → 적용 후 **PM 지시로 원복 완료** (allow_comment/allow_attachment/category_mode 원값 유지)
 - [x] 적용 후 스키마 재검증 (DESCRIBE 확인)
+- [x] **attachments 선업로드 DDL 적용** (2026-08-23) — post_id nullable + uploader_id + usage_type,
+  기존 18행 uploader_id 백필 확인(posts.user_id 기준), policy_settings 3건 등록.
+  적용 전 attachments 전체 행 백업(SELECT 덤프) 후 실행. 검증: 선업로드→발행 연결→인증형 조회→
+  수정 시 본문에서 지운 이미지 정리까지 로컬 통합 테스트로 확인(테스트 트랜잭션 롤백, 잔여 행·파일 0).
+- [x] **임시저장 DDL 적용** (2026-08-23, PR #83 통합) — drafts 테이블 + attachments.draft_id/FK/CHECK.
+  PR #83 원안의 uploaded_by/attachment_type/draft_orphan_purge_hours 는 기존
+  uploader_id/usage_type/pending_upload_purge_hours 로 흡수(위 DDL 주석 참고) — 미적용이 맞다.
 - [x] **api_endpoints 테이블 생성 + 95행 시드** (2026-08-14 PM 지시) — API 인벤토리 정본.
   `phase`(1기=6월 이전 / 2기) × `status`(active=구현·검증 완료 70 / planned=예정 25) × `auth`(PUBLIC/MEMBER/ADMIN).
   경로 변경 이력은 note 컬럼에 기록. 노션 명세와 동기 대상.

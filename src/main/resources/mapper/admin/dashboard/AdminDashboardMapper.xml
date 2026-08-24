@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.admin.dashboard.mapper.AdminDashboardMapper">
+
+    <!-- 집계 기간은 policy_settings 에서 로드(없으면 1일). 기준은 '지금부터 24시간'이 아니라 자정 —
+         화면 문구가 '오늘'이라 관리자는 당일 자정부터로 읽는다. n=1 이면 오늘 00:00 부터, n=7 이면 오늘 포함 7일. -->
+    <sql id="periodStart">
+        DATE_SUB(CURDATE(), INTERVAL (CAST(COALESCE(
+            (SELECT setting_value FROM policy_settings WHERE code = #{policyCode}), '1'
+          ) AS SIGNED) - 1) DAY)
+    </sql>
+
+    <!-- 영구차단·탈퇴 회원은 제외 -->
+    <select id="countNewMembers" resultType="int">
+        SELECT COUNT(*)
+        FROM users
+        WHERE is_deleted = 0
+          AND ban_status &lt;&gt; 'permanent'
+          AND created_at &gt;= <include refid="periodStart"/>
+    </select>
+
+    <select id="countNewPosts" resultType="int">
+        SELECT COUNT(*)
+        FROM posts
+        WHERE state &lt;&gt; 'deleted'
+          AND created_at &gt;= <include refid="periodStart"/>
+    </select>
+
+    <!-- 처리 대기 신고 수는 '대상 단위'로 센다 — 신고 처리(반려/삭제)가 대상 단위로 pending 을 일괄 종료하므로
+         행 단위로 세면 같은 글이 N번 신고됐을 때 신고 관리 화면(GROUP BY target_id)과 숫자가 갈린다. -->
+    <select id="countPendingReports" resultType="int">
+        SELECT COUNT(*)
+        FROM (
+            SELECT DISTINCT r.target_type, r.target_id
+            FROM reports_log r
+            INNER JOIN posts p ON r.target_type = 'post' AND r.target_id = p.post_id
+            WHERE r.status = 'pending'
+            UNION ALL
+            SELECT DISTINCT r.target_type, r.target_id
+            FROM reports_log r
+            INNER JOIN comments c ON r.target_type = 'comment' AND r.target_id = c.comment_id
+            WHERE r.status = 'pending'
+        ) pending
+    </select>
+
+    <select id="countTotalMembers" resultType="long">
+        SELECT COUNT(*)
+        FROM users
+        WHERE is_deleted = 0
+          AND ban_status &lt;&gt; 'permanent'
+    </select>
+
+    <!-- 게시글 신고 + 댓글 신고 통합, 최신순 N건.
+         대상 단위로 묶는다(같은 글이 N번 신고돼도 1줄) — 안 묶으면 중복 신고 1건이 목록을 독점한다.
+         preview 는 신고 대상 자체의 본문 앞부분(신고 관리 화면의 ReportedItemResponse 와 동일 규칙).
+         postId 는 댓글 신고 행에서 원글로 이동하기 위한 값(댓글은 targetId 가 comment_id 라 그것만으론 못 감). -->
+    <select id="findRecentReports" resultType="com.back.admin.dashboard.dto.RecentReportResponse">
+        SELECT targetType, targetId, postId, boardId, boardName, preview, createdAt
+        FROM (
+            SELECT 'post'              AS targetType,
+                   p.post_id           AS targetId,
+                   p.post_id           AS postId,
+                   b.board_id          AS boardId,
+                   b.name              AS boardName,
+                   LEFT(p.content, 30) AS preview,
+                   MAX(r.created_at)   AS createdAt
+            FROM reports_log r
+            INNER JOIN posts p ON r.target_type = 'post' AND r.target_id = p.post_id
+            INNER JOIN boards b ON p.board_id = b.board_id
+            GROUP BY p.post_id, b.board_id, b.name, LEFT(p.content, 30)
+            UNION ALL
+            SELECT 'comment'           AS targetType,
+                   c.comment_id        AS targetId,
+                   p2.post_id          AS postId,
+                   b.board_id          AS boardId,
+                   b.name              AS boardName,
+                   LEFT(c.content, 30) AS preview,
+                   MAX(r.created_at)   AS createdAt
+            FROM reports_log r
+            INNER JOIN comments c ON r.target_type = 'comment' AND r.target_id = c.comment_id
+            INNER JOIN posts p2 ON c.post_id = p2.post_id
+            INNER JOIN boards b ON p2.board_id = b.board_id
+            GROUP BY c.comment_id, p2.post_id, b.board_id, b.name, LEFT(c.content, 30)
+        ) recent
+        ORDER BY createdAt DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 영구차단·탈퇴 회원 제외 — 같은 화면의 신규 가입자/전체 회원 수와 기준을 맞춘다 -->
+    <select id="findRecentMembers" resultType="com.back.admin.dashboard.dto.RecentMemberResponse">
+        SELECT user_id     AS userId,
+               member_type AS memberType,
+               login_id    AS loginId,
+               name,
+               created_at  AS joinedAt
+        FROM users
+        WHERE is_deleted = 0
+          AND ban_status &lt;&gt; 'permanent'
+        ORDER BY created_at DESC
+        LIMIT #{limit}
+    </select>
+
+</mapper>

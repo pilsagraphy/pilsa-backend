@@ -1,10 +1,14 @@
 package com.back.board.service;
 
+import com.back.board.attachment.service.AttachmentService;
+import com.back.board.draft.mapper.DraftMapper;
 import com.back.board.dto.*;
 import com.back.board.exception.BoardException;
 import com.back.board.mapper.BoardMapper;
 import com.back.global.security.AuthUtils;
 import com.back.global.util.FileStorageUtil;
+import com.back.mypage.notification.dto.NotificationType;
+import com.back.mypage.notification.service.NotificationPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -13,7 +17,9 @@ import org.springframework.util.CollectionUtils;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 게시판 통합 서비스.
@@ -34,6 +40,10 @@ public class BoardServiceImpl implements BoardService {
     private final BoardMapper boardMapper;
     private final BoardPolicyService boardPolicyService;
     private final FileStorageUtil fileStorageUtil;
+    private final AttachmentService attachmentService;
+    private final NotificationPublisher notificationPublisher;
+    // 발행 연동(초안 확인·삭제)용 — 첨부 소유 이전은 AttachmentService 가 담당한다
+    private final DraftMapper draftMapper;
 
     /**
      * 게시판 카테고리 목록 (카테고리 미사용 게시판은 빈 목록).
@@ -191,15 +201,55 @@ public class BoardServiceImpl implements BoardService {
         boolean pinned = resolvePinned(policy, request.getCategoryId());
 
         boardMapper.insertPost(request, userId, boardId, pinned);
-        saveAttachments(policy, request.getPostId(), request.getFiles());
+        saveAttachments(policy, userId, request.getPostId(), request.getFiles());
+
+        // 선업로드 연결·초안 이관은 게시판이 파일 업로드를 허용할 때만 — 다른 게시판에서 올린
+        // attachmentId 를 첨부 금지 게시판에 실어 보내는 정책 우회를 막는다(saveAttachments 와 같은 게이트)
+        if (policy.isAttachmentAllowed()) {
+            // 임시저장에서 발행한 경우: 초안 첨부를 먼저 이 게시글로 이관하고 초안을 삭제한다(같은 트랜잭션).
+            // linkToPost 보다 먼저 실행해 초안 첨부가 "이 글의 것"이 된 상태에서 연결·정리가 이어지게 한다
+            publishFromDraftIfPresent(request.getDraftId(), boardId, userId, request.getPostId());
+
+            // 에디터에서 미리 올려 둔 파일(본문 이미지·첨부)을 이 글의 것으로 만든다.
+            // 본문 마크다운에 남아 있는 /api/user/files/{id} 도 함께 연결된다 — 연결되지 않은 파일은 정리 배치가 지운다
+            attachmentService.linkToPost(request.getPostId(), request.getAttachmentIds(), request.getContent());
+
+            // 연결됐지만 발행 본문에는 없는 인라인 이미지 정리 — 초안 이관분이든 attachmentIds 에
+            // 습관적으로 실려 온 id 든, "마크다운이 기준" 규칙 하나로 정리한다
+            attachmentService.syncInlineAttachments(request.getPostId(), request.getContent());
+        }
 
         // 생성 PK 반환 — 프론트가 등록 직후 상세 페이지로 이동하는 데 필요
         return new BoardResponse("게시글이 성공적으로 등록되었습니다.", request.getPostId());
     }
 
-    // 첨부 저장 (등록·수정 공통). 첨부를 쓰지 않는 게시판이면 조용히 무시한다
+    /**
+     * 임시저장 → 발행 연동.
+     *
+     * 순서 절대 중요(SPEC-A5 §6-3): <b>첨부 소유권 이관(UPDATE) 먼저, 초안 삭제(DELETE) 나중.</b>
+     * 순서를 바꾸면 fk_attachments_draft 의 ON DELETE CASCADE 가 방금 발행한 글의 첨부를 통째로 지운다.
+     * 단일 UPDATE(post_id 세팅 + draft_id 비움)라 CHECK(동시 소유 금지)도 만족한다.
+     *
+     * 없는/남의/다른 게시판 초안이면 조용히 무시된다 — 발행 자체를 막을 이유가 없기 때문(SPEC-A5 §2-6).
+     */
+    private void publishFromDraftIfPresent(Long draftId, Long boardId, Long userId, Long postId) {
+        if (draftId == null) {
+            return;
+        }
+        // 본인 + 이 게시판의 초안인지 확인 겸 drafts 행 잠금 — 다른 게시판의 초안 id 는 무시하고,
+        // 락 순서(drafts → attachments)를 저장·삭제 경로와 맞춰 동시 저장·삭제와의 경합을 직렬화한다
+        if (draftMapper.lockDraft(draftId, userId, boardId) == null) {
+            log.info("발행 draftId 무시(없음/남의 것/다른 게시판) - draftId: {}, userId: {}", draftId, userId);
+            return;
+        }
+        attachmentService.transferDraftToPost(draftId, postId); // ① 첨부 이관 먼저
+        draftMapper.deleteDraft(draftId, userId);               // ② 초안 삭제 나중
+    }
+
+    // 발행 시점에 함께 올라온 첨부 저장 (등록·수정 공통). 첨부를 쓰지 않는 게시판이면 조용히 무시한다
     // 저장 경로는 uploads/board-{boardId}/{postId}/원본파일명 — 글 단위 폴더라 글끼리 이름이 겹칠 일이 없다
-    private void saveAttachments(BoardPolicy policy, Long postId, List<MultipartFile> files) {
+    // (선업로드분은 글 번호를 모르는 시점에 저장되므로 uploads/board-{boardId}/user-{userId}/ 에 들어간다)
+    private void saveAttachments(BoardPolicy policy, Long uploaderId, Long postId, List<MultipartFile> files) {
         if (!policy.isAttachmentAllowed() || CollectionUtils.isEmpty(files)) {
             return;
         }
@@ -209,7 +259,7 @@ public class BoardServiceImpl implements BoardService {
                 continue;
             }
             String savedPath = fileStorageUtil.save(file, dir);
-            boardMapper.insertAttachment(postId, file.getOriginalFilename(), savedPath,
+            boardMapper.insertAttachment(postId, uploaderId, file.getOriginalFilename(), savedPath,
                     file.getSize(), file.getContentType());
         }
     }
@@ -244,13 +294,21 @@ public class BoardServiceImpl implements BoardService {
         // 첨부는 증분 처리: 지운 것만 소프트삭제하고, 새로 올린 것만 추가한다
         if (!CollectionUtils.isEmpty(request.getDeleteAttachmentIds())) {
             // 물리 파일까지 지워 고아 파일이 디스크에 남지 않게 한다 (PM 결정 2026-08-16).
-            // 삭제할 경로를 먼저 확보한 뒤 행을 소프트삭제하고 파일을 지운다 —
+            // 삭제할 경로를 먼저 확보해 행을 소프트삭제하되, 파일은 **커밋 후** 지운다 —
+            // 이후 단계(새 첨부 저장 등)가 실패해 롤백되면 행은 normal 로 살아나는데
+            // 파일만 사라진 "정상 첨부인데 다운로드 404" 상태가 되기 때문이다.
             // 대상 글 소속인 것만 조회/삭제되므로 남의 첨부 id가 섞여도 무해하다
             List<String> fileUrls = boardMapper.findAttachmentUrls(postId, request.getDeleteAttachmentIds());
             boardMapper.softDeleteAttachments(postId, request.getDeleteAttachmentIds());
-            fileUrls.forEach(fileStorageUtil::delete);
+            fileStorageUtil.deleteAfterCommit(fileUrls);
         }
-        saveAttachments(policy, postId, request.getFiles());
+        saveAttachments(policy, currentUserId, postId, request.getFiles());
+        if (policy.isAttachmentAllowed()) {
+            // 수정 중 새로 선업로드한 파일 연결 → 그다음 본문에서 사라진 인라인 이미지 정리.
+            // 순서가 중요하다: 연결을 먼저 해야 방금 넣은 이미지가 "본문에 없는 이미지"로 오인되지 않는다
+            attachmentService.linkToPost(postId, request.getAttachmentIds(), request.getContent());
+            attachmentService.syncInlineAttachments(postId, request.getContent());
+        }
         // 응답은 message 만 — 어차피 프론트가 상세로 이동하며 GET 을 한 번 더 하므로 상세 객체 반환은 낭비 (PM 합의)
         return new BoardResponse("게시글이 성공적으로 수정되었습니다.");
     }
@@ -301,11 +359,45 @@ public class BoardServiceImpl implements BoardService {
 
         boardMapper.insertComment(postId, userId, request);
 
-        // TODO(담당자 과제): 댓글·대댓글 알림 발행을 여기에 연결한다.
-        //   누구에게 알림이 가야 하고 누구에게는 가면 안 되는지부터 정리할 것.
-        //   과제 설명: docs/integration-20260814/HANDOFF-notification-tasks.md
+        // 댓글/답글 알림 발행 (부가기능 — 실패해도 댓글 등록은 성공해야 하므로 내부에서 예외를 삼킨다)
+        publishCommentNotifications(boardId, postId, userId, parentCommentId);
 
         return new CommentResponse("댓글이 성공적으로 등록되었습니다.");
+    }
+
+    /**
+     * 댓글/답글 알림 발행.
+     *
+     * 수신자 규칙(확정):
+     *  - 일반 댓글  → 글 작성자에게 COMMENT
+     *  - 답글       → 부모 댓글 작성자에게 REPLY + 글 작성자에게 COMMENT (답글도 그 글에 달린 반응이므로)
+     *  - 같은 사람이 둘 다면 REPLY 하나만 (더 구체적인 쪽 우선)
+     *  - 어떤 경우든 <b>지금 댓글을 단 본인에게는 발행하지 않는다</b>
+     *
+     * 알림은 부가기능이라 발행 실패가 본 기능(댓글 등록)을 롤백·500 시키면 안 된다 → 전체를 try/catch 로 감싸 로그만 남긴다.
+     * (외부 HTTP 푸시는 NotificationPushService 가 @Async 로 이미 분리되어 있어 지연·실패가 이 흐름에 영향을 주지 않는다.)
+     */
+    private void publishCommentNotifications(Long boardId, Long postId, Long actorId, Long parentCommentId) {
+        try {
+            // 수신자 → 알림유형. 삽입 순서(REPLY 먼저)를 유지해 동일인 중복 시 putIfAbsent 가 REPLY 를 남기게 한다.
+            Map<Long, NotificationType> recipients = new LinkedHashMap<>();
+            if (parentCommentId != null) {
+                Long parentAuthorId = boardMapper.findCommentAuthorId(parentCommentId);
+                if (parentAuthorId != null) {
+                    recipients.put(parentAuthorId, NotificationType.REPLY);
+                }
+            }
+            Long postAuthorId = boardMapper.findAuthorIdByPostId(postId);
+            if (postAuthorId != null) {
+                recipients.putIfAbsent(postAuthorId, NotificationType.COMMENT); // 이미 REPLY 로 잡혔으면 유지
+            }
+            recipients.remove(actorId); // 본인 제외 (내 글/내 댓글에 내가 달아도 나에겐 안 감)
+
+            recipients.forEach((receiverId, type) ->
+                    notificationPublisher.publish(receiverId, type, "post", postId, boardId));
+        } catch (Exception e) {
+            log.warn("댓글 알림 발행 실패 - postId: {}, parentCommentId: {}, {}", postId, parentCommentId, e.getMessage());
+        }
     }
 
     // 댓글 수정: 관리자이거나 작성자 본인일 경우 가능

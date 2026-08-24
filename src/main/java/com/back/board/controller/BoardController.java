@@ -156,13 +156,17 @@ public class BoardController {
                       "created": "2026-08-14T10:12:30", "updated": "2026-08-14T11:02:11",
                       "prevPost": {"postId": 159, "title": "이전 글 제목", "categoryName": "질문", "created": "2026-08-13T09:20:00"},
                       "nextPost": {"postId": 172, "title": "다음 글 제목", "categoryName": "일상", "created": "2026-08-14T15:40:00"},
-                      "attachments": [{"attachmentId": 18, "originName": "파일.pdf", "fileUrl": "uploads/board-2/uuid.pdf", "fileSize": 12345}],
+                      "attachments": [{"attachmentId": 18, "originName": "파일.pdf", "fileUrl": "/api/user/files/18", "fileSize": 12345}],
                       "attachmentCount": 1
                     }
                     ```
                     ※ 익명글: authorName="익명", userId=null (관리자·작성자 본인 제외)
                     ※ prevPost/nextPost: 첫 글·마지막 글이면 null
                     ※ 상세에서만 created(작성일)와 updated(수정일)가 함께 내려갑니다.
+                    ※ attachments 에는 **본문에 삽입된 이미지가 포함되지 않습니다** — 본문에 이미 보이는 이미지가
+                      첨부 목록에 중복 노출되지 않게 서버가 걸러냅니다(첨부 목록용 파일만).
+                    ※ attachments 의 fileUrl 은 인증형 조회 API 주소(/api/user/files/{id})입니다 — fetch 에
+                      Authorization 헤더를 붙여 blob 으로 표시/다운로드하세요(정적 /uploads 첨부 서빙은 폐지됨).
                     """)
     @GetMapping("/posts/{postId}")
     public ResponseEntity<BoardDetailResponse> getPostDetail(
@@ -217,13 +221,27 @@ public class BoardController {
                     content: ## 마크다운 본문         ← 필수, 마크다운 문자열
                     categoryId: 4
                     isAnonymous: false
-                    files: 자료.pdf, 사진.png         ← 선택, 다중 첨부
+                    attachmentIds: 31, 32            ← 선택, 에디터에서 선업로드한 파일 연결 (권장)
+                    files: 자료.pdf, 사진.png         ← 선택, 이 요청에 함께 올리는 첨부(기존 방식, 계속 지원)
+                    draftId: 7                       ← 선택, 임시저장에서 발행할 때만. 발행 성공 시 이 초안 자동 삭제 + 첨부 이관
                     ```
+
+                    ### 파일 두 가지 방식
+                    | | 선업로드 `attachmentIds` | 발행 동시 업로드 `files` |
+                    |---|---|---|
+                    | 올리는 시점 | 에디터에서 파일을 고른 즉시(`POST .../files`) | 발행 요청과 함께 |
+                    | 본문 이미지 | **가능** (즉시 url 을 받아 마크다운에 삽입) | 불가 |
+                    | 용도 | 본문 이미지 + 첨부 | 첨부만 |
+
+                    본문에 `/api/user/files/{id}` 가 남아 있으면 attachmentIds 에 빠뜨려도 서버가 본문을 훑어 함께 연결합니다.
+                    연결되지 않은 선업로드 파일은 24시간 뒤 새벽 배치가 삭제합니다.
 
                     ### 응답 예시
                     ```json
                     {"message": "게시글이 성공적으로 등록되었습니다.", "postId": 185}
                     ```
+                    ※ draftId 를 넣으면 발행과 같은 트랜잭션에서 그 초안의 첨부가 이 글로 이관되고 초안은 삭제됩니다.
+                      없거나 남의/다른 게시판 초안이면 무시하고 발행은 성공합니다.
 
                     실패: 400 {"message":"제목은 필수입니다."}
                     실패: 400 {"message":"제목은 200자를 넘을 수 없습니다."}
@@ -237,6 +255,9 @@ public class BoardController {
         log.info("게시글 등록 요청 - boardId: {}, title: {}", boardId, request.getTitle());
         return ResponseEntity.ok(boardService.createPost(boardId, request));
     }
+
+    // 선업로드 엔드포인트는 여기 두지 않는다 — 본문 이미지·첨부 공용 POST .../files 가 정본이다
+    // (api_endpoints id 13, AttachmentController). PR #83 초안의 /posts/images·/posts/attachments 는 통합 시 흡수.
 
     @Operation(summary = "게시글 수정",
             description = """
@@ -255,8 +276,13 @@ public class BoardController {
                     categoryId: 4
                     isAnonymous: false
                     deleteAttachmentIds: 18, 19         ← 삭제할 기존 첨부 id만
-                    files: 새파일.pdf                   ← 새로 추가할 첨부만
+                    attachmentIds: 33                   ← 수정 중 새로 선업로드한 파일
+                    files: 새파일.pdf                   ← 이 요청에 함께 올리는 첨부(기존 방식)
                     ```
+
+                    ### 본문 이미지 정리
+                    수정 저장 시 **본문에서 지운 인라인 이미지는 서버가 함께 삭제**합니다(마크다운이 곧 기준).
+                    첨부 목록의 파일은 이 규칙과 무관하며 deleteAttachmentIds 로만 지워집니다.
 
                     ### 응답 예시
                     ```json

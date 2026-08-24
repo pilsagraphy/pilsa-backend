@@ -1,6 +1,6 @@
 package com.back.admin.sanction.service;
 
-import com.back.admin.common.dto.BulkResultResponse;
+import com.back.admin.sanction.dto.BulkResultResponse;
 import com.back.admin.sanction.dto.ReportPageResponse;
 
 import java.util.List;
@@ -13,11 +13,11 @@ import java.util.List;
  */
 public interface ReportAdminService {
 
-    // 신고된 게시글 목록
-    ReportPageResponse getReportedPosts(int page, int size, String status, Long boardId, String sort);
+    // 신고된 게시글 목록 (state=blind/deleted 필터·검색·게시판 필터. state 미지정 시 normal 제외)
+    ReportPageResponse getReportedPosts(int page, int size, String state, String keyword, Long boardId, String sort);
 
-    // 신고된 댓글 목록
-    ReportPageResponse getReportedComments(int page, int size, String status, Long boardId, String sort);
+    // 신고된 댓글 목록 (state=blind/deleted 필터·검색·게시판 필터. state 미지정 시 normal 제외)
+    ReportPageResponse getReportedComments(int page, int size, String state, String keyword, Long boardId, String sort);
 
     // 선택 복원(=신고 반려): 대상 복원(state=normal) + 신고 rejected. 사유를 받지 않는다
     BulkResultResponse selectRestore(String targetType, List<Long> targetIds);

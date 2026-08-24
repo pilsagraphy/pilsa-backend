@@ -61,4 +61,39 @@ public class EventController {
                 .header("Content-Disposition", "inline; filename=\"pilsagraphy.ics\"")
                 .body(body);
     }
+
+    @Operation(summary = "일정 1건 ICS (비로그인 공개)",
+            description = """
+                    일정 하나만 담긴 ICS 파일. **구독(calendar.ics)과 용도가 다릅니다.**
+
+                    | | `/api/event/calendar.ics` | `/api/event/{eventId}.ics` |
+                    |---|---|---|
+                    | 성격 | 구독(subscribe) | 가져오기(import) |
+                    | 이후 수정 반영 | 자동 반영 | **반영 안 됨** |
+                    | 용도 | 전체 일정 구독 | 이 일정만 담기 |
+
+                    ### 왜 필요한가
+                    안드로이드에는 URL 구독 경로가 없습니다 — 구글 캘린더 앱에 "URL로 추가"가 없고(웹 전용),
+                    `webcal://` 을 받아주는 기본 앱도 없습니다. 그래서 안드로이드에서는 전체 구독 대신
+                    일정별 [내 캘린더에 담기] 로 대신합니다. iOS·데스크톱은 그대로 구독을 쓰면 됩니다.
+
+                    ### 프론트 사용법
+                    ```js
+                    // 링크로 걸면 브라우저가 받아서 사용자의 캘린더 앱으로 넘긴다
+                    location.href = `/api/event/${eventId}.ics`;
+                    ```
+                    `Content-Disposition: attachment` 라 브라우저가 바로 다운로드 흐름을 탑니다.
+
+                    실패: 404 `{"message":"존재하지 않거나 삭제된 일정입니다."}` (삭제된 일정 포함)""")
+    @GetMapping(value = "/api/event/{eventId}.ics")
+    public ResponseEntity<byte[]> getEventFeed(
+            @Parameter(description = "일정 ID", example = "32") @PathVariable("eventId") Long eventId) {
+        log.info("단일 일정 ICS 요청 - eventId: {}", eventId);
+        byte[] body = eventService.buildEventFeed(eventId).getBytes(StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("text/calendar; charset=UTF-8"))
+                // 구독 피드와 달리 attachment — 브라우저가 받아 캘린더 앱으로 넘기게 한다
+                .header("Content-Disposition", "attachment; filename=\"pilsagraphy-event-" + eventId + ".ics\"")
+                .body(body);
+    }
 }

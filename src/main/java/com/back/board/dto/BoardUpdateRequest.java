@@ -44,4 +44,10 @@ public class BoardUpdateRequest {
     @Schema(description = "삭제할 기존 첨부의 attachmentId 목록 (선택). 화면에서 X 누른 것만 보냅니다",
             requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
     private List<Long> deleteAttachmentIds;
+
+    // 수정 화면에서 새로 선업로드한 파일. 등록(BoardRequest)과 같은 규칙이며
+    // 본문에서 지워진 인라인 이미지는 저장 시점에 정리된다 (AttachmentService.syncInlineAttachments)
+    @Schema(description = "수정 중 새로 선업로드한 파일의 attachmentId 목록 (선택)",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
+    private List<Long> attachmentIds;
 }

@@ -28,6 +28,8 @@ public interface BoardService {
     // 좋아요 토글
     BoardResponse togglePostLike(Long boardId, Long postId);
 
+    // 파일 선업로드(본문 이미지·첨부 공용)는 AttachmentService(POST .../files)가 담당한다 — 여기 두지 않는다
+
     // 게시글 등록, 수정, 삭제 (등록 응답에는 postId 포함 — 상세 이동용)
     BoardResponse createPost(Long boardId, BoardRequest request);
     BoardResponse updatePost(Long boardId, Long postId, BoardUpdateRequest request);

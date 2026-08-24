@@ -69,7 +69,22 @@ public class SanctionAdminService {
     @Transactional
     public void liftBan(Long userId, Long adminUserId) {
         AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
+
+        // findSanctionedUserById 는 존재하는 회원이면 항상 행을 반환(없으면 null) → 존재 확인 겸 현재 캐시 상태 확보
+        SanctionedUserResponse user = sanctionMapper.findSanctionedUserById(userId);
+        if (user == null) {
+            throw new SanctionException("존재하지 않는 회원입니다.", HttpStatus.NOT_FOUND);
+        }
+
+        // 열린 정지/차단(ban_log)을 닫는다(닫힌 행 수 반환). 캐시상 제재 상태였는지도 함께 본다.
+        int closed = sanctionMapper.closeActiveBanLog(userId, adminUserId);
+        boolean bannedByCache = !"none".equals(user.getBanStatus());
+
+        // 열린 제재도 없고 캐시도 이미 none = 진짜로 해제할 것이 없음
+        if (closed == 0 && !bannedByCache) {
+            throw new SanctionException("이미 제재가 해제된 회원입니다.", HttpStatus.CONFLICT);
+        }
+        // 실제 해제했거나 캐시가 어긋나(drift) 있던 경우 → 캐시(users.ban_status/banned_until)를 none 으로 정리
         sanctionMapper.updateUserBanStatus(userId, "none", null);
-        sanctionMapper.closeActiveBanLog(userId, adminUserId);
     }
 }

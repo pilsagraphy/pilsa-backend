@@ -1,5 +1,6 @@
 package com.back.global.security;
 
+import com.back.auth.exception.BannedException;
 import com.back.auth.mapper.AuthMapper;
 import com.back.stats.access.service.AccessStatsRecorder;
 import io.jsonwebtoken.Claims;
@@ -93,8 +94,24 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     // 로그인 시점의 BannedException 응답과 동일한 형태로 내려 프론트 분기가 한 곳에서 끝나게 한다
                     String body = isPermanentBan
                             ? "{\"message\":\"영구적으로 차단된 계정입니다.\",\"banType\":\"permanent\",\"bannedUntil\":null}"
-                            : "{\"message\":\"정지된 계정입니다.\",\"banType\":\"temporary\",\"bannedUntil\":\"" + user.getBannedUntil() + "\"}";
+                            : "{\"message\":\"정지된 계정입니다.\",\"banType\":\"temporary\",\"bannedUntil\":\""
+                              + BannedException.formatBannedUntil(user.getBannedUntil()) + "\"}";
                     writeJson(response, HttpServletResponse.SC_FORBIDDEN, body);
+                    return;
+                }
+
+                // 무효화된 토큰 차단 (비밀번호 변경 등으로 users.token_version 이 올라간 경우).
+                // 무상태 JWT 라 발급 후에는 취소할 방법이 이것뿐이다 — 자세한 배경은 JwtUtil 참고.
+                int tokenVersion = jwtUtil.tokenVersion(claims);
+                int currentVersion = user.getTokenVersion() == null ? 0 : user.getTokenVersion();
+                if (tokenVersion != currentVersion) {
+                    log.warn("무효화된 토큰 접근: {} (token ver={}, current ver={})", loginId, tokenVersion, currentVersion);
+                    // 만료와 같은 값("1")을 쓴다 — 프론트 인터셉터가 재발급을 시도하고,
+                    // 재발급도 token_version 에서 막히면서 logout() + /login 리다이렉트로 이어진다.
+                    // "0" 을 주면 인터셉터가 아무것도 하지 않아 사용자가 깨진 화면에 그대로 남는다.
+                    response.setHeader("X-Token-Expired", "1");
+                    writeJson(response, HttpServletResponse.SC_UNAUTHORIZED,
+                            "{\"message\":\"로그인 정보가 만료되었습니다. 다시 로그인해주세요.\"}");
                     return;
                 }
 
@@ -163,7 +180,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return path.startsWith("/api/mail/")
                 || path.startsWith("/swagger-ui")
                 || path.startsWith("/v3/api-docs")
-                || path.startsWith("/uploads/")
+                || path.startsWith("/uploads/Honor/") // 첨부 정적 서빙 폐지 — 명예의전당 사진만 공개
                 || path.equals("/api/donations")
                 || path.equals("/api/quotes/current")
                 || path.equals("/api/event")

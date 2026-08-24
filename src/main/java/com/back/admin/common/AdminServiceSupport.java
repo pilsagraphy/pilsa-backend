@@ -1,12 +1,10 @@
 package com.back.admin.common;
 
-import com.back.admin.common.exception.AdminException;
 import com.back.global.exception.BaseException;
-import org.springframework.http.HttpStatus;
 import com.back.global.security.AuthUtils;
 
-// 관리자 서비스 공통 헬퍼 (인증 주체 추출, 일괄 실패 메시지, 페이지 파라미터 보정).
-// 상태를 갖지 않는 정적 유틸.
+// 관리자 서비스 공통 헬퍼 (인증 주체 추출, 일괄 실패 메시지, 페이지 파라미터 보정, LIKE 이스케이프).
+// 상태를 갖지 않는 정적 유틸. 관리자 화면(게시글·댓글·신고/제재·대시보드)이 공유한다.
 public final class AdminServiceSupport {
 
     private static final int MAX_PAGE_SIZE = 100;
@@ -35,5 +33,16 @@ public final class AdminServiceSupport {
             return 1;
         }
         return Math.min(size, MAX_PAGE_SIZE);
+    }
+
+    // LIKE 검색어 이스케이프: 사용자가 입력한 % _ \ 를 리터럴로 취급하도록 백슬래시 이스케이프.
+    // 매퍼의 LIKE ... ESCAPE '\\' 와 짝을 이룬다. null/공백이면 null 반환(검색 미적용).
+    public static String escapeLike(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return null;
+        }
+        return keyword.replace("\\", "\\\\")
+                      .replace("%", "\\%")
+                      .replace("_", "\\_");
     }
 }

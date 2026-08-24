@@ -15,7 +15,8 @@
                admin_level   AS adminLevel,
                is_deleted    AS isDeleted,
                ban_status    AS banStatus,
-               banned_until  AS bannedUntil
+               banned_until  AS bannedUntil,
+               token_version AS tokenVersion
         FROM users
         WHERE login_id = #{loginId}
     </select>
@@ -69,9 +70,20 @@
     </select>
 
     <!-- 비밀번호 초기화 -->
+    <!-- 비밀번호를 바꾸면 그 사용자의 기존 토큰을 전부 무효화한다 (계정 탈취 후 비번을 바꿔도
+         공격자의 400일짜리 리프레시 토큰이 살아 있던 구멍을 막는다).
+         비밀번호가 바뀌는 경로가 이 쿼리 하나뿐이라 여기서 함께 올리면 호출부가 빠뜨릴 수 없다. -->
     <update id="updatePassword">
-        UPDATE users SET password_hash = #{password}
+        UPDATE users
+           SET password_hash = #{password},
+               token_version = token_version + 1
         WHERE login_id = #{loginId}
+    </update>
+
+    <!-- 모든 기기에서 로그아웃 -->
+    <update id="bumpTokenVersion">
+        UPDATE users SET token_version = token_version + 1
+        WHERE user_id = #{userId}
     </update>
 
     <!-- 이메일 찾기 - 학번+이름 모두 일치 시 이메일 반환 (하나라도 다르면 결과 없음) -->

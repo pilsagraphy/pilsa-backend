@@ -3,6 +3,7 @@ package com.back.auth.service;
 import com.back.auth.dto.AuthResponse;
 import com.back.auth.dto.LoginRequest;
 //import com.back.auth.dto.SignupRequest;
+import com.back.auth.dto.PasswordChangeRequest;
 import com.back.auth.dto.PasswordResetRequest;
 import com.back.auth.dto.SignupRequest;
 import com.back.auth.dto.FindIdVerifyRequest;
@@ -29,6 +30,9 @@ public interface AuthService {
     // 비밀번호 초기화
     void resetPassword(PasswordResetRequest request);
 
+    // 마이페이지 비밀번호 변경 — 로그인 상태에서 현재 비밀번호 재확인 후 변경 (비로그인 초기화와 별개)
+    void changePassword(PasswordChangeRequest request);
+
     // 이메일 찾기 - 학번/이름 일치 시 마스킹된 이메일 반환
     String findMaskedEmail(String studentNo, String name);
 
@@ -38,4 +42,6 @@ public interface AuthService {
     AuthResponse extend(String refreshToken, HttpServletResponse response);
     // 엑세스 토큰 발급/재발급 (+ 리프레시 토큰 회전)
     AuthResponse refresh(String refreshToken, HttpServletResponse response);
+    // 모든 기기에서 로그아웃 (users.token_version 을 올려 기존 토큰 전부 무효화)
+    void logoutAllDevices(HttpServletRequest request, HttpServletResponse response);
 }

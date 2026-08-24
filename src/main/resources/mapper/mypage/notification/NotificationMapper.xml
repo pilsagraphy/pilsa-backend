@@ -2,11 +2,92 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.back.mypage.notification.mapper.NotificationMapper">
 
-    <!--
-      알림 발행(INSERT)과 알림함 화면용 조회/읽음/삭제 쿼리는 아직 없다 — 담당자 과제.
-      과제 설명: docs/integration-20260814/HANDOFF-notification-tasks.md
-      (notifications 테이블은 이미 있으므로 스키마는 DB에서 직접 확인할 것)
-    -->
+    <!-- 알림 1건 발행. 생성된 notification_id 를 command 에 회수(useGeneratedKeys) → 푸시 toastId 로 재사용 -->
+    <insert id="insertNotification"
+            parameterType="com.back.mypage.notification.dto.NotificationCreate"
+            useGeneratedKeys="true" keyProperty="notificationId" keyColumn="notification_id">
+        INSERT INTO notifications (user_id, type, title, message, target_type, target_id, is_read, state, created_at)
+        VALUES (#{userId}, #{type}, #{title}, #{message}, #{targetType}, #{targetId}, 0, 'normal', NOW())
+    </insert>
+
+    <!-- 목록: 최근 N개월, 본인 normal, 최신순. boardId 는 target(post) → posts 조인으로 유도 -->
+    <select id="findByUser" resultType="com.back.mypage.notification.dto.NotificationResponse">
+        SELECT n.notification_id AS toastId,
+               n.type,
+               n.title,
+               n.message,
+               n.target_type       AS targetType,
+               n.target_id         AS targetId,
+               p.board_id          AS boardId,
+               n.is_read           AS isRead,
+               n.created_at        AS createdAt
+        FROM notifications n
+        LEFT JOIN posts p ON n.target_type = 'post' AND n.target_id = p.post_id
+        WHERE n.user_id = #{userId}
+          AND n.state = 'normal'
+          AND n.created_at >= DATE_SUB(NOW(), INTERVAL #{months} MONTH)
+        ORDER BY n.created_at DESC
+    </select>
+
+    <!-- 미읽음 개수 (뱃지·응답 공용) — 목록과 동일한 N개월 창 -->
+    <select id="countUnread" resultType="int">
+        SELECT COUNT(*)
+        FROM notifications
+        WHERE user_id = #{userId}
+          AND state = 'normal'
+          AND is_read = 0
+          AND created_at >= DATE_SUB(NOW(), INTERVAL #{months} MONTH)
+    </select>
+
+    <!-- 단건 읽음: 본인 normal 미읽음만 (이미 읽었으면 0행) -->
+    <update id="markAsRead">
+        UPDATE notifications
+        SET is_read = 1, read_at = NOW()
+        WHERE notification_id = #{toastId}
+          AND user_id = #{userId}
+          AND state = 'normal'
+          AND is_read = 0
+    </update>
+
+    <!-- 읽음 응답용 이동정보: 본인 normal 알림이 아니면 결과 없음 → 서비스가 404 -->
+    <select id="findMoveInfo" resultType="com.back.mypage.notification.dto.NotificationReadResponse">
+        SELECT n.notification_id AS toastId,
+               n.type,
+               n.target_type      AS targetType,
+               n.target_id        AS targetId,
+               p.board_id         AS boardId
+        FROM notifications n
+        LEFT JOIN posts p ON n.target_type = 'post' AND n.target_id = p.post_id
+        WHERE n.notification_id = #{toastId}
+          AND n.user_id = #{userId}
+          AND n.state = 'normal'
+    </select>
+
+    <!-- 전체 읽음: 본인 normal 미읽음(최근 N개월) -->
+    <update id="markAllAsRead">
+        UPDATE notifications
+        SET is_read = 1, read_at = NOW()
+        WHERE user_id = #{userId}
+          AND state = 'normal'
+          AND is_read = 0
+          AND created_at >= DATE_SUB(NOW(), INTERVAL #{months} MONTH)
+    </update>
+
+    <!-- 단건 삭제(소프트): 본인 normal 만. 0행이면 서비스가 404 -->
+    <update id="softDelete">
+        UPDATE notifications
+        SET state = 'deleted'
+        WHERE notification_id = #{toastId}
+          AND user_id = #{userId}
+          AND state = 'normal'
+    </update>
+
+    <!-- 목록 표시 기간(개월) — policy_settings 에서 로드(하드코딩 금지). 없으면 null -->
+    <select id="findListMonths" resultType="java.lang.Integer">
+        SELECT CAST(setting_value AS SIGNED)
+        FROM policy_settings
+        WHERE code = 'notification_list_months'
+    </select>
 
     <!-- 탈퇴 시 본인 알림 일괄 소프트삭제 -->
     <update id="softDeleteAllByUser">
@@ -15,5 +96,17 @@
         WHERE user_id = #{userId}
           AND state = 'normal'
     </update>
+
+    <select id="findPolicySetting" resultType="string">
+        SELECT setting_value FROM policy_settings WHERE code = #{code}
+    </select>
+
+    <!-- 보존기간 경과 알림 물리 삭제.
+         알림은 수신자 본인만 보는 UI 편의 데이터라 증적 가치가 없다 — 소프트삭제 대전제의 예외.
+         읽음/삭제(state) 여부와 무관하게 발생 시각 기준으로만 자른다 -->
+    <delete id="deleteExpiredNotifications">
+        DELETE FROM notifications
+        WHERE created_at &lt; DATE_SUB(NOW(), INTERVAL #{retentionDays} DAY)
+    </delete>
 
 </mapper>

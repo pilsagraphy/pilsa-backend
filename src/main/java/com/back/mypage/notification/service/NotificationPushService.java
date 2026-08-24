@@ -53,9 +53,17 @@ public class NotificationPushService {
      * 수신자의 모든 등록 기기로 발송.
      * 404/410 응답은 "기기가 수신을 끊었다"(알림 차단·앱 삭제·브라우저 초기화)는 뜻이므로 그 행을 즉시 정리한다
      * — 이것만 지켜도 죽은 기기가 등록부에 쌓이지 않는다.
+     *
+     * toastId 는 저장된 알림 행의 PK — 발행 측은 반드시 **알림 행을 먼저 INSERT 하고 생성된 id 를 확보한 뒤**
+     * 이 메서드를 불러야 한다. id 가 있어야 OS 알림을 누른 프론트가 읽음 API(PATCH .../toast/{toastId}/read)를
+     * 호출해 뱃지를 줄일 수 있다.
+     *
+     * 이동 정보는 targetType/targetId/boardId — 화면 경로(linkUrl)를 백엔드가 만들어 넣지 않는다.
+     * 게시판은 데이터로 정의되므로 백엔드는 프론트 라우팅을 알 수 없다. 조립은 프론트 몫.
      */
     @Async
-    public void sendToUser(Long receiverId, String title, String body, String linkUrl) {
+    public void sendToUser(Long receiverId, Long toastId, String title, String body,
+                           String targetType, Long targetId, Long boardId) {
         List<NotificationDevice> devices = deviceMapper.findByUserId(receiverId);
         if (devices.isEmpty()) {
             return;
@@ -63,11 +71,15 @@ public class NotificationPushService {
 
         byte[] payload;
         try {
-            // 프론트 Service Worker 의 push 핸들러가 그대로 showNotification 에 쓰는 형태
+            // 프론트 Service Worker 의 push 핸들러가 그대로 showNotification / 화면 경로 조립에 쓰는 형태
             Map<String, Object> json = new LinkedHashMap<>();
+            json.put("toastId", toastId);
             json.put("title", title);
             json.put("body", body != null ? body : title);
-            json.put("linkUrl", linkUrl);
+            json.put("toastId", toastId);
+            json.put("targetType", targetType);
+            json.put("targetId", targetId);
+            json.put("boardId", boardId);
             payload = objectMapper.writeValueAsString(json).getBytes(StandardCharsets.UTF_8);
         } catch (Exception e) {
             log.warn("푸시 페이로드 생성 실패 - userId: {}, {}", receiverId, e.getMessage());

@@ -51,6 +51,15 @@
                DATE_ADD(NOW(), INTERVAL CAST(COALESCE((SELECT setting_value FROM policy_settings WHERE code = 'caution_ttl_days'), '365') AS SIGNED) DAY)
     </insert>
 
+    <!-- 대상에 아직 회수되지 않은 주의 포인트가 있는지 = 관리자가 이미 삭제 조치했는지 -->
+    <select id="hasActivePenalty" resultType="boolean">
+        SELECT COUNT(*) &gt; 0
+        FROM penalty_log
+        WHERE target_type = #{targetType}
+          AND target_id = #{targetId}
+          AND voided_at IS NULL
+    </select>
+
     <!-- 대상에 걸린, 아직 회수되지 않은 주의 포인트를 복원 조치로 void 처리 -->
     <update id="voidPenaltiesByTarget">
         UPDATE penalty_log
