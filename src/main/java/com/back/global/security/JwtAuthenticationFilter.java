@@ -2,6 +2,7 @@ package com.back.global.security;
 
 import com.back.auth.exception.BannedException;
 import com.back.auth.mapper.AuthMapper;
+import com.back.stats.access.service.AccessStatsRecorder;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
@@ -35,6 +36,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
     private final AuthMapper authMapper;
+    private final AccessStatsRecorder accessStatsRecorder;
 
     @Override
     protected void doFilterInternal(@NonNull HttpServletRequest request,
@@ -134,6 +136,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
                 SecurityContextHolder.getContext().setAuthentication(auth);
+
+                // 접속 통계 — 인증이 성공한 요청만 기록한다(시간대당 1행, 비동기·실패 무해).
+                // 로그인 시점만 세면 토큰으로 계속 쓰는 세션이 통계에서 빠지므로 인증 성공 지점에 둔다.
+                accessStatsRecorder.record(userId);
             }
 
         } catch (ExpiredJwtException e) {
