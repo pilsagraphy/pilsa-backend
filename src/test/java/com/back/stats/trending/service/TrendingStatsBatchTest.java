@@ -61,8 +61,8 @@ class TrendingStatsBatchTest {
         when(statsPolicy.trendingMinScore()).thenReturn(10.0);
         when(statsPolicy.trendingSpikeRatio()).thenReturn(3.0);
         when(statsPolicy.trendingTopN()).thenReturn(5);
-        when(statsPolicy.trendingActiveUserFloor()).thenReturn(5);
-        when(statsPolicy.trendingFreshnessScaleHours()).thenReturn(24);
+        when(statsPolicy.trendingMinActiveUsers()).thenReturn(5);
+        when(statsPolicy.trendingHalflifeHours()).thenReturn(24);
         // 구간 접속자 10명 → 분모는 max(10, 하한 5) = 10
         when(statsAccessMapper.countActiveUsers(any(), any())).thenReturn(10);
     }

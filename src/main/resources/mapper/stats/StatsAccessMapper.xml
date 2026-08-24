@@ -10,6 +10,11 @@
         VALUES (#{userId}, DATE_FORMAT(NOW(), '%Y-%m-%d %H:00:00'))
     </insert>
 
+    <!-- 집계 구간의 기준 시계. 기록(NOW())과 집계가 같은 시계를 쓰게 하려고 앱 시각을 쓰지 않는다 -->
+    <select id="currentDbTime" resultType="java.time.LocalDateTime">
+        SELECT NOW()
+    </select>
+
     <select id="countActiveUsers" resultType="int">
         SELECT COUNT(DISTINCT user_id)
         FROM stats_access_hourly

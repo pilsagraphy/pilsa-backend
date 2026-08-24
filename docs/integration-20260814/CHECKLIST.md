@@ -249,8 +249,8 @@ INSERT INTO `policy_settings` (code, setting_value, description) VALUES
 ('trending_weight_view',           '1',    'raw_score 조회 가중치'),
 ('trending_weight_like',           '5',    'raw_score 좋아요 가중치'),
 ('trending_weight_comment',        '3',    'raw_score 댓글 가중치 (공개 댓글만 집계)'),
-('trending_active_user_floor',     '5',    '점수 분모 하한 — 새벽 소수 접속 구간의 점수 폭등 방지'),
-('trending_freshness_scale_hours', '24',   'freshness = 1/(1 + 글나이/이 값). 이 시간 경과 시 0.5'),
+('trending_min_active_users',      '5',    '점수 분모 하한 — 새벽 소수 접속 구간의 점수 폭등 방지'),
+('trending_halflife_hours',        '24',   'freshness = 1/(1 + 글나이/이 값). 이 시간 경과 시 0.5'),
 ('signup_stats_recalc_weeks',      '2',    '주간 가입 통계 재집계 구간(주)'),
 ('stats_retention_days',           '1825', '접속·게시글 집계 보존 일수(5년). 경과 행은 새벽 배치가 물리 삭제');
 ```

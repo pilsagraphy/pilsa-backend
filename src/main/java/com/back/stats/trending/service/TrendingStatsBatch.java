@@ -57,13 +57,17 @@ public class TrendingStatsBatch {
     /**
      * 스케줄 진입점 — 직전에 끝난 구간을 집계한다.
      *
+     * 구간 경계는 앱 시각이 아니라 <b>DB 시각</b>으로 잡는다. 접속 기록이 `NOW()` 로 찍히므로
+     * 앱 TZ 가 DB 와 다르면(EC2 기본 UTC vs DB Asia/Seoul = 9시간) 구간이 통째로 어긋나
+     * 접속자가 0으로 집계되고, 그 시차만큼의 최신 글이 후보에서 빠진다.
+     *
      * 트랜잭션을 여기에도 붙이는 이유: 아래 {@code aggregateBucket} 은 같은 빈의 메서드라 내부 호출로는
      * 프록시를 타지 않는다. 스케줄러가 프록시로 부르는 이 메서드에 경계가 있어야 실제로 한 트랜잭션이 된다.
      */
     @Transactional
     public void aggregateLatestBucket() {
         int intervalMinutes = statsPolicy.trendingIntervalMinutes();
-        LocalDateTime currentBucketStart = truncateToInterval(LocalDateTime.now(), intervalMinutes);
+        LocalDateTime currentBucketStart = truncateToInterval(statsAccessMapper.currentDbTime(), intervalMinutes);
         aggregateBucket(currentBucketStart.minusMinutes(intervalMinutes), currentBucketStart);
     }
 
@@ -85,7 +89,7 @@ public class TrendingStatsBatch {
 
         int windows = statsPolicy.trendingBaselineWindows();
         Map<Long, PostStatHistory> histories = loadHistories(candidates, bucketStart, windows);
-        int denominator = Math.max(countActiveUsers(bucketStart, bucketEnd), statsPolicy.trendingActiveUserFloor());
+        int denominator = Math.max(countActiveUsers(bucketStart, bucketEnd), statsPolicy.trendingMinActiveUsers());
 
         List<PostStatRow> rows = buildRows(candidates, histories, bucketStart, bucketEnd, windows, denominator);
         if (rows.isEmpty()) {
@@ -116,11 +120,11 @@ public class TrendingStatsBatch {
     /**
      * 구간 접속자 수 — 점수의 분모. 컬럼으로 저장하지 않고 필요할 때 집계한다.
      *
-     * access_hour 는 시간 단위로 절삭돼 있으므로, 집계 주기가 1시간보다 짧으면 구간 하한을 그 구간이 속한
-     * 정시로 내려 세야 분모가 0으로 무너지지 않는다.
+     * access_hour 가 시간 단위로 절삭돼 있어도 경계가 맞는 이유는 집계 주기가 60의 배수로 강제되기
+     * 때문이다({@link StatsPolicy#trendingIntervalMinutes()}) — 구간 경계가 항상 정시에 떨어진다.
      */
     private int countActiveUsers(LocalDateTime bucketStart, LocalDateTime bucketEnd) {
-        return statsAccessMapper.countActiveUsers(bucketStart.truncatedTo(ChronoUnit.HOURS), bucketEnd);
+        return statsAccessMapper.countActiveUsers(bucketStart, bucketEnd);
     }
 
     private List<PostStatRow> buildRows(List<TrendingCandidate> candidates,
@@ -133,7 +137,7 @@ public class TrendingStatsBatch {
         double likeWeight = statsPolicy.trendingWeightLike();
         double commentWeight = statsPolicy.trendingWeightComment();
         double minDeltaScore = statsPolicy.trendingMinDeltaScore();
-        int freshnessScaleHours = statsPolicy.trendingFreshnessScaleHours();
+        int halflifeHours = statsPolicy.trendingHalflifeHours();
 
         List<PostStatRow> rows = new ArrayList<>();
         for (TrendingCandidate candidate : candidates) {
@@ -155,7 +159,7 @@ public class TrendingStatsBatch {
             Double spikeRatio = baselineScore > 0 ? rawScore / baselineScore : null;
 
             double ageHours = Math.max(0, Duration.between(candidate.getCreatedAt(), bucketEnd).toMinutes()) / 60.0;
-            double freshness = 1.0 / (1.0 + ageHours / freshnessScaleHours);
+            double freshness = 1.0 / (1.0 + ageHours / halflifeHours);
 
             PostStatRow row = new PostStatRow();
             row.setStatHour(bucketStart);

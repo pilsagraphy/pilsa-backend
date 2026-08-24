@@ -88,13 +88,20 @@
 집계 대상은 **직전에 끝난 구간** `[현재구간시작 - interval, 현재구간시작)`이다. 진행 중인 구간은 분모(접속자 수)가
 덜 차서 구간끼리 점수를 비교할 수 없다.
 
+구간 경계는 **DB 시각**(`SELECT NOW()`)으로 잡는다. 접속 기록이 `NOW()` 로 찍히므로 앱 시계를 쓰면
+TZ가 갈릴 때(EC2 기본 UTC vs DB Asia/Seoul = 9시간) 구간이 통째로 어긋나 접속자가 0으로 집계되고
+분모가 하한에 고정되며, 그 시차만큼의 최신 글이 후보에서 빠진다. 시계는 하나만 쓴다.
+
+집계 주기는 **60의 배수만 유효**하다 — 분모를 시간 버킷 테이블에서 세기 때문에 30분·50분 주기는 구간 경계가
+정시와 어긋나 분모가 틀어진다. 배수가 아닌 값은 경고 후 60으로 되돌린다.
+
 1. **후보**: `posts.state='normal'` + `boards.state='normal' AND trending_enabled=1`
    + 글 나이 ≤ `trending_post_max_age_hours`(기본 168h). 나이·작성 시점은 **구간 종료 시각** 기준으로 판정한다.
 2. **증가분**: 그 글의 가장 최근 행(구간 시작 **이전**)의 누적값이 기준선. 첫 등장은 0으로 본다(COALESCE).
    댓글은 `state='normal' AND is_private=0`만 센다 — 블라인드·비밀댓글이 노출을 키우면 조치가 역효과를 낸다.
 3. **점수**: `raw = 조회Δ×1 + 좋아요Δ×5 + 댓글Δ×3`,
-   `final = raw / MAX(구간 접속자수, trending_active_user_floor) × freshness`,
-   `freshness = 1 / (1 + 글나이시간 / trending_freshness_scale_hours)`.
+   `final = raw / MAX(구간 접속자수, trending_min_active_users) × freshness`,
+   `freshness = 1 / (1 + 글나이시간 / trending_halflife_hours)`.
 4. **적재 컷**: `raw < trending_min_delta_score`(기본 5)면 **행을 만들지 않는다**. 누적값을 행에 저장하므로
    건너뛴 증가분은 다음 적재 행에서 전부 잡힌다(손실 없음).
 5. **baseline**: 직전 `trending_baseline_windows`(6)개 구간 `raw_score`의 **SUM/N**.
@@ -136,7 +143,7 @@
 
 | code | 기본 | 뜻 |
 |------|------|-----|
-| `trending_interval_minutes` | 60 | 집계 주기(분). 다음 실행부터 반영 |
+| `trending_interval_minutes` | 60 | 집계 주기(분). **60의 배수만 유효**(아니면 경고 후 60). 다음 실행부터 반영 |
 | `trending_post_max_age_hours` | 168 | 후보 최대 글 나이 |
 | `trending_min_delta_score` | 5 | 적재 컷 |
 | `trending_baseline_windows` | 6 | 평소 수준 산출 구간 수 |
@@ -144,8 +151,8 @@
 | `trending_spike_ratio` | 3.0 | 관문2 |
 | `trending_top_n` | 5 | 관문3 |
 | `trending_weight_view` / `_like` / `_comment` | 1 / 5 / 3 | raw_score 가중치 |
-| `trending_active_user_floor` | 5 | 점수 분모 하한 |
-| `trending_freshness_scale_hours` | 24 | freshness 감쇠 기준 |
+| `trending_min_active_users` | 5 | 점수 분모 하한 |
+| `trending_halflife_hours` | 24 | freshness 반감기 — 이 시간 경과 시 0.5 |
 | `signup_stats_recalc_weeks` | 2 | 가입 재집계 구간(주) |
 | `stats_retention_days` | 1825 | 접속·게시글 집계 보존 일수 |
 
@@ -172,6 +179,8 @@
 - `./gradlew compileJava` 통과.
 - `TrendingStatsBatchTest` (DB 없이 매퍼 대역) — 적재 컷 / 첫 등장 spike NULL 면제 / baseline=SUM/N /
   관문2 탈락 / top_n 초과 탈락 / 후보 없음 시 미적재 4케이스 통과.
+- `StatsPolicyTest` — 조회 실패·파싱 실패·빈 값·행 없음이 모두 기본값으로 흡수되는지(스케줄이 죽지 않게),
+  집계 주기가 60의 배수만 통과하는지 4케이스 통과.
 - **실DB 기동 검증은 미실시** — 접속 기록 1행 생성, 급상승 배치 1구간 적재, 주간 가입 UPSERT 멱등,
   정리 배치 삭제 건수는 QA 기동 후 확인이 필요하다(§7).
 
