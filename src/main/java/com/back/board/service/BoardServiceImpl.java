@@ -7,6 +7,7 @@ import com.back.board.exception.BoardException;
 import com.back.board.mapper.BoardMapper;
 import com.back.global.security.AuthUtils;
 import com.back.global.util.FileStorageUtil;
+import com.back.global.util.PageUtils;
 import com.back.mypage.notification.dto.NotificationType;
 import com.back.mypage.notification.service.NotificationPublisher;
 import lombok.RequiredArgsConstructor;
@@ -75,13 +76,17 @@ public class BoardServiceImpl implements BoardService {
     public BoardPageResponse getPostList(Long boardId, int page, int size, Long categoryId, String keyword, String sort) {
         boardPolicyService.requireReadable(boardId);
 
+        // 보정하지 않으면 ?size=-1 이 LIMIT -1 로, 큰 page 는 넘친 OFFSET 음수로 나가 둘 다 500 이 된다
+        page = PageUtils.clampPage(page);
+        size = PageUtils.clampSize(size);
+
         int totalCount = boardMapper.countPosts(boardId, categoryId, keyword);
         int totalPages = (int) Math.ceil((double) totalCount / size);
 
         // 글이 없는 게시판도 정상 상태다 (새로 만든 게시판은 항상 0건) → 빈 목록으로 응답
         List<BoardListResponse> posts = totalCount == 0
                 ? List.of()
-                : boardMapper.findAllPosts(boardId, categoryId, (page - 1) * size, size, keyword, sort);
+                : boardMapper.findAllPosts(boardId, categoryId, PageUtils.offset(page, size), size, keyword, sort);
 
         BoardPageResponse response = new BoardPageResponse();
         response.setTotalPages(totalPages);
