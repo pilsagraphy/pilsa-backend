@@ -2,12 +2,11 @@ package com.back.admin.common;
 
 import com.back.global.exception.BaseException;
 import com.back.global.security.AuthUtils;
+import com.back.global.util.PageUtils;
 
 // 관리자 서비스 공통 헬퍼 (인증 주체 추출, 일괄 실패 메시지, 페이지 파라미터 보정, LIKE 이스케이프).
 // 상태를 갖지 않는 정적 유틸. 관리자 화면(게시글·댓글·신고/제재·대시보드)이 공유한다.
 public final class AdminServiceSupport {
-
-    private static final int MAX_PAGE_SIZE = 100;
 
     private AdminServiceSupport() {
     }
@@ -22,17 +21,14 @@ public final class AdminServiceSupport {
         return (e instanceof BaseException) ? e.getMessage() : "처리 중 오류가 발생했습니다.";
     }
 
-    // 페이지 번호 보정 (1 미만 방지 → 음수 OFFSET 오류 예방)
+    // 페이지 번호 보정 — 회원 화면도 같은 보정이 필요해 global.util.PageUtils 로 옮겼다
     public static int clampPage(int page) {
-        return Math.max(1, page);
+        return PageUtils.clampPage(page);
     }
 
-    // 페이지 크기 보정 (1 ~ MAX_PAGE_SIZE)
+    // 페이지 크기 보정 (1 ~ PageUtils.MAX_PAGE_SIZE)
     public static int clampSize(int size) {
-        if (size < 1) {
-            return 1;
-        }
-        return Math.min(size, MAX_PAGE_SIZE);
+        return PageUtils.clampSize(size);
     }
 
     // LIKE 검색어 이스케이프: 사용자가 입력한 % _ \ 를 리터럴로 취급하도록 백슬래시 이스케이프.

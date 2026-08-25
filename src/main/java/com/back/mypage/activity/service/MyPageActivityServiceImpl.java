@@ -1,6 +1,7 @@
 package com.back.mypage.activity.service;
 
 import com.back.global.security.AuthUtils;
+import com.back.global.util.PageUtils;
 import com.back.mypage.activity.dto.MyCommentPageResponse;
 import com.back.mypage.activity.dto.MyCommentRow;
 import com.back.mypage.activity.dto.MyPostPageResponse;
@@ -22,34 +23,34 @@ public class MyPageActivityServiceImpl implements MyPageActivityService {
     @Override
     public MyPostPageResponse getMyPosts(int page, int size, Long boardId, String keyword, String sort) {
         Long userId = AuthUtils.currentUserId();
+        page = PageUtils.clampPage(page);
+        size = PageUtils.clampSize(size);
         long totalCount = mapper.countMyPosts(userId, boardId, keyword);
-        List<MyPostRow> posts = mapper.findMyPosts(userId, boardId, keyword, sort, offset(page, size), size);
+        List<MyPostRow> posts = mapper.findMyPosts(userId, boardId, keyword, sort, PageUtils.offset(page, size), size);
         return new MyPostPageResponse(totalPages(totalCount, size), totalCount, posts);
     }
 
     @Override
     public MyCommentPageResponse getMyComments(int page, int size, Long boardId, String keyword) {
         Long userId = AuthUtils.currentUserId();
+        page = PageUtils.clampPage(page);
+        size = PageUtils.clampSize(size);
         long totalCount = mapper.countMyComments(userId, boardId, keyword);
-        List<MyCommentRow> comments = mapper.findMyComments(userId, boardId, keyword, offset(page, size), size);
+        List<MyCommentRow> comments = mapper.findMyComments(userId, boardId, keyword, PageUtils.offset(page, size), size);
         return new MyCommentPageResponse(totalPages(totalCount, size), totalCount, comments);
     }
 
     @Override
     public MyPostPageResponse getMyLikedPosts(int page, int size, Long boardId, String keyword, String sort) {
         Long userId = AuthUtils.currentUserId();
+        page = PageUtils.clampPage(page);
+        size = PageUtils.clampSize(size);
         long totalCount = mapper.countMyLikedPosts(userId, boardId, keyword);
-        List<MyPostRow> posts = mapper.findMyLikedPosts(userId, boardId, keyword, sort, offset(page, size), size);
+        List<MyPostRow> posts = mapper.findMyLikedPosts(userId, boardId, keyword, sort, PageUtils.offset(page, size), size);
         return new MyPostPageResponse(totalPages(totalCount, size), totalCount, posts);
     }
 
-    // page(1-base)·size 정규화 후 offset 계산
-    private int offset(int page, int size) {
-        return (Math.max(page, 1) - 1) * Math.max(size, 1);
-    }
-
     private int totalPages(long totalCount, int size) {
-        int s = Math.max(size, 1);
-        return (int) ((totalCount + s - 1) / s); // ceil
+        return (int) ((totalCount + size - 1) / size); // ceil
     }
 }

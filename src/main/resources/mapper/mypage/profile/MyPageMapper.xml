@@ -2,6 +2,17 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.back.mypage.profile.mapper.MyPageMapper">
 
+    <!-- ============================================================
+         마이페이지 상단 지표 6개.
+         이 숫자를 누르면 활동 목록(/api/user/mypage/posts|comments|likes)이 뜨므로
+         목록과 세는 기준이 같아야 한다 — 어긋나면 "댓글 87 눌렀는데 85건" 이 된다.
+         공통 기준: 관련 행이 전부 살아 있어야 센다.
+          - 내 글/댓글 자신이 state='normal'
+          - 댓글은 원글도 state='normal'  (숨긴 글의 댓글을 세면 숨긴 의미가 없다)
+          - 소속 게시판도 state='normal'  (삭제된 게시판 글은 눌러도 404)
+         게시판 read_scope 는 적용하지 않는다 — 졸업 후에도 내 활동은 전부 센다(PM 2026-08-25).
+         ============================================================ -->
+
     <select id="findBasicInfo" resultType="com.back.mypage.profile.dto.MyPageBasicInfoRow">
         SELECT login_id AS loginId, name, created_at AS joinedAt
         FROM users
@@ -10,36 +21,55 @@
 
     <select id="countMyPosts" resultType="int">
         SELECT COUNT(*)
-        FROM posts
-        WHERE user_id = #{userId} AND state = 'normal'
+        FROM posts p
+        INNER JOIN boards b ON p.board_id = b.board_id
+        WHERE p.user_id = #{userId}
+          AND p.state = 'normal'
+          AND b.state = 'normal'
     </select>
 
     <select id="countMyComments" resultType="int">
         SELECT COUNT(*)
-        FROM comments
-        WHERE user_id = #{userId} AND state = 'normal'
+        FROM comments cm
+        INNER JOIN posts p  ON cm.post_id = p.post_id
+        INNER JOIN boards b ON p.board_id = b.board_id
+        WHERE cm.user_id = #{userId}
+          AND cm.state = 'normal'
+          AND p.state  = 'normal'
+          AND b.state  = 'normal'
     </select>
 
     <!-- post_likes 는 소프트삭제 예외(좋아요 토글=행 삭제) -->
     <select id="countMyLikedPosts" resultType="int">
         SELECT COUNT(*)
         FROM post_likes pl
-        INNER JOIN posts p ON pl.post_id = p.post_id
-        WHERE pl.user_id = #{userId} AND p.state = 'normal'
+        INNER JOIN posts p  ON pl.post_id = p.post_id
+        INNER JOIN boards b ON p.board_id = b.board_id
+        WHERE pl.user_id = #{userId}
+          AND p.state = 'normal'
+          AND b.state = 'normal'
     </select>
 
     <select id="countMyPostsInPeriod" resultType="int">
         SELECT COUNT(*)
-        FROM posts
-        WHERE user_id = #{userId} AND state = 'normal'
-          AND created_at &gt;= #{from} AND created_at &lt; #{to}
+        FROM posts p
+        INNER JOIN boards b ON p.board_id = b.board_id
+        WHERE p.user_id = #{userId}
+          AND p.state = 'normal'
+          AND b.state = 'normal'
+          AND p.created_at &gt;= #{from} AND p.created_at &lt; #{to}
     </select>
 
     <select id="countMyCommentsInPeriod" resultType="int">
         SELECT COUNT(*)
-        FROM comments
-        WHERE user_id = #{userId} AND state = 'normal'
-          AND created_at &gt;= #{from} AND created_at &lt; #{to}
+        FROM comments cm
+        INNER JOIN posts p  ON cm.post_id = p.post_id
+        INNER JOIN boards b ON p.board_id = b.board_id
+        WHERE cm.user_id = #{userId}
+          AND cm.state = 'normal'
+          AND p.state  = 'normal'
+          AND b.state  = 'normal'
+          AND cm.created_at &gt;= #{from} AND cm.created_at &lt; #{to}
     </select>
 
     <!-- 이번 학기 '동안 눌린' 좋아요를 센다 — 기준은 post_likes.created_at('좋아요 누른 일시').
@@ -48,7 +78,10 @@
         SELECT COUNT(*)
         FROM posts p
         INNER JOIN post_likes pl ON pl.post_id = p.post_id
-        WHERE p.user_id = #{userId} AND p.state = 'normal'
+        INNER JOIN boards b      ON p.board_id = b.board_id
+        WHERE p.user_id = #{userId}
+          AND p.state = 'normal'
+          AND b.state = 'normal'
           AND pl.created_at &gt;= #{from} AND pl.created_at &lt; #{to}
     </select>
 

@@ -6,7 +6,10 @@
          마이페이지 활동 목록 (내 글 / 내 댓글 / 좋아요 누른 글)
          공통 규칙:
           - state='normal' 만 노출 (블라인드·삭제 제외 — 학생 화면 대전제)
-          - 졸업 후에도 전부 노출 (재학/졸업 시점 컬럼이 없어 "재학생 때만" 필터 불가)
+          - 삭제된 게시판(boards.state='deleted')의 글도 제외 — 눌러도 게시판을 못 찾아 404 라
+            목록에 남길 이유가 없다. count/find 양쪽에 같은 조건을 걸어 개수가 어긋나지 않게 한다.
+          - 게시판 read_scope 는 적용하지 않는다 — 졸업해서 열람권한이 사라진 게시판이라도
+            내 활동 이력은 그대로 노출한다(PM 2026-08-25). 본문 열람은 requireReadable 이 막는다.
           - 필터: boardId(선택) / keyword(선택), 정렬: sort(created|viewCount)
          ============================================================ -->
 
@@ -24,6 +27,7 @@
         INNER JOIN boards b ON p.board_id = b.board_id
         WHERE p.user_id = #{userId}
           AND p.state = 'normal'
+          AND b.state = 'normal'
         <if test="boardId != null">AND p.board_id = #{boardId}</if>
         <if test="keyword != null and keyword != ''">
             AND (p.title LIKE CONCAT('%', #{keyword}, '%')
@@ -40,8 +44,10 @@
     <select id="countMyPosts" resultType="long">
         SELECT COUNT(*)
         FROM posts p
+        INNER JOIN boards b ON p.board_id = b.board_id
         WHERE p.user_id = #{userId}
           AND p.state = 'normal'
+          AND b.state = 'normal'
         <if test="boardId != null">AND p.board_id = #{boardId}</if>
         <if test="keyword != null and keyword != ''">
             AND (p.title LIKE CONCAT('%', #{keyword}, '%')
@@ -60,10 +66,12 @@
             p.board_id    AS boardId,
             p.title       AS postTitle
         FROM comments cm
-        INNER JOIN posts p ON cm.post_id = p.post_id
+        INNER JOIN posts p  ON cm.post_id = p.post_id
+        INNER JOIN boards b ON p.board_id = b.board_id
         WHERE cm.user_id = #{userId}
           AND cm.state = 'normal'
           AND p.state  = 'normal'
+          AND b.state  = 'normal'
         <if test="boardId != null">AND p.board_id = #{boardId}</if>
         <if test="keyword != null and keyword != ''">
             AND (cm.content LIKE CONCAT('%', #{keyword}, '%')
@@ -76,10 +84,12 @@
     <select id="countMyComments" resultType="long">
         SELECT COUNT(*)
         FROM comments cm
-        INNER JOIN posts p ON cm.post_id = p.post_id
+        INNER JOIN posts p  ON cm.post_id = p.post_id
+        INNER JOIN boards b ON p.board_id = b.board_id
         WHERE cm.user_id = #{userId}
           AND cm.state = 'normal'
           AND p.state  = 'normal'
+          AND b.state  = 'normal'
         <if test="boardId != null">AND p.board_id = #{boardId}</if>
         <if test="keyword != null and keyword != ''">
             AND (cm.content LIKE CONCAT('%', #{keyword}, '%')
@@ -103,6 +113,7 @@
         INNER JOIN boards b ON p.board_id = b.board_id
         WHERE pl.user_id = #{userId}
           AND p.state = 'normal'
+          AND b.state = 'normal'
         <if test="boardId != null">AND p.board_id = #{boardId}</if>
         <if test="keyword != null and keyword != ''">
             AND (p.title LIKE CONCAT('%', #{keyword}, '%')
@@ -119,9 +130,11 @@
     <select id="countMyLikedPosts" resultType="long">
         SELECT COUNT(*)
         FROM post_likes pl
-        INNER JOIN posts p ON pl.post_id = p.post_id
+        INNER JOIN posts p  ON pl.post_id = p.post_id
+        INNER JOIN boards b ON p.board_id = b.board_id
         WHERE pl.user_id = #{userId}
           AND p.state = 'normal'
+          AND b.state = 'normal'
         <if test="boardId != null">AND p.board_id = #{boardId}</if>
         <if test="keyword != null and keyword != ''">
             AND (p.title LIKE CONCAT('%', #{keyword}, '%')

@@ -8,6 +8,7 @@ import com.back.admin.sanction.dto.ReportedItemResponse;
 import com.back.admin.sanction.exception.ReportAdminException;
 import com.back.admin.sanction.mapper.ReportAdminMapper;
 import com.back.global.security.AuthUtils;
+import com.back.global.util.PageUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -54,7 +55,7 @@ public class ReportAdminServiceImpl implements ReportAdminService {
         keyword = AdminServiceSupport.escapeLike(keyword);  // LIKE 와일드카드(%,_) 리터럴화
         int totalCount = reportAdminMapper.countReportedPosts(state, keyword, boardId);
         int totalPages = (int) Math.ceil((double) totalCount / size);
-        int offset = (page - 1) * size;
+        int offset = PageUtils.offset(page, size);
         List<ReportedItemResponse> items = reportAdminMapper.findReportedPosts(state, keyword, boardId, sort, offset, size);
         return toPage(totalPages, totalCount, items);
     }
@@ -68,7 +69,7 @@ public class ReportAdminServiceImpl implements ReportAdminService {
         keyword = AdminServiceSupport.escapeLike(keyword);  // LIKE 와일드카드(%,_) 리터럴화
         int totalCount = reportAdminMapper.countReportedComments(state, keyword, boardId);
         int totalPages = (int) Math.ceil((double) totalCount / size);
-        int offset = (page - 1) * size;
+        int offset = PageUtils.offset(page, size);
         List<ReportedItemResponse> items = reportAdminMapper.findReportedComments(state, keyword, boardId, sort, offset, size);
         return toPage(totalPages, totalCount, items);
     }

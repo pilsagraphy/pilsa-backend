@@ -7,6 +7,7 @@ import com.back.admin.post.dto.AdminPostPageResponse;
 import com.back.admin.post.exception.AdminPostException;
 import com.back.admin.post.mapper.AdminPostMapper;
 import com.back.global.security.AuthUtils;
+import com.back.global.util.PageUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -31,7 +32,7 @@ public class AdminPostServiceImpl implements AdminPostService {
         int totalCount = adminPostMapper.countPosts(boardId, keyword);
         int totalPages = (int) Math.ceil((double) totalCount / size);
 
-        int offset = (page - 1) * size;
+        int offset = PageUtils.offset(page, size);
         List<AdminPostListResponse> posts = adminPostMapper.findPosts(boardId, keyword, offset, size);
 
         AdminPostPageResponse response = new AdminPostPageResponse();
