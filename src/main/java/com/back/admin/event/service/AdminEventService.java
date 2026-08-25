@@ -35,12 +35,20 @@ public class AdminEventService {
         }
     }
 
+    // 카테고리 유효성 검증 — event_categories 에 등록된 값만 허용 (자유 입력 폐지)
+    private void validateCategory(String category) {
+        if (category != null && !category.isBlank() && !adminEventMapper.existsEventCategory(category)) {
+            throw new EventException("유효하지 않은 일정 카테고리입니다. (GET /api/event/categories 참고)", HttpStatus.BAD_REQUEST);
+        }
+    }
+
     @Transactional
     public EventResponse createEvent(EventRequest request) {
         checkAdminRole();
 
         // 날짜 선후 관계 검증
         validateExecutionDates(request.getStartDate(), request.getEndDate());
+        validateCategory(request.getCategory());
 
         // 등록 시에는 ERD 구조상 누가 등록했는지(user_id)가 필요하므로 가져옴
         Long userId = AuthUtils.currentUserId();
@@ -68,6 +76,7 @@ public class AdminEventService {
     @Transactional
     public EventResponse updateEvent(Long eventId, EventUpdateRequest request) {
         checkAdminRole(); // 권한만 확인
+        validateCategory(request.getCategory());
 
         int updated = adminEventMapper.updateEvent(eventId, request);
         if (updated == 0) {

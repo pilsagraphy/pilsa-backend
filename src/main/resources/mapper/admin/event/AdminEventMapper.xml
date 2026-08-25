@@ -43,4 +43,12 @@
         WHERE event_id = #{eventId} AND state = 'normal'
     </update>
 
+    <!-- 카테고리 유효성 검증용 (event_categories 가 events.category 값의 정본) -->
+    <select id="existsEventCategory" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1 FROM event_categories
+            WHERE name = #{name} AND is_active = 1
+        )
+    </select>
+
 </mapper>

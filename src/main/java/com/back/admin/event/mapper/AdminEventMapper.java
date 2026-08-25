@@ -20,4 +20,7 @@ public interface AdminEventMapper {
 
     // 3. 일정 삭제 (소프트)
     int deleteEvent(@Param("eventId") Long eventId);
+
+    // 4. 카테고리 유효성 (등록/수정 시 event_categories 에 있는 값만 허용)
+    boolean existsEventCategory(@Param("name") String name);
 }

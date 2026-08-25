@@ -44,4 +44,25 @@
         ORDER BY start_at ASC
     </select>
 
+    <select id="findEventById" resultType="com.back.event.dto.EventDataResponse">
+        SELECT
+            event_id AS eventId,
+            title,
+            category,
+            description,
+            DATE_FORMAT(start_at, '%Y-%m-%d') AS startDate,
+            DATE_FORMAT(end_at, '%Y-%m-%d') AS endDate
+        FROM events
+        WHERE event_id = #{eventId} AND state = 'normal'
+    </select>
+
+    <!-- 일정 카테고리 목록 (event_categories 가 events.category 값의 정본) -->
+    <select id="findActiveEventCategories" resultType="com.back.event.dto.EventCategoryResponse">
+        SELECT event_category_id AS eventCategoryId,
+               name
+        FROM event_categories
+        WHERE is_active = 1
+        ORDER BY display_order ASC, event_category_id ASC
+    </select>
+
 </mapper>
