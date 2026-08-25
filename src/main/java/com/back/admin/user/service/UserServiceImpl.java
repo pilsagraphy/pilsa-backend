@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import com.back.global.security.AuthUtils;
+import com.back.global.util.PageUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -72,7 +73,7 @@ public class UserServiceImpl implements UserService {
         // 검색 결과가 없으면(회원 0명) 빈 목록을 그대로 반환 - 관리자 화면이므로 에러로 막지 않음
         List<UserListResponse> users = totalCount == 0
                 ? List.of()
-                : userMapper.findUsers(keyword, sort, (page - 1) * size, size);
+                : userMapper.findUsers(keyword, sort, PageUtils.offset(page, size), size);
 
         UserPageResponse response = new UserPageResponse();
         response.setTotalPages(totalPages);

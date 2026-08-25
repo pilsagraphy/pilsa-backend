@@ -31,14 +31,16 @@ public final class PageUtils {
     }
 
     /**
-     * OFFSET 계산. clampPage 에는 상한이 없어 큰 page 가 들어오면 int 곱셈이 넘치므로
-     * long 으로 계산한 뒤 상한을 씌운다 — 데이터 범위를 넘은 페이지는 500 이 아니라 빈 목록이 된다.
+     * OFFSET 계산. page 에 상한이 없어 큰 값이 오면 int 곱셈이 넘치므로 long 으로 계산한 뒤
+     * 상한을 씌운다 — 데이터 범위를 넘은 페이지는 500 이 아니라 빈 목록이 된다.
      * (OFFSET 2147483647 은 MySQL 이 정상 수용한다)
      *
-     * page·size 는 clampPage/clampSize 를 통과한 값을 넘겨야 한다.
+     * 여기서 size 는 1 미만만 막고 MAX_PAGE_SIZE 로 깎지 않는다. 깎으면 LIMIT 에 쓰는 size 와
+     * 기준이 달라져(LIMIT 200 인데 OFFSET 은 100 기준) 페이지가 겹친다.
+     * 상한을 둘지는 호출부가 clampSize 로 결정하고, 그 값을 그대로 넘겨야 한다.
      */
     public static int offset(int page, int size) {
-        long offset = (long) (clampPage(page) - 1) * clampSize(size);
+        long offset = (long) (clampPage(page) - 1) * Math.max(1, size);
         return (int) Math.min(offset, Integer.MAX_VALUE);
     }
 }

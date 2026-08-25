@@ -5,6 +5,7 @@ import com.back.admin.comment.dto.AdminCommentPageResponse;
 import com.back.admin.comment.mapper.AdminCommentMapper;
 import com.back.admin.common.AdminServiceSupport;
 import com.back.global.security.AuthUtils;
+import com.back.global.util.PageUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,7 +29,7 @@ public class AdminCommentServiceImpl implements AdminCommentService {
         int totalCount = adminCommentMapper.countComments(boardId, keyword);
         int totalPages = (int) Math.ceil((double) totalCount / size);
 
-        int offset = (page - 1) * size;
+        int offset = PageUtils.offset(page, size);
         List<AdminCommentListResponse> comments = adminCommentMapper.findComments(boardId, keyword, offset, size);
 
         AdminCommentPageResponse response = new AdminCommentPageResponse();
