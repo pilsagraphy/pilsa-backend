@@ -22,6 +22,8 @@ com.back
 │                   #   알림 발행·알림함 API 는 담당자 과제로 비워둠(HANDOFF-notification-tasks.md)
 ├── event           # 일정 조회(회원 달력, 공개) + 구글 캘린더 구독 피드(/api/event/calendar.ics)
 ├── donation        # 명예의전당 (donations)
+├── stats           # 통계 — 접속 기록(JWT 필터 훅) + 급상승 집계·주간 가입·보존기간 정리 배치.
+│                   #   수집·집계만 있고 조회 API 는 아직 없다 (docs/integration-20260814/SPEC-stats.md)
 ├── admin           # 관리자 화면 전용 도메인
 │   ├── common      # AdminServiceSupport (페이지 보정·LIKE 이스케이프 등 관리자 화면 공용 헬퍼)
 │   ├── event       # 일정 등록/수정/삭제 (AdminEventMapper — 관리 쿼리는 자기 패키지 소유)
@@ -88,6 +90,29 @@ com.back
   회원가입·비밀번호 초기화는 **서버가 이메일 인증 통과 플래그(policy_settings.mail_verified_ttl_minutes, 기본 30분, 1회용)를 직접 검증**한다 — 프론트 검증만으로는 API 직접 호출을 못 막는다.
   활동·제재 이력이 전혀 없는 탈퇴 행은 **90일 후 새벽 배치(04:30)가 물리 삭제**(policy_settings.withdrawn_purge_days) —
   글 있는 탈퇴자 행은 작성자 표기('탈퇴한 회원') 조인 때문에, 제재 이력 행은 재가입 차단 근거라서 남긴다.
+
+### 통계는 원본 하나에서 파생시킨다 (수집·집계만, 조회 API 는 아직 없음)
+- 접속 원본은 `stats_access_hourly`(user_id + 시간버킷) **하나**뿐이다. 일·주·월·학기·연 통계는 전부 이 테이블
+  GROUP BY 로 만든다 — 단위별 집계 테이블·배치는 데이터가 수억 행일 때 얘기다. 기록 지점은
+  `JwtAuthenticationFilter` 인증 성공 직후(`AccessStatsRecorder`, INSERT IGNORE 로 시간대당 1행). 로그아웃은 기록하지 않는다.
+- 급상승은 `stats_post_hourly` 한 테이블에서 끝난다: 누적값을 집계 행에 저장해 다음 구간의 기준선으로 쓰고,
+  접속자 수는 저장하지 않고 필요할 때 원본에서 센다 → 스냅샷·구간 테이블이 필요 없다.
+- **가입 통계만 스냅샷**(`stats_signup_weekly`)이다. 탈퇴 행 정리 배치가 users 를 물리 삭제해 과거 수치가
+  소급 감소하고 member_type 도 졸업 시 바뀌므로, 지금 고정하지 않으면 되돌릴 수 없다.
+- 배치는 **재실행 안전**해야 한다: 기준선은 구간 시작 **이전** 행만 보고, 후보 조건은 wall clock 이 아니라
+  구간 종료 시각으로 판정하고, 적재는 PK upsert, 동점 순위는 post_id 로 확정한다.
+- **적재 컷**(`trending_min_delta_score`) 미달 구간은 행을 만들지 않는다. 누적값을 행에 저장하므로 건너뛴
+  증가분은 다음 행에서 전부 잡힌다(손실 없음). baseline 은 행 평균(AVG) 금지 — 직전 N구간 `SUM/N` 이다
+  (조용한 구간엔 행이 없어 AVG 는 평소 수준을 과대평가한다).
+- 급상승 판정은 3관문 전부 통과: `raw_score >= trending_min_score` / `spike_ratio >= trending_spike_ratio`
+  (NULL=이력 없음이면 면제) / `rank_no <= trending_top_n`. 댓글은 `state='normal' AND is_private=0` 만 센다.
+- 수치는 전부 `policy_settings`(`StatsPolicy`)에서 읽고, 코드에는 행이 없을 때의 기본값만 둔다. 집계 주기도
+  정책이라 `@Scheduled` 상수가 아니라 `TrendingScheduleConfig` 의 트리거가 매 실행마다 다시 읽는다.
+- **급상승 알림은 발송하지 않는다**(1차 미구현, PM 확정) — 통계 코드는 notifications 를 건드리지 않는다.
+- 통계 조회 API 를 만들 때는 **권한 필터가 필수**다: `admin_level >= 1` 이거나 `read_scope='MEMBER'` 또는
+  `read_scope = member_type`. 그래서 집계 행에 `read_scope` 스냅샷을 남겨 뒀다(boards 재조인 없이 필터 가능).
+- 배치 순번: 04:00 제재 캐시 → 04:30 탈퇴 행 → 04:40 알림 → **04:50 주간 가입** → **05:00 통계 정리**.
+  급상승만 시간 주기(기본 60분)다.
 
 ## 주의사항
 - `users.role`/`status` 컬럼은 **DB에서 제거됨** — 참조 시 런타임 SQL 오류.

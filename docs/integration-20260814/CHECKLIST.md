@@ -248,76 +248,77 @@ CREATE TABLE `notification_devices` (
   CONSTRAINT `fk_notification_devices_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='알림 수신 기기 등록부 (웹 푸시. 세션성 데이터 — 물리 삭제 허용)';
 
--- [2026-08-19] 세션 무효화용 토큰 버전 (PM 승인). 리프레시가 무상태 JWT 라 발급 후 취소가 불가능했고,
--- 자동 로그인이 400일짜리라 비밀번호를 바꿔도 탈취된 토큰이 살아 있는 구멍이 있었다.
--- 이 값이 바뀌면 그 사용자의 기존 액세스·리프레시 토큰이 전부 무효가 된다.
--- 올라가는 시점: 비밀번호 초기화(updatePassword 쿼리가 함께 +1) / PATCH /api/user/mypage/logout-all.
--- 탈퇴·차단은 JwtAuthenticationFilter 가 매 요청 DB 를 봐서 이미 즉시 막으므로 이 값과 무관하다.
--- 기본값 0 + 구 토큰의 ver claim 부재를 0 으로 읽어, 배포 시점에 살아 있던 세션은 끊기지 않는다.
-ALTER TABLE `users`
-  ADD COLUMN `token_version` int NOT NULL DEFAULT 0 COMMENT '세션 무효화용 토큰 버전 — 올리면 그 회원의 기존 토큰 전부 무효';
 
--- [2026-08-23] 리치 에디터 선업로드 (백로그 A-4, 명세 id 13·147). 에디터에 이미지를 넣는 순간
--- 화면에 보여줄 URL이 필요하므로 파일이 글보다 먼저 존재한다 → post_id 를 nullable 로 바꾸고,
--- 그 상태의 소유자 판정 근거로 uploader_id 를 둔다(새 테이블 없음. SPEC-A5 §6-6 의 usage_type 안 채택).
--- FK 는 걸지 않았다: 탈퇴 행 물리삭제 배치(withdrawn_purge_days)가 미연결 파일 때문에 실패하는 일을 막기 위함.
-ALTER TABLE `attachments`
-  MODIFY COLUMN `post_id` bigint NULL COMMENT '게시글 고유 번호 (NULL = 아직 글에 연결되지 않은 선업로드 파일)',
-  ADD COLUMN `uploader_id` bigint NULL COMMENT '업로더 user_id — 선업로드 파일 소유자 판정·정리 배치 기준' AFTER `post_id`,
-  ADD COLUMN `usage_type` varchar(20) NOT NULL DEFAULT 'attachment'
-    COMMENT 'attachment=첨부목록 노출 / inline=본문 삽입 이미지' AFTER `file_type`;
--- 기존 18행 백필 후 NOT NULL 로 조인다 (컬럼명은 usage 가 아니라 usage_type — USAGE 는 MySQL 예약어)
-UPDATE `attachments` a JOIN `posts` p ON a.post_id = p.post_id
-   SET a.uploader_id = p.user_id WHERE a.uploader_id IS NULL;
-ALTER TABLE `attachments`
-  MODIFY COLUMN `uploader_id` bigint NOT NULL COMMENT '업로더 user_id — 선업로드 파일 소유자 판정·정리 배치 기준',
-  ADD KEY `idx_attachments_pending` (`uploader_id`, `post_id`, `created_at`);
+-- [2026-08-18] 통계 3종 (PM 적용 완료 — 아래는 적용된 정본 기록).
+--   설계 요점: 스냅샷·구간 테이블을 따로 두지 않는다. 누적값은 집계 행에, 접속자 수는 원본에서 얻는다.
+--   접속은 단위별 테이블 없이 stats_access_hourly 하나를 GROUP BY 해 일·주·월·학기·연을 만든다.
+--   가입만 스냅샷을 남긴다 — 탈퇴 90일 정리 배치가 users 행을 물리 삭제해 과거 수치가 소급 감소하고,
+--   member_type 도 졸업 시 바뀌기 때문에 지금 고정하지 않으면 소실된다.
+CREATE TABLE `stats_access_hourly` (
+  `user_id`     bigint   NOT NULL COMMENT '접속 회원 (FK 없음 — 탈퇴 후에도 통계 보존)',
+  `access_hour` datetime NOT NULL COMMENT '시간 버킷 (분·초 절삭, 예: 2026-08-18 21:00:00)',
+  PRIMARY KEY (`user_id`,`access_hour`),
+  KEY `idx_stats_access_hourly_hour` (`access_hour`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='회원 접속 기록 (시간 버킷당 1행)';
 
-INSERT INTO `policy_settings` (`code`, `setting_value`, `description`) VALUES
- ('upload_image_extensions', 'jpg,jpeg,png,gif,webp,bmp',
-  '본문 삽입 이미지 허용 확장자 (svg 제외 — 인라인 스크립트 실행 위험)'),
- ('upload_file_extensions', 'pdf,doc,docx,xls,xlsx,ppt,pptx,txt,csv,md,zip,hwp,hwpx',
-  '첨부 허용 확장자 (이미지 외). 목록에 없는 확장자는 400'),
- ('pending_upload_purge_hours', '24',
-  '글에 연결되지 않은 선업로드 파일 보존 시간 — 경과 시 새벽 배치(04:50)가 물리 삭제');
+CREATE TABLE `stats_signup_weekly` (
+  `stat_week`     date     NOT NULL COMMENT '주 시작일(월요일)',
+  `signup_count`  int      NOT NULL DEFAULT 0 COMMENT '신규가입 수 (탈퇴자 포함 — 가입 사실은 변하지 않는다)',
+  `student_count` int      NOT NULL DEFAULT 0 COMMENT '그중 재학생 (집계 시점 member_type 스냅샷)',
+  `alumni_count`  int      NOT NULL DEFAULT 0 COMMENT '그중 졸업생',
+  `captured_at`   datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '이 행을 집계한 시각',
+  PRIMARY KEY (`stat_week`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='주간 신규가입 통계 (8주치 백필 완료)';
 
--- [2026-08-23] 게시판 임시저장(Draft) — SPEC-A5, PR #83 통합본. drafts 신규 + attachments.draft_id 추가.
---   PR #83 원안의 uploaded_by/attachment_type/draft_orphan_purge_hours 는 만들지 않는다 —
---   위 [2026-08-23] 선업로드 DDL 의 uploader_id/usage_type/pending_upload_purge_hours 가 이미 같은 역할을 한다
---   (명세 id 13·147 정본이 그 표기로 확정됨). 두 체계를 병존시키면 정리 배치·권한 판정이 갈라진다.
---   상한 강제 방식: PM 지시로 "DB에서부터 5개 제한" 채택 → slot_no(1~5) + UNIQUE(user_id,board_id,slot_no)
---     로 물리 강제(경합에도 6번째 INSERT 는 duplicate-key 로 실패 → 서비스가 409 로 변환).
---     회원당 '게시판별' 5개. draft_max_count 를 5 이외로 바꾸려면 아래 CHECK 범위도 함께 조정할 것.
---   소프트삭제 대전제의 예외: 발행 전 개인 작업물이라 state 컬럼 없이 물리 DELETE. 초안 첨부도 같은 규칙.
-CREATE TABLE `drafts` (
-  `draft_id`     bigint       NOT NULL AUTO_INCREMENT COMMENT '임시저장 고유 번호',
-  `user_id`      bigint       NOT NULL COMMENT '작성자 (→users)',
-  `slot_no`      tinyint unsigned NOT NULL COMMENT '임시저장 슬롯(1~5) — 게시판별 UNIQUE 로 최대 5개 물리 강제',
-  `board_id`     bigint       NOT NULL COMMENT '작성 중인 게시판 (→boards)',
-  `category_id`  bigint       DEFAULT NULL COMMENT '선택한 카테고리 (→categories, 미선택 가능)',
-  `title`        varchar(200) DEFAULT NULL COMMENT '제목 (작성 중이라 NULL 허용)',
-  `content`      longtext     DEFAULT NULL COMMENT '본문 마크다운 (작성 중이라 NULL 허용)',
-  `is_anonymous` tinyint(1)   NOT NULL DEFAULT '0' COMMENT '익명 게시 체크 여부 (정책 검증은 발행 시점)',
-  `created_at`   datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '최초 저장 일시',
-  `updated_at`   datetime     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '마지막 저장 일시 (목록·단건이 내려주는 값 — 이어쓰기 판단 기준)',
-  PRIMARY KEY (`draft_id`),
-  UNIQUE KEY `uq_drafts_user_board_slot` (`user_id`,`board_id`,`slot_no`) COMMENT '회원×게시판당 슬롯 1~5 → 6번째 저장 물리 차단',
-  KEY `idx_drafts_user_board_updated` (`user_id`,`board_id`,`updated_at`) COMMENT '내 임시저장 목록(게시판별 최근순) 조회용',
-  CONSTRAINT `ck_drafts_slot_no` CHECK (`slot_no` BETWEEN 1 AND 5),
-  CONSTRAINT `fk_drafts_user`     FOREIGN KEY (`user_id`)     REFERENCES `users` (`user_id`)         ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_drafts_board`    FOREIGN KEY (`board_id`)    REFERENCES `boards` (`board_id`)       ON UPDATE CASCADE,
-  CONSTRAINT `fk_drafts_category` FOREIGN KEY (`category_id`) REFERENCES `categories` (`category_id`) ON DELETE SET NULL ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='글쓰기 임시저장 (발행 전 초안. 물리삭제 예외)';
+-- stats_post_hourly: 구간 집계 + 급상승 판정. 변화가 적재 컷 이상인 글만 행이 생긴다(행 폭증 방지).
+--   read_scope 는 집계 당시 스냅샷 — 조회 API 가 게시판 권한 필터를 걸 때 boards 재조인 없이 쓰기 위한 것.
+CREATE TABLE `stats_post_hourly` (
+  `stat_hour`      datetime      NOT NULL COMMENT '집계 구간 시작 (시간 버킷)',
+  `post_id`        bigint        NOT NULL COMMENT '대상 게시글 (FK 없음 — 통계 보존)',
+  `board_id`       bigint        NOT NULL COMMENT '대상 게시판 (→boards)',
+  `read_scope`     varchar(20)   NOT NULL COMMENT '집계 당시 열람 범위 스냅샷: MEMBER / STUDENT / ALUMNI',
+  `view_count`     int           NOT NULL DEFAULT 0 COMMENT '집계 시점 누적 조회수 (다음 집계의 기준선)',
+  `like_count`     int           NOT NULL DEFAULT 0 COMMENT '집계 시점 좋아요 수',
+  `comment_count`  int           NOT NULL DEFAULT 0 COMMENT '집계 시점 공개 댓글 수 (state=normal, is_private=0)',
+  `view_delta`     int           NOT NULL DEFAULT 0 COMMENT '직전 행 이후 조회 증가분',
+  `like_delta`     int           NOT NULL DEFAULT 0 COMMENT '직전 행 이후 좋아요 순증 (취소 시 음수)',
+  `comment_delta`  int           NOT NULL DEFAULT 0 COMMENT '직전 행 이후 공개 댓글 순증',
+  `raw_score`      decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT '가중 합산 (조회×1 + 좋아요×5 + 댓글×3)',
+  `baseline_score` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT '평소 수준 = 직전 N구간 raw_score 의 SUM/N (행 평균 아님)',
+  `spike_ratio`    decimal(8,2)  DEFAULT NULL COMMENT '평소 대비 배수. NULL = 이력 없음(신규 글, 관문2 면제)',
+  `freshness`      decimal(6,4)  NOT NULL DEFAULT 1.0000 COMMENT '글 나이 감쇠 (1=방금, 0.5=하루 경과)',
+  `final_score`    decimal(12,4) NOT NULL DEFAULT 0.0000 COMMENT 'raw_score / 접속자수보정 × freshness',
+  `rank_no`        int           DEFAULT NULL COMMENT '구간 내 순위 (1위부터)',
+  `is_trending`    tinyint(1)    NOT NULL DEFAULT 0 COMMENT '급상승 선정 여부 (관문 1·2·3 통과)',
+  PRIMARY KEY (`stat_hour`,`post_id`),
+  KEY `idx_stats_post_hourly_selected` (`stat_hour`,`is_trending`,`rank_no`),
+  KEY `idx_stats_post_hourly_post` (`post_id`,`stat_hour`),
+  KEY `idx_stats_post_hourly_board` (`board_id`,`stat_hour`),
+  CONSTRAINT `fk_stats_post_hourly_board` FOREIGN KEY (`board_id`) REFERENCES `boards` (`board_id`) ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='게시글 구간 집계 + 급상승 판정 (변화가 기준치 이상인 글만 적재)';
 
--- attachments 에 초안 소속만 추가.
--- PR #83 원안의 완화 CHECK(동시 소유 금지)는 적용 불가였다 — MySQL 8 은 CASCADE/SET NULL FK 에 쓰인 컬럼을
--- CHECK 에 넣을 수 없다(에러 3823: post_id 가 fk_attachments_post 의 referential action 대상).
--- 대신 코드가 불변식을 강제한다: linkToPost/transferDraftAttachmentsToPost 가 post_id 세팅과 동시에
--- draft_id 를 비우고, linkToDraft 는 post_id IS NULL 인 행만 초안에 귀속한다 (AttachmentMapper.xml).
-ALTER TABLE `attachments`
-  ADD COLUMN `draft_id` bigint NULL COMMENT '임시저장 고유 번호 (발행되면 NULL 로 비움)' AFTER `post_id`,
-  ADD CONSTRAINT `fk_attachments_draft` FOREIGN KEY (`draft_id`) REFERENCES `drafts` (`draft_id`) ON DELETE CASCADE ON UPDATE CASCADE;
+-- 집계 대상 게시판을 데이터로 고른다 (게시판 하드코딩 금지 규칙과 같은 이유 — 신설 게시판은 기본 포함)
+ALTER TABLE `boards`
+  ADD COLUMN `trending_enabled` tinyint(1) NOT NULL DEFAULT 1
+    COMMENT '급상승 집계 대상 여부 (1=포함, 0=제외). 신설 게시판은 기본 포함';
 
+-- [2026-08-18] 통계 정책 수치. 코드(StatsPolicy)에 동일 기본값이 있어 행이 없어도 동작한다 —
+--   행을 넣으면 재배포 없이 값만 바꿔 조정할 수 있다.
+INSERT INTO `policy_settings` (code, setting_value, description) VALUES
+('trending_interval_minutes',      '60',   '급상승 집계 주기(분). 다음 실행부터 반영'),
+('trending_post_max_age_hours',    '168',  '급상승 후보 최대 글 나이(시간, 기본 7일)'),
+('trending_min_delta_score',       '5',    '적재 컷 — raw_score 미달 구간은 행을 만들지 않는다'),
+('trending_baseline_windows',      '6',    '평소 수준 산출에 쓰는 직전 구간 수 (합/N, 행 평균 아님)'),
+('trending_min_score',             '10',   '급상승 관문1 — 절대 활동량 하한'),
+('trending_spike_ratio',           '3.0',  '급상승 관문2 — 평소 대비 배수. 이력 없는 신규 글은 면제'),
+('trending_top_n',                 '5',    '급상승 관문3 — 구간 내 상위 N'),
+('trending_weight_view',           '1',    'raw_score 조회 가중치'),
+('trending_weight_like',           '5',    'raw_score 좋아요 가중치'),
+('trending_weight_comment',        '3',    'raw_score 댓글 가중치 (공개 댓글만 집계)'),
+('trending_min_active_users',      '5',    '점수 분모 하한 — 새벽 소수 접속 구간의 점수 폭등 방지'),
+('trending_halflife_hours',        '24',   'freshness = 1/(1 + 글나이/이 값). 이 시간 경과 시 0.5'),
+('signup_stats_recalc_weeks',      '2',    '주간 가입 통계 재집계 구간(주)'),
+('stats_retention_days',           '1825', '접속·게시글 집계 보존 일수(5년). 경과 행은 새벽 배치가 물리 삭제');
 ```
 > **임시저장 DDL 적용 시 주의**
 > - `drafts` 를 **먼저** 만든 뒤 `attachments` 의 `fk_attachments_draft` 를 건다(참조 순서).
@@ -327,6 +328,9 @@ ALTER TABLE `attachments`
 >   CASCADE 는 백스톱일 뿐, CASCADE 에 맡기면 디스크 파일이 고아로 남는다.
 > - 롤백: `ALTER TABLE attachments DROP FOREIGN KEY fk_attachments_draft, DROP COLUMN draft_id;` → `DROP TABLE drafts;`
 - [x] events DDL 적용 (2026-08-14, location 값 전부 NULL 확인 후 제거)
+- [x] **통계 3종 테이블 + `boards.trending_enabled` 적용** (2026-08-18 PM). 수집·집계 코드는 `통계` 브랜치의 `com.back.stats`.
+  정책 14행은 **선택** — `StatsPolicy` 에 동일 기본값이 있어 넣지 않아도 동작하고, 넣으면 재배포 없이 조정된다.
+  조회 API 는 아직 없다(설계는 `SPEC-stats.md` §5).
 - [x] boards 권한 컬럼 DDL 적용 (#61 §1)
 - [x] ~~boards 컬럼 제거 (#70)~~ → 적용 후 **PM 지시로 원복 완료** (allow_comment/allow_attachment/category_mode 원값 유지)
 - [x] 적용 후 스키마 재검증 (DESCRIBE 확인)
