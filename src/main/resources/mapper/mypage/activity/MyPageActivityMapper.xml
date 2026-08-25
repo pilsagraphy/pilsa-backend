@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.mypage.activity.mapper.MyPageActivityMapper">
+
+    <!-- ============================================================
+         마이페이지 활동 목록 (내 글 / 내 댓글 / 좋아요 누른 글)
+         공통 규칙:
+          - state='normal' 만 노출 (블라인드·삭제 제외 — 학생 화면 대전제)
+          - 졸업 후에도 전부 노출 (재학/졸업 시점 컬럼이 없어 "재학생 때만" 필터 불가)
+          - 필터: boardId(선택) / keyword(선택), 정렬: sort(created|viewCount)
+         ============================================================ -->
+
+    <!-- ── 탭 1: 내가 쓴 글 ─────────────────────────────────── -->
+    <select id="findMyPosts" resultType="com.back.mypage.activity.dto.MyPostRow">
+        SELECT
+            p.post_id     AS postId,
+            p.board_id    AS boardId,
+            b.name        AS boardName,
+            p.title,
+            p.view_count  AS viewCount,
+            p.created_at  AS created,
+            (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.post_id) AS likeCount
+        FROM posts p
+        INNER JOIN boards b ON p.board_id = b.board_id
+        WHERE p.user_id = #{userId}
+          AND p.state = 'normal'
+        <if test="boardId != null">AND p.board_id = #{boardId}</if>
+        <if test="keyword != null and keyword != ''">
+            AND (p.title LIKE CONCAT('%', #{keyword}, '%')
+                 OR p.content LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        ORDER BY
+        <choose>
+            <when test="sort == 'viewCount'">p.view_count DESC, p.post_id DESC</when>
+            <otherwise>p.created_at DESC, p.post_id DESC</otherwise>
+        </choose>
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countMyPosts" resultType="long">
+        SELECT COUNT(*)
+        FROM posts p
+        WHERE p.user_id = #{userId}
+          AND p.state = 'normal'
+        <if test="boardId != null">AND p.board_id = #{boardId}</if>
+        <if test="keyword != null and keyword != ''">
+            AND (p.title LIKE CONCAT('%', #{keyword}, '%')
+                 OR p.content LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </select>
+
+    <!-- ── 탭 2: 내가 쓴 댓글 (대댓글 포함) ─────────────────────
+         원글이 블라인드/삭제(state!='normal')면 그 댓글도 숨김.        -->
+    <select id="findMyComments" resultType="com.back.mypage.activity.dto.MyCommentRow">
+        SELECT
+            cm.comment_id AS commentId,
+            cm.content,
+            cm.created_at AS created,
+            p.post_id     AS postId,
+            p.board_id    AS boardId,
+            p.title       AS postTitle
+        FROM comments cm
+        INNER JOIN posts p ON cm.post_id = p.post_id
+        WHERE cm.user_id = #{userId}
+          AND cm.state = 'normal'
+          AND p.state  = 'normal'
+        <if test="boardId != null">AND p.board_id = #{boardId}</if>
+        <if test="keyword != null and keyword != ''">
+            AND (cm.content LIKE CONCAT('%', #{keyword}, '%')
+                 OR p.title  LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        ORDER BY cm.created_at DESC, cm.comment_id DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countMyComments" resultType="long">
+        SELECT COUNT(*)
+        FROM comments cm
+        INNER JOIN posts p ON cm.post_id = p.post_id
+        WHERE cm.user_id = #{userId}
+          AND cm.state = 'normal'
+          AND p.state  = 'normal'
+        <if test="boardId != null">AND p.board_id = #{boardId}</if>
+        <if test="keyword != null and keyword != ''">
+            AND (cm.content LIKE CONCAT('%', #{keyword}, '%')
+                 OR p.title  LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </select>
+
+    <!-- ── 탭 3: 좋아요 누른 글 ─────────────────────────────────
+         내가 좋아요 누른 글 중, 지금 정상 노출(state='normal')인 것만.    -->
+    <select id="findMyLikedPosts" resultType="com.back.mypage.activity.dto.MyPostRow">
+        SELECT
+            p.post_id     AS postId,
+            p.board_id    AS boardId,
+            b.name        AS boardName,
+            p.title,
+            p.view_count  AS viewCount,
+            p.created_at  AS created,
+            (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.post_id) AS likeCount
+        FROM post_likes pl
+        INNER JOIN posts p  ON pl.post_id = p.post_id
+        INNER JOIN boards b ON p.board_id = b.board_id
+        WHERE pl.user_id = #{userId}
+          AND p.state = 'normal'
+        <if test="boardId != null">AND p.board_id = #{boardId}</if>
+        <if test="keyword != null and keyword != ''">
+            AND (p.title LIKE CONCAT('%', #{keyword}, '%')
+                 OR p.content LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+        ORDER BY
+        <choose>
+            <when test="sort == 'viewCount'">p.view_count DESC, p.post_id DESC</when>
+            <otherwise>pl.created_at DESC, p.post_id DESC</otherwise>
+        </choose>
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countMyLikedPosts" resultType="long">
+        SELECT COUNT(*)
+        FROM post_likes pl
+        INNER JOIN posts p ON pl.post_id = p.post_id
+        WHERE pl.user_id = #{userId}
+          AND p.state = 'normal'
+        <if test="boardId != null">AND p.board_id = #{boardId}</if>
+        <if test="keyword != null and keyword != ''">
+            AND (p.title LIKE CONCAT('%', #{keyword}, '%')
+                 OR p.content LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </select>
+
+</mapper>
