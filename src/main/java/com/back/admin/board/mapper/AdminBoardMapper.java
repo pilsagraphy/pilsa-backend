@@ -4,6 +4,8 @@ import com.back.board.dto.BoardPolicy;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
+import java.util.List;
+
 /**
  * 게시판 관리(관리자) 매퍼 — 생성/수정/삭제와 관리 화면 전용 조회.
  *
@@ -28,4 +30,10 @@ public interface AdminBoardMapper {
 
     /** 게시판 생성 시 '중요'(code=PINNED) 카테고리 자동 생성 — 없으면 새 게시판에서 상단고정을 못 쓴다 */
     void insertPinnedCategory(@Param("boardId") Long boardId);
+
+    /** 순번 재부여의 기준 목록 — 살아있는 게시판 id 를 화면과 같은 순서로 */
+    List<Long> findLiveBoardIdsOrdered();
+
+    /** 전달된 순서 그대로 display_order 에 1..N 을 다시 부여한다 */
+    void applyDisplayOrder(@Param("boardIds") List<Long> boardIds);
 }

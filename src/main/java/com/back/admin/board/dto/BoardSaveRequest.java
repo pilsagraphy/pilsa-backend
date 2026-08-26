@@ -12,10 +12,10 @@ import lombok.ToString;
 @Setter
 @ToString
 public class BoardSaveRequest {
-    private String name;                  // 게시판 이름 (한글, 중복 불가)
+    private String name;                  // 게시판 이름 (한글, 살아있는 게시판끼리 중복 불가)
     private String readScope;             // MEMBER(재학+졸업) / STUDENT(재학) / ALUMNI(졸업) — 전체 공개(ALL) 불가
     private Integer writeLevel;           // 0=일반회원, 1~3=관리자 레벨
-    private Integer displayOrder;         // 노출 순서 (미지정 시 맨 뒤)
+    private Integer displayOrder;         // 노출 순서 = "몇 번째"(1부터). 나머지는 서버가 밀어준다. 미지정 시 맨 뒤
     private Boolean allowComment;         // 댓글 사용
     private Boolean allowAttachment;      // 첨부 사용
     private Boolean categoryMode;         // 카테고리 사용
