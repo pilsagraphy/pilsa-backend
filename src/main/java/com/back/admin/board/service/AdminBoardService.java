@@ -80,6 +80,9 @@ public class AdminBoardService {
         // 상단 고정은 이 카테고리 선택으로만 결정되므로, 없으면 새 게시판에서 고정을 못 쓴다.
         adminBoardMapper.insertPinnedCategory(board.getBoardId());
 
+        // 요청에 위치가 있으면 그 자리에, 없으면 맨 뒤에 놓고 전체 순번을 1..N 으로 다시 채운다
+        resequence(board.getBoardId(), request.getDisplayOrder());
+
         log.info("게시판 생성 완료 - boardId: {}, name: {}", board.getBoardId(), name);
         return toResponse(boardMapper.findBoardPolicy(board.getBoardId()), 0);
     }
@@ -118,6 +121,11 @@ public class AdminBoardService {
         patch.setAllowPrivateComment(request.getAllowPrivateComment());
 
         adminBoardMapper.updateBoard(boardId, patch);
+
+        // displayOrder 는 "몇 번째"다 — 그 자리로 옮기고 나머지를 한 칸씩 밀어 1..N 을 유지한다
+        if (request.getDisplayOrder() != null) {
+            resequence(boardId, request.getDisplayOrder());
+        }
         return toResponse(boardMapper.findBoardPolicy(boardId), adminBoardMapper.countPostsByBoard(boardId));
     }
 
@@ -134,6 +142,32 @@ public class AdminBoardService {
             throw new BoardException("게시글이 " + postCount + "건 남아 있어 삭제할 수 없습니다.", HttpStatus.CONFLICT);
         }
         adminBoardMapper.deleteBoard(boardId);
+
+        // 빠져나간 자리만큼 뒤 게시판을 당겨 번호에 구멍을 남기지 않는다
+        resequence(null, null);
+    }
+
+    /**
+     * 살아있는 게시판의 display_order 를 1..N 으로 다시 채운다.
+     *
+     * 생성·삭제·순서 변경 뒤 항상 호출한다. 번호가 늘 조밀해야 프론트가 드래그한 결과를
+     * "몇 번째"라는 값 하나로만 보낼 수 있다 — 구멍이 있으면 화면의 N번째와 display_order 값이
+     * 어긋나 엉뚱한 게시판이 밀린다.
+     *
+     * @param targetBoardId 자리를 옮길 게시판. null 이면 현재 순서를 유지한 채 번호만 정리한다.
+     * @param position      옮길 자리(1부터). null 이면 맨 뒤. 범위를 벗어나면 처음/끝으로 맞춘다.
+     */
+    private void resequence(Long targetBoardId, Integer position) {
+        List<Long> ids = new ArrayList<>(adminBoardMapper.findLiveBoardIdsOrdered());
+        if (targetBoardId != null && ids.remove(targetBoardId)) {
+            int index = (position == null)
+                    ? ids.size()
+                    : Math.max(0, Math.min(ids.size(), position - 1));
+            ids.add(index, targetBoardId);
+        }
+        if (!ids.isEmpty()) {
+            adminBoardMapper.applyDisplayOrder(ids);
+        }
     }
 
     private void validateScopeAndLevel(BoardSaveRequest request) {
