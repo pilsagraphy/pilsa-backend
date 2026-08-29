@@ -2,6 +2,20 @@
 
 필사(pilsagraphy) 동아리 홈페이지 백엔드. Spring Boot 3.4 (Java 17) + MyBatis + MySQL 8 + Redis + JWT.
 
+## 절대 금지
+
+### `dev` · `main` · `release` 에 직접 push 하지 않는다
+- 어떤 경우에도 이 세 브랜치로 직접 push 하지 않는다. 작업은 항상 별도 브랜치에서 하고 PR 로 올린다.
+- 사용자가 명시적으로 지시하지 않는 한 **push 자체를 하지 않는다.** 커밋도 지시가 있을 때만 한다.
+- 이 세 브랜치를 체크아웃해 작업하지 않는다. 최신화가 필요하면 작업 브랜치에서 `git merge origin/dev` 로 받아온다.
+- force push (`--force`, `--force-with-lease`)는 어느 브랜치에서도 하지 않는다.
+
+### `.gitignore` 를 건드리지 않는다
+- 항목을 추가·삭제·수정하지 않는다. 무엇을 추적할지는 사용자가 정하는 영역이다.
+- `application.properties` 등 무시되는 설정 파일은 **그렇게 되어 있는 것이 의도**다.
+  커밋에 실리지 않는다는 이유로 코드에 기본값을 심거나 우회 경로를 만들지 않는다.
+- 무시된 파일 때문에 문제가 보이면 고치지 말고 사용자에게 보고한다.
+
 ## 빌드/실행
 ```bash
 ./gradlew compileJava          # 컴파일 검증
@@ -9,7 +23,7 @@
 ./gradlew bootRun              # 실행 (기본 8080)
 ```
 - DB: `application.properties`의 qa_pilsa (원격 MySQL). Flyway/Liquibase **없음** — DDL은 DB에 수동 적용하며,
-  **.sql 파일을 레포에 커밋하지 않는 것이 팀 컨벤션**. 적용한 DDL은 `docs/integration-*/CHECKLIST.md`에 기록.
+  **.sql 파일을 레포에 커밋하지 않는 것이 팀 컨벤션**.
 - Redis: 이메일 인증번호·아이디찾기 인증 상태. (리프레시 토큰은 무상태 JWT 쿠키 — Redis 미사용). Swagger: `/swagger-ui/index.html`.
 
 ## 패키지 구조 — **UI 페이지 단위 또는 DB 테이블 단위**로 맞춘다
@@ -19,11 +33,11 @@ com.back
 ├── board           # 게시판 (posts/comments/boards). 게시판은 데이터로 정의됨
 │   └── report      # 신고 접수 (POST /api/user/reports) — 게시글/댓글에 대한 회원 기능이라 board 하위
 ├── mypage          # 마이페이지 — notification(발행 훅 + 알림 수신 기기 등록부=웹 푸시).
-│                   #   알림 발행·알림함 API 는 담당자 과제로 비워둠(HANDOFF-notification-tasks.md)
+│                   #   알림 발행·알림함 API 는 담당자 과제로 비워둠
 ├── event           # 일정 조회(회원 달력, 공개) + 구글 캘린더 구독 피드(/api/event/calendar.ics)
 ├── donation        # 명예의전당 (donations)
 ├── stats           # 통계 — 접속 기록(JWT 필터 훅) + 급상승 집계·주간 가입·보존기간 정리 배치.
-│                   #   수집·집계만 있고 조회 API 는 아직 없다 (docs/integration-20260814/SPEC-stats.md)
+│                   #   수집·집계만 있고 조회 API 는 아직 없다
 ├── admin           # 관리자 화면 전용 도메인
 │   ├── common      # AdminServiceSupport (페이지 보정·LIKE 이스케이프 등 관리자 화면 공용 헬퍼)
 │   ├── event       # 일정 등록/수정/삭제 (AdminEventMapper — 관리 쿼리는 자기 패키지 소유)
@@ -48,7 +62,6 @@ com.back
   게시판은 `/api/user/boards/{boardId}/**`, 내 정보는 `/api/user/mypage/**`, 신고는 `/api/user/reports`.
   공개 리소스는 `/api/donations`·`/api/quotes/current`·`/api/event`. 관리자는 `/api/admin/**`.
   경로 정본은 `api_endpoints` 테이블이며, 코드가 그 표기를 따른다.
-  전체 매핑표는 `docs/integration-20260814/API-MIGRATION.md`.
 - SecurityConfig는 `/api/admin/**`=ADMIN, 그 외 회원 API는 **로그인 여부만** 확인.
   신분별 접근은 각 도메인이 `AuthUtils`(global.security)로 판정한다. 신분을 URL 접두사로 가르지 않는다 —
   관리자가 런타임에 만든 게시판의 열람 대상을 정적 URL로 표현할 수 없기 때문.
@@ -122,4 +135,3 @@ com.back
 - 미인증=401, 권한부족=403 (SecurityConfig의 exceptionHandling).
 - MyBatis 파라미터 2개 이상이면 @Param 필수. 날짜는 문자열 'YYYY-MM-DD'로 받는 API 다수.
 - 패키지/클래스 일괄 리네임 시 PowerShell `-replace`는 대소문자 무시라 URL·컬럼명까지 깨뜨린다. `-creplace` 사용 후 경로·필드·SQL 잔존 검사 필수.
-- 통합 이력·미해결 결정사항: `docs/integration-20260814/` (CHECKLIST / REVIEW-NOTES / BACKLOG).
