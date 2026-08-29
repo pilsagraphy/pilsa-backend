@@ -30,17 +30,15 @@ public class AdminEventController {
                     { "title": "3월 정기모임", "category": "정기모임",
                       "description": "3월 정기모임 안내", "startDate": "2026-03-01", "endDate": "2026-03-01" }
                     ```
-                    - category 는 **관리자 자유 입력**(events.category varchar(50), 예: 정기모임) — 선택지 목록 API 없음.
-                      카테고리 테이블(event_categories)은 2026-08-16 구현했다가 PM 지시로 당일 롤백(DB 드랍)했고,
-                      완성본은 git 브랜치 `archive/event-categories`(da6da1d, 원격 보관)에 있다. 되살릴 땐 체리픽할 것.
-                      (`categories` 테이블은 게시판 전용이라 일정과 무관 — 재사용 금지)
+                    - category 는 `GET /api/event/categories` 목록에 있는 이름만 허용됩니다(자유 입력 아님).
+                      정본은 `event_categories` 테이블(events.category 는 그 이름값을 그대로 저장).
                     - description 은 필수(DB NOT NULL), 날짜는 YYYY-MM-DD
 
                     ### 응답 예시
                     ```json
                     { "message": "새로운 일정이 등록되었습니다.", "data": { "eventId": 12, "title": "3월 정기모임" } }
                     ```
-                    실패: 400(필수값/날짜 역전), 403(관리자 아님)""")
+                    실패: 400(필수값/날짜 역전/카테고리), 403(관리자 아님)""")
     @PostMapping("/api/admin/event")
     public ResponseEntity<EventResponse> createEvent(@RequestBody EventRequest request) {
         log.info("일정 등록 요청 데이터: {}", request);
@@ -61,7 +59,7 @@ public class AdminEventController {
                     ```json
                     { "message": "일정 정보가 성공적으로 수정되었습니다.", "data": { "eventId": 12, "updatedAt": "..." } }
                     ```
-                    실패: 404(없거나 삭제된 일정), 403(관리자 아님)""")
+                    실패: 404(없거나 삭제된 일정), 400(카테고리), 403(관리자 아님)""")
     @PutMapping("/api/admin/event/{eventId}")
     public ResponseEntity<EventResponse> updateEvent(
             @Parameter(description = "일정 ID") @PathVariable Long eventId,

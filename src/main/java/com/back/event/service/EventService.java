@@ -2,6 +2,8 @@ package com.back.event.service;
 
 import com.back.event.dto.*;
 
+import java.util.List;
+
 public interface EventService {
 
     // 1. 일정 목록 조회 (Public)
@@ -13,4 +15,10 @@ public interface EventService {
 
     // 3. 일정 1건짜리 ICS (Public) — 구독 경로가 없는 안드로이드에서 "이 일정만 담기" 용
     String buildEventFeed(Long eventId);
+
+    // 4. 일정 상세 조회 (Public)
+    EventResponse getEventById(Long eventId);
+
+    // 5. 일정 카테고리 목록 (Public)
+    List<EventCategoryResponse> getEventCategories();
 }

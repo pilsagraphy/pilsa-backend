@@ -33,6 +33,20 @@ public class EventServiceImpl implements EventService {
         return new EventPageResponse("일정 목록을 성공적으로 불러왔습니다.", events);
     }
 
+    @Override
+    public EventResponse getEventById(Long eventId) {
+        EventDataResponse event = eventMapper.findEventById(eventId);
+        if (event == null) {
+            throw new EventException("해당 일정을 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
+        }
+        return new EventResponse("일정 상세 정보를 성공적으로 불러왔습니다.", event);
+    }
+
+    @Override
+    public List<EventCategoryResponse> getEventCategories() {
+        return eventMapper.findActiveEventCategories();
+    }
+
     /**
      * 구글 캘린더 "URL로 추가" 구독용 iCalendar(ICS) 피드.
      *

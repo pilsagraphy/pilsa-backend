@@ -41,8 +41,11 @@ public class SecurityConfig {
                     "/api/donations",        // 명예의전당
                     "/api/quotes/current",   // 이 주의 문장
                     "/api/event",              // 일정(캘린더) 조회
-                    "/api/event/calendar.ics", // 구글 캘린더 구독 피드 (구글 서버가 인증 없이 가져감)
-                    "/api/event/*.ics",        // 일정 1건 ICS — 안드로이드 "이 일정만 담기" (구독 경로가 없어서)
+                    // /api/event 하위는 전부 비로그인 공개다 — 일정 상세, 카테고리 목록,
+                    // 구글 캘린더 구독 피드(구글 서버가 인증 없이 가져감), 일정 1건 ICS.
+                    // 관리 기능은 /api/admin/event 에 따로 있으므로 여기서 열어도 노출되지 않는다.
+                    // ("/api/event" 는 정확히 그 경로만 매칭하고 하위를 포함하지 않는다)
+                    "/api/event/**",
                     "/api/mail/**", // 인증번호 관련
                     "/swagger-ui/**", // 스웨거 관련
                     "/v3/api-docs/**", // 스웨거 관련

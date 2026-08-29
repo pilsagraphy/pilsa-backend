@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 @Slf4j
 @RestController
@@ -32,13 +33,47 @@ public class EventController {
                       "data": [ { "eventId": 1, "title": "가을 MT", "category": "정기모임",
                                   "description": "일시/장소/준비물 ...", "startDate": "2026-10-20", "endDate": "2026-10-21" } ] }
                     ```
-                    일정 카드 클릭 시 펼치는 상세는 이 목록의 description 으로 그리면 됩니다(추가 호출 불필요).""")
+                    일정 카드 클릭 시 펼치는 상세는 이 목록이 이미 주는 값으로 그리면 됩니다(추가 호출 불필요).
+                    `GET /api/event/{eventId}`는 직접 링크·새로고침처럼 단건만 필요한 경우에 씁니다.""")
     @GetMapping("/api/event")
     public ResponseEntity<EventPageResponse> getEvents(
             @Parameter(description = "조회 시작 (YYYY-MM 또는 YYYY-MM-DD)", example = "2026-03") @RequestParam("from") String from,
             @Parameter(description = "조회 끝 (YYYY-MM 또는 YYYY-MM-DD)", example = "2026-03") @RequestParam("to") String to) {
         log.info("일정 목록 조회 요청 - 기간: {} ~ {}", from, to);
         return ResponseEntity.ok(eventService.getEventsByPeriod(from, to));
+    }
+
+    @Operation(summary = "일정 상세 조회 (비로그인 공개)",
+            description = """
+                    단건 일정 상세. 필드는 목록 조회(`GET /api/event`)와 동일 — 직접 링크·새로고침처럼
+                    목록 없이 단건만 필요한 경우에 사용합니다.
+
+                    ### 응답 예시
+                    ```json
+                    { "message": "일정 상세 정보를 성공적으로 불러왔습니다.",
+                      "data": { "eventId": 1, "title": "가을 MT", "category": "정기모임",
+                                "description": "일시/장소/준비물 ...", "startDate": "2026-10-20", "endDate": "2026-10-21" } }
+                    ```
+                    실패: 404(없거나 블라인드/삭제된 일정)""")
+    @GetMapping("/api/event/{eventId}")
+    public ResponseEntity<EventResponse> getEvent(
+            @Parameter(description = "일정 ID") @PathVariable Long eventId) {
+        log.info("일정 상세 조회 요청 - ID: {}", eventId);
+        return ResponseEntity.ok(eventService.getEventById(eventId));
+    }
+
+    @Operation(summary = "일정 카테고리 목록 (비로그인 공개)",
+            description = """
+                    일정 등록/수정 화면의 카테고리 셀렉트박스용. event_categories 테이블이 정본이며,
+                    등록/수정의 category 값은 이 목록에 있는 이름만 허용됩니다.
+
+                    ### 응답 예시
+                    ```json
+                    [ { "eventCategoryId": 1, "name": "정기모임" }, { "eventCategoryId": 2, "name": "MT" } ]
+                    ```""")
+    @GetMapping("/api/event/categories")
+    public ResponseEntity<List<EventCategoryResponse>> getEventCategories() {
+        return ResponseEntity.ok(eventService.getEventCategories());
     }
 
     @Operation(summary = "구글 캘린더 구독 피드 (ICS, 비로그인 공개)",

@@ -43,4 +43,21 @@
         WHERE event_id = #{eventId} AND state = 'normal'
     </update>
 
+    <!-- 카테고리 정본 이름 조회 (event_categories 가 events.category 값의 정본).
+         콜레이션(utf8mb4_0900_ai_ci)이 대소문자를 무시하므로 'mt' 로 찾아도 'MT' 가 나온다 —
+         그 반환값을 저장해야 events.category 의 표기가 갈리지 않는다. 없으면 null → 400. -->
+    <select id="findActiveCategoryName" resultType="string">
+        SELECT name
+        FROM event_categories
+        WHERE name = #{name} AND is_active = 1
+    </select>
+
+    <!-- 수정 시 존재 확인. 카테고리 400 보다 404 가 먼저 나가야 하므로 UPDATE 앞에서 판정한다 -->
+    <select id="existsEvent" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1 FROM events
+            WHERE event_id = #{eventId} AND state = 'normal'
+        )
+    </select>
+
 </mapper>
