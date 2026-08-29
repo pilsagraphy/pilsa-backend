@@ -21,6 +21,10 @@ public interface AdminEventMapper {
     // 3. 일정 삭제 (소프트)
     int deleteEvent(@Param("eventId") Long eventId);
 
-    // 4. 카테고리 유효성 (등록/수정 시 event_categories 에 있는 값만 허용)
-    boolean existsEventCategory(@Param("name") String name);
+    // 4. 카테고리 정본 이름 조회 (등록/수정 시 event_categories 에 있는 값만 허용 + 표기 정규화).
+    //    존재 확인이 아니라 이름을 되돌려주는 이유는 콜레이션이 대소문자를 무시하기 때문 ("mt" → "MT")
+    String findActiveCategoryName(@Param("name") String name);
+
+    // 5. 일정 존재 확인 (수정 시 404 를 카테고리 400 보다 먼저 판정하기 위함)
+    boolean existsEvent(@Param("eventId") Long eventId);
 }
