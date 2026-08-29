@@ -1,7 +1,7 @@
 package com.back.global.security;
 
-import com.back.auth.exception.BannedException;
-import com.back.auth.mapper.AuthMapper;
+import com.back.auth.core.exception.BannedException;
+import com.back.auth.core.mapper.AuthMapper;
 import com.back.stats.access.service.AccessStatsRecorder;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
@@ -183,8 +183,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 || path.startsWith("/uploads/Honor/") // 첨부 정적 서빙 폐지 — 명예의전당 사진만 공개
                 || path.equals("/api/donations")
                 || path.equals("/api/quotes/current")
-                || path.equals("/api/event")
-                || path.equals("/api/event/calendar.ics");
+                // SecurityConfig 의 "/api/event/**" 에 대응 — 목록·상세·카테고리·구독 피드·1건 ICS 전부
+                || path.equals("/api/event") || path.startsWith("/api/event/")
+                // 구글 캘린더 연동 콜백 — 구글이 리다이렉트로 부르므로 Authorization 헤더가 없다.
+                // 사용자 식별은 state 로 한다 (OAuthStateService).
+                || path.equals("/api/user/mypage/calendar/google/callback");
     }
 
     // 에러 응답은 항상 {"message": ...} JSON 객체 계약을 지킨다 (sendError는 본문에서 메시지가 탈락함)

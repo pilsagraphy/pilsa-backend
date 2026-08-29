@@ -6,10 +6,13 @@ import com.back.event.dto.EventUpdateRequest;
 import com.back.event.exception.EventException;
 import com.back.admin.event.mapper.AdminEventMapper;
 import com.back.global.security.AuthUtils;
+import com.back.mypage.calendar.service.GoogleCalendarSyncService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -20,6 +23,10 @@ import java.util.Map;
  *
  * 회원 달력 조회·캘린더 구독 피드는 com.back.event 가 담당하고, 여기는 관리자 화면 전용이다.
  * 매퍼도 이 패키지에서 직접 관리한다({@link AdminEventMapper}) — 관리자 쿼리와 회원 조회 쿼리는 겹치지 않는다.
+ *
+ * 일정이 바뀌면 구글 캘린더 연동 사용자들에게도 반영한다({@link GoogleCalendarSyncService}).
+ * 반영은 비동기이며 커밋 이후에 시작한다 — 관리자 화면이 구글 응답을 기다리지 않게 하고,
+ * 구글이 느리거나 실패해도 일정 등록 자체는 성공으로 끝나게 하기 위해서다.
  */
 @Service
 @RequiredArgsConstructor
@@ -27,6 +34,7 @@ import java.util.Map;
 public class AdminEventService {
 
     private final AdminEventMapper adminEventMapper;
+    private final GoogleCalendarSyncService calendarSyncService;
 
     // 관리자 권한 확인 (공통 유틸 사용)
     private void checkAdminRole() {
@@ -67,11 +75,33 @@ public class AdminEventService {
 
         adminEventMapper.insertEvent(request, userId);
 
+        Long eventId = request.getEventId();
+        afterCommit(() -> calendarSyncService.onEventCreated(eventId));
+
         Map<String, Object> data = new HashMap<>();
-        data.put("eventId", request.getEventId());
+        data.put("eventId", eventId);
         data.put("title", request.getTitle());
 
         return new EventResponse("새로운 일정이 등록되었습니다.", data);
+    }
+
+    /**
+     * 커밋이 끝난 뒤에 실행한다.
+     *
+     * 트랜잭션 안에서 바로 부르면 비동기 스레드가 아직 커밋되지 않은 행을 조회해
+     * "일정을 찾지 못했다"로 조용히 넘어가 버린다. 트랜잭션이 없으면(테스트 등) 즉시 실행한다.
+     */
+    private void afterCommit(Runnable task) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            task.run();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                task.run();
+            }
+        });
     }
 
     private void validateExecutionDates(String startDate, String endDate) {
@@ -103,6 +133,8 @@ public class AdminEventService {
             throw new EventException("해당 일정을 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
         }
 
+        afterCommit(() -> calendarSyncService.onEventUpdated(eventId));
+
         Map<String, Object> data = new HashMap<>();
         data.put("eventId", eventId);
         data.put("updatedAt", LocalDateTime.now());
@@ -118,6 +150,10 @@ public class AdminEventService {
         if (deleted == 0) {
             throw new EventException("삭제할 일정을 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
         }
+
+        // 소프트 삭제라 events 행은 남지만, 사용자 캘린더에서는 지워야 한다.
+        // 매핑 테이블의 google_event_id 만 있으면 되므로 일정 본문을 다시 읽지 않는다.
+        afterCommit(() -> calendarSyncService.onEventDeleted(eventId));
 
         return new EventResponse("일정이 정상적으로 삭제되었습니다.", null);
     }

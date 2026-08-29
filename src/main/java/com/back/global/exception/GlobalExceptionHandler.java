@@ -1,6 +1,6 @@
 package com.back.global.exception;
 
-import com.back.auth.exception.BannedException;
+import com.back.auth.core.exception.BannedException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

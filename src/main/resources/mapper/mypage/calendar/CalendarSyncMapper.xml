@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.mypage.calendar.mapper.CalendarSyncMapper">
+
+    <!-- ICS 피드와 같은 컬럼·같은 변환 규칙을 쓴다 (EventMapper.calendarRowColumns 와 동일).
+         날짜를 SQL 에서 포맷하는 이유는 종일 일정의 종료일이 배타적이라 +1일 계산이 필요하기 때문이다.
+         GoogleCalendarClient 가 yyyyMMdd -> yyyy-MM-dd 로 바꿔서 보낸다 -->
+    <sql id="calendarRowColumns">
+        event_id AS eventId,
+        title,
+        category,
+        description,
+        DATE_FORMAT(start_at, '%Y%m%d')                          AS startDate,
+        DATE_FORMAT(DATE_ADD(end_at, INTERVAL 1 DAY), '%Y%m%d')  AS endDateExclusive,
+        DATE_FORMAT(CONVERT_TZ(updated_at, '+09:00', '+00:00'), '%Y%m%dT%H%i%sZ') AS dtstamp
+    </sql>
+
+    <select id="findEventForSync" resultType="com.back.event.dto.EventCalendarRow">
+        SELECT <include refid="calendarRowColumns"/>
+        FROM events
+        WHERE event_id = #{eventId}
+          AND state = 'normal'
+    </select>
+
+    <!-- 연동 직후 초기 동기화.
+         지난 일정까지 넣으면 사용자 캘린더가 과거 기록으로 지저분해지므로 아직 안 끝난 것만 넣는다 -->
+    <select id="findUpcomingEventsForSync" resultType="com.back.event.dto.EventCalendarRow">
+        SELECT <include refid="calendarRowColumns"/>
+        FROM events
+        WHERE state = 'normal'
+          AND end_at >= CURDATE()
+        ORDER BY start_at ASC, event_id ASC
+    </select>
+
+    <sql id="mappingColumns">
+        id,
+        user_id         AS userId,
+        event_id        AS eventId,
+        google_event_id AS googleEventId,
+        sync_status     AS syncStatus,
+        retry_count     AS retryCount,
+        last_error      AS lastError,
+        last_synced_at  AS lastSyncedAt
+    </sql>
+
+    <select id="findMapping" resultType="com.back.mypage.calendar.dto.UserCalendarEvent">
+        SELECT <include refid="mappingColumns"/>
+        FROM user_calendar_events
+        WHERE user_id = #{userId} AND event_id = #{eventId}
+    </select>
+
+    <select id="findMappingsByUser" resultType="com.back.mypage.calendar.dto.UserCalendarEvent">
+        SELECT <include refid="mappingColumns"/>
+        FROM user_calendar_events
+        WHERE user_id = #{userId}
+          AND sync_status &lt;&gt; 'DELETED'
+    </select>
+
+    <!-- 일정 수정/삭제 팬아웃 대상.
+         구글에 실제로 들어간 행만 고른다(google_event_id 가 있어야 수정·삭제할 수 있다) -->
+    <select id="findMappingsByEvent" resultType="com.back.mypage.calendar.dto.UserCalendarEvent">
+        SELECT <include refid="mappingColumns"/>
+        FROM user_calendar_events
+        WHERE event_id = #{eventId}
+          AND google_event_id IS NOT NULL
+          AND sync_status &lt;&gt; 'DELETED'
+    </select>
+
+    <select id="countByUserAndStatus" resultType="int">
+        SELECT COUNT(*)
+        FROM user_calendar_events
+        WHERE user_id = #{userId} AND sync_status = #{syncStatus}
+    </select>
+
+    <insert id="upsertMapping">
+        INSERT INTO user_calendar_events (user_id, event_id, google_event_id, sync_status, retry_count)
+        VALUES (#{userId}, #{eventId}, #{googleEventId}, #{syncStatus}, #{retryCount})
+        ON DUPLICATE KEY UPDATE
+            sync_status = VALUES(sync_status),
+            retry_count = VALUES(retry_count)
+    </insert>
+
+    <update id="markSynced">
+        UPDATE user_calendar_events
+           SET google_event_id = #{googleEventId},
+               sync_status     = 'SYNCED',
+               retry_count     = 0,
+               last_error      = NULL,
+               last_synced_at  = NOW()
+         WHERE user_id = #{userId} AND event_id = #{eventId}
+    </update>
+
+    <update id="markFailed">
+        UPDATE user_calendar_events
+           SET sync_status = 'FAILED',
+               retry_count = retry_count + 1,
+               last_error  = LEFT(#{lastError}, 500)
+         WHERE user_id = #{userId} AND event_id = #{eventId}
+    </update>
+
+    <!-- 행을 지우지 않고 상태만 바꾼다 — 언제 무엇을 지웠는지 추적할 수 있어야 한다 -->
+    <update id="markDeleted">
+        UPDATE user_calendar_events
+           SET sync_status    = 'DELETED',
+               last_synced_at = NOW()
+         WHERE user_id = #{userId} AND event_id = #{eventId}
+    </update>
+
+    <delete id="deleteByUserId">
+        DELETE FROM user_calendar_events WHERE user_id = #{userId}
+    </delete>
+
+</mapper>

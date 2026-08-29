@@ -46,6 +46,10 @@ public class SecurityConfig {
                     // 관리 기능은 /api/admin/event 에 따로 있으므로 여기서 열어도 노출되지 않는다.
                     // ("/api/event" 는 정확히 그 경로만 매칭하고 하위를 포함하지 않는다)
                     "/api/event/**",
+                    // 구글 캘린더 연동 콜백 — 구글이 브라우저 리다이렉트로 부르므로 Authorization 헤더가 없다.
+                    // 사용자 식별과 CSRF 방어는 state 파라미터로 한다 (OAuthStateService).
+                    // /api/user/mypage/** 아래에 있지만 이 한 경로만 예외로 연다.
+                    "/api/user/mypage/calendar/google/callback",
                     "/api/mail/**", // 인증번호 관련
                     "/swagger-ui/**", // 스웨거 관련
                     "/v3/api-docs/**", // 스웨거 관련

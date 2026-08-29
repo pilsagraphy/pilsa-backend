@@ -6,7 +6,7 @@ import com.back.admin.user.dto.UserResponse;
 import com.back.admin.user.dto.UserSuspendRequest;
 import com.back.admin.user.dto.UserUpdateRequest;
 import com.back.admin.user.service.UserService;
-import com.back.auth.service.WithdrawService;
+import com.back.auth.local.service.WithdrawService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;

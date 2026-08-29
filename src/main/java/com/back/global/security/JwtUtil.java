@@ -1,6 +1,6 @@
 package com.back.global.security;
 
-import com.back.auth.dto.UserDto;
+import com.back.auth.core.dto.UserDto;
 import io.jsonwebtoken.*;
 import org.springframework.stereotype.Component;
 

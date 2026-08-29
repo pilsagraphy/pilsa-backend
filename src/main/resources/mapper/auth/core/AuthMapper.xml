@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.back.auth.core.mapper.AuthMapper">
+    <!-- loginId 찾기 -->
+    <select id="findByLoginId" resultType="com.back.auth.core.dto.UserDto">
+        SELECT user_id       AS userId,
+               login_id      AS loginId,
+               password_hash AS passwordHash,
+               name,
+               email,
+               member_type   AS memberType,
+               admin_level   AS adminLevel,
+               is_deleted    AS isDeleted,
+               ban_status    AS banStatus,
+               banned_until  AS bannedUntil,
+               token_version AS tokenVersion
+        FROM users
+        WHERE login_id = #{loginId}
+    </select>
+
+    <!-- 구글 소셜 로그인 — google_sub 로 찾은 userId 로 계정을 집는다 (findByLoginId 와 같은 컬럼) -->
+    <select id="findByUserId" resultType="com.back.auth.core.dto.UserDto">
+        SELECT user_id       AS userId,
+               login_id      AS loginId,
+               password_hash AS passwordHash,
+               name,
+               email,
+               member_type   AS memberType,
+               admin_level   AS adminLevel,
+               is_deleted    AS isDeleted,
+               ban_status    AS banStatus,
+               banned_until  AS bannedUntil,
+               token_version AS tokenVersion
+        FROM users
+        WHERE user_id = #{userId}
+    </select>
+
+    <!-- 로그인 로그 기록 -->
+    <update id="updateLastLoginAt">
+        UPDATE users SET last_login_at = NOW()
+        WHERE login_id = #{loginId}
+    </update>
+
+    <update id="updateLastLoginAtByUserId">
+        UPDATE users SET last_login_at = NOW()
+        WHERE user_id = #{userId}
+    </update>
+
+
+<!--    void insertLoginLogWithSession(@Param("userId") Long userId, String role, String sessionKey);-->
+
+
+    <!-- 회원가입 -->
+    <insert id="insertUser" useGeneratedKeys="true" keyProperty="userId">
+        <!-- major는 NOT NULL DEFAULT 'NONE' — 요청에서 누락돼도 DB 기본값 의도대로 'NONE' 저장 (null 바인딩 시 1048 오류) -->
+        INSERT INTO users (name, phone, major, student_no, email, login_id, password_hash, member_type, admin_level, is_deleted)
+        VALUES (#{name},#{phone}, COALESCE(#{major}, 'NONE'), #{studentNo}, #{email}, #{loginId}, #{passwordHash}, #{memberType}, #{adminLevel}, #{isDeleted})
+    </insert>
+
+    <!-- 회원가입 - 아이디 & 이메일 중복 확인 -->
+    <select id="existsByLoginId" resultType="boolean">
+        SELECT COUNT(*) > 0 FROM users WHERE login_id = #{loginId}
+    </select>
+    <select id="existsByEmail" resultType="boolean">
+        SELECT COUNT(*) > 0 FROM users WHERE email = #{email}
+    </select>
+    <!-- 학번/전화도 UNIQUE 인데 사전 검사가 없으면 INSERT 에서 1062 → 500 으로 터진다 -->
+    <select id="existsByStudentNo" resultType="boolean">
+        SELECT COUNT(*) > 0 FROM users WHERE student_no = #{studentNo}
+    </select>
+    <select id="existsByPhone" resultType="boolean">
+        SELECT COUNT(*) > 0 FROM users WHERE phone = #{phone}
+    </select>
+
+    <!-- 아이디 찾기 - 이메일로 login_id 조회 -->
+    <select id="findLoginIdByEmail" resultType="string">
+        SELECT login_id
+        FROM users
+        WHERE email = #{email}
+            LIMIT 1
+    </select>
+
+    <!-- 비밀번호 초기화 전 단계 - 아이디/이메일 일치 확인 -->
+    <select id="existsByLoginIdAndEmail" resultType="boolean">
+        SELECT COUNT(*) > 0
+        FROM users
+        WHERE login_id = #{loginId}
+          AND email = #{email}
+    </select>
+
+    <!-- 비밀번호 초기화 -->
+    <!-- 비밀번호를 바꾸면 그 사용자의 기존 토큰을 전부 무효화한다 (계정 탈취 후 비번을 바꿔도
+         공격자의 400일짜리 리프레시 토큰이 살아 있던 구멍을 막는다).
+         비밀번호가 바뀌는 경로가 이 쿼리 하나뿐이라 여기서 함께 올리면 호출부가 빠뜨릴 수 없다. -->
+    <update id="updatePassword">
+        UPDATE users
+           SET password_hash = #{password},
+               token_version = token_version + 1
+        WHERE login_id = #{loginId}
+    </update>
+
+    <!-- 모든 기기에서 로그아웃 -->
+    <update id="bumpTokenVersion">
+        UPDATE users SET token_version = token_version + 1
+        WHERE user_id = #{userId}
+    </update>
+
+    <!-- 이메일 찾기 - 학번+이름 모두 일치 시 이메일 반환 (하나라도 다르면 결과 없음) -->
+    <select id="findEmailByStudentNoAndName" resultType="string">
+        SELECT email
+        FROM users
+        WHERE student_no = #{studentNo}
+          AND name = #{name}
+          AND is_deleted = false
+        LIMIT 1
+    </select>
+
+    <!-- 정책값 단건 조회 (이메일 인증 통과 플래그 유효시간 등) -->
+    <select id="findPolicySetting" resultType="string">
+        SELECT setting_value
+        FROM policy_settings
+        WHERE code = #{code}
+    </select>
+</mapper>
+
+        <!--<mapper namespace="com.back.auth.core.mapper.AuthMapper">-->
+
+        <!--    &lt;!&ndash; email로 회원 찾기 &ndash;&gt;-->
+        <!--    <select id="findByEmail" parameterType="string" resultType="com.back.auth.core.dto.UserDto">-->
+        <!--        SELECT-->
+        <!--            user_id         AS userId,-->
+        <!--            user_email      AS userEmail,-->
+        <!--            user_password   AS userPassword,-->
+        <!--            user_role       AS userRole,-->
+        <!--            manager_phone_access AS managerPhoneAccess,-->
+        <!--            center_id       AS centerId,-->
+        <!--            user_name       AS userName,-->
+        <!--            user_phone      AS userPhone,-->
+        <!--            user_approved   AS userApproved,-->
+        <!--            user_created_at AS userCreatedAt,-->
+        <!--            CASE WHEN is_super = 'Y' THEN TRUE ELSE FALSE END AS isSuper,-->
+        <!--            can_allocate AS canAllocate-->
+        <!--        FROM users-->
+        <!--        WHERE user_email = #{email}-->
+        <!--    </select>-->
+
+        <!--    &lt;!&ndash; phone으로 회원 찾기 &ndash;&gt;-->
+        <!--    <select id="findByPhone" parameterType="string" resultType="com.blue.auth.dto.UserDto">-->
+        <!--        SELECT-->
+        <!--            user_id         AS userId,-->
+        <!--            user_email      AS userEmail,-->
+        <!--            user_password   AS userPassword,-->
+        <!--            user_role       AS userRole,-->
+        <!--            manager_phone_access AS managerPhoneAccess,-->
+        <!--            center_id       AS centerId,-->
+        <!--            user_name       AS userName,-->
+        <!--            user_phone      AS userPhone,-->
+        <!--            user_approved   AS userApproved,-->
+        <!--            user_created_at AS userCreatedAt,-->
+        <!--            CASE WHEN is_super = 'Y' THEN TRUE ELSE FALSE END AS isSuper,-->
+        <!--            can_allocate AS canAllocate-->
+        <!--        FROM users-->
+        <!--        WHERE user_phone = #{phone}-->
+        <!--    </select>-->
+
+        <!--    &lt;!&ndash; 회원가입 (회원 추가) &ndash;&gt;-->
+        <!--    <insert id="insertUser" parameterType="com.blue.auth.dto.UserDto">-->
+        <!--        INSERT INTO users (-->
+        <!--            user_email, user_password, user_role, manager_phone_access, can_allocate,-->
+        <!--            center_id, user_name, user_phone, user_approved, user_created_at-->
+        <!--        )-->
+        <!--        VALUES (-->
+        <!--                   #{userEmail}, #{userPassword}, #{userRole}, #{managerPhoneAccess}, #{canAllocate},-->
+        <!--                   #{centerId}, #{userName}, #{userPhone}, #{userApproved}, NOW()-->
+        <!--               )-->
+        <!--    </insert>-->
+
+        <!--    &lt;!&ndash; 비밀번호 업데이트 &ndash;&gt;-->
+        <!--    <update id="updatePassword">-->
+        <!--        UPDATE users-->
+        <!--        SET user_password = #{password}-->
+        <!--        WHERE user_id = #{id}-->
+        <!--    </update>-->
+
+        <!--</mapper>-->
