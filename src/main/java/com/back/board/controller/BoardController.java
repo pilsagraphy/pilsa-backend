@@ -154,14 +154,15 @@ public class BoardController {
                       "viewCount": 15, "likeCount": 2, "isLiked": true,
                       "commentCount": 3,
                       "created": "2026-08-14T10:12:30", "updated": "2026-08-14T11:02:11",
-                      "prevPost": {"postId": 159, "title": "이전 글 제목", "categoryName": "질문", "created": "2026-08-13T09:20:00"},
-                      "nextPost": {"postId": 172, "title": "다음 글 제목", "categoryName": "일상", "created": "2026-08-14T15:40:00"},
+                      "prevPost": {"postId": 172, "title": "이전 글 제목", "categoryName": "일상", "created": "2026-08-14T15:40:00"},
+                      "nextPost": {"postId": 159, "title": "다음 글 제목", "categoryName": "질문", "created": "2026-08-13T09:20:00"},
                       "attachments": [{"attachmentId": 18, "originName": "파일.pdf", "fileUrl": "uploads/board-2/uuid.pdf", "fileSize": 12345}],
                       "attachmentCount": 1
                     }
                     ```
                     ※ 익명글: authorName="익명", userId=null (관리자·작성자 본인 제외)
-                    ※ prevPost/nextPost: 첫 글·마지막 글이면 null
+                    ※ prevPost/nextPost: 목록과 동일한 순서(중요 우선 + 최신순) 기준으로 현재 글 바로 위(prev)·아래(next) 글.
+                       첫 글이면 prevPost=null, 마지막 글이면 nextPost=null. sort=viewCount 면 조회순 기준으로 계산됩니다.
                     ※ 상세에서만 created(작성일)와 updated(수정일)가 함께 내려갑니다.
                     """)
     @GetMapping("/posts/{postId}")

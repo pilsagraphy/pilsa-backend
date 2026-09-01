@@ -114,7 +114,7 @@
         FROM posts
         WHERE board_id = #{boardId}
           AND state = 'normal'
-        ORDER BY is_pinned DESC, created_at DESC
+        ORDER BY is_pinned DESC, created_at DESC, post_id DESC
         LIMIT #{limit}
     </select>
 
@@ -166,8 +166,8 @@
         </if>
         ORDER BY p.is_pinned DESC,
         <choose>
-            <when test="sort == 'viewCount'">p.view_count DESC</when>
-            <otherwise>p.created_at DESC</otherwise>
+            <when test="sort == 'viewCount'">p.view_count DESC, p.post_id DESC</when>
+            <otherwise>p.created_at DESC, p.post_id DESC</otherwise>
         </choose>
         LIMIT #{size} OFFSET #{offset}
     </select>
@@ -208,20 +208,40 @@
         p.is_anonymous AS isAnonymous,
         p.is_pinned AS isPinned,
         ct.name AS categoryName,
+        <!-- 이전글/다음글은 목록(findAllPosts)과 '완전히 같은 순서'로 걷는다 — 현재 글이 중심.
+             목록 정렬 = is_pinned DESC, (created_at|view_count) DESC, post_id DESC (동률 안정화).
+             목록을 위에서 아래로 읽을 때:
+               prevPost = 현재 글 바로 위 칸(정렬키가 현재보다 큰 것 중 가장 작은 = 최신/상단 쪽 이웃)
+               nextPost = 현재 글 바로 아래 칸(정렬키가 현재보다 작은 것 중 가장 큰 = 과거/하단 쪽 이웃)
+             board_id 로 게시판마다 분리되고, state='normal' 만 대상(블라인드/삭제 글은 건너뛴다). -->
         <choose>
             <when test="sort == 'viewCount'">
-                (SELECT post_id FROM posts
-                WHERE board_id = #{boardId} AND state = 'normal' AND post_id != p.post_id
-                AND (view_count &gt; p.view_count OR (view_count = p.view_count AND post_id &gt; p.post_id))
-                ORDER BY view_count ASC, post_id ASC LIMIT 1) AS prevPostId,
-                (SELECT post_id FROM posts
-                WHERE board_id = #{boardId} AND state = 'normal' AND post_id != p.post_id
-                AND (view_count &lt; p.view_count OR (view_count = p.view_count AND post_id &lt; p.post_id))
-                ORDER BY view_count DESC, post_id DESC LIMIT 1) AS nextPostId
+                (SELECT sub.post_id FROM posts sub
+                WHERE sub.board_id = #{boardId} AND sub.state = 'normal'
+                AND (sub.is_pinned &gt; p.is_pinned
+                OR (sub.is_pinned = p.is_pinned AND sub.view_count &gt; p.view_count)
+                OR (sub.is_pinned = p.is_pinned AND sub.view_count = p.view_count AND sub.post_id &gt; p.post_id))
+                ORDER BY sub.is_pinned ASC, sub.view_count ASC, sub.post_id ASC LIMIT 1) AS prevPostId,
+                (SELECT sub.post_id FROM posts sub
+                WHERE sub.board_id = #{boardId} AND sub.state = 'normal'
+                AND (sub.is_pinned &lt; p.is_pinned
+                OR (sub.is_pinned = p.is_pinned AND sub.view_count &lt; p.view_count)
+                OR (sub.is_pinned = p.is_pinned AND sub.view_count = p.view_count AND sub.post_id &lt; p.post_id))
+                ORDER BY sub.is_pinned DESC, sub.view_count DESC, sub.post_id DESC LIMIT 1) AS nextPostId
             </when>
             <otherwise>
-                (SELECT MAX(post_id) FROM posts WHERE board_id = #{boardId} AND state = 'normal' AND post_id &lt; #{postId}) AS prevPostId,
-                (SELECT MIN(post_id) FROM posts WHERE board_id = #{boardId} AND state = 'normal' AND post_id &gt; #{postId}) AS nextPostId
+                (SELECT sub.post_id FROM posts sub
+                WHERE sub.board_id = #{boardId} AND sub.state = 'normal'
+                AND (sub.is_pinned &gt; p.is_pinned
+                OR (sub.is_pinned = p.is_pinned AND sub.created_at &gt; p.created_at)
+                OR (sub.is_pinned = p.is_pinned AND sub.created_at = p.created_at AND sub.post_id &gt; p.post_id))
+                ORDER BY sub.is_pinned ASC, sub.created_at ASC, sub.post_id ASC LIMIT 1) AS prevPostId,
+                (SELECT sub.post_id FROM posts sub
+                WHERE sub.board_id = #{boardId} AND sub.state = 'normal'
+                AND (sub.is_pinned &lt; p.is_pinned
+                OR (sub.is_pinned = p.is_pinned AND sub.created_at &lt; p.created_at)
+                OR (sub.is_pinned = p.is_pinned AND sub.created_at = p.created_at AND sub.post_id &lt; p.post_id))
+                ORDER BY sub.is_pinned DESC, sub.created_at DESC, sub.post_id DESC LIMIT 1) AS nextPostId
             </otherwise>
         </choose>
         FROM posts p
