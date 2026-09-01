@@ -1,4 +1,4 @@
-package com.back.admin.common.dto;
+package com.back.admin.sanction.dto;
 
 import java.util.List;
 import lombok.Getter;
@@ -18,7 +18,7 @@ public class BulkResultResponse {
 
     @Getter
     public static class FailureItem {
-        private final Long id;      // 실패한 대상 id (postId / commentId)
+        private final Long id;      // 실패한 대상 id (targetId = postId / commentId)
         private final String message;
 
         public FailureItem(Long id, String message) {

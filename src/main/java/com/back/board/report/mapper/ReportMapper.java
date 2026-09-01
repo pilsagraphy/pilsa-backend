@@ -1,11 +1,17 @@
 package com.back.board.report.mapper;
 
+import com.back.board.report.dto.ReportReasonResponse;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
-// 신고 "접수" 매퍼. 신고 처리(반려/삭제) 조회는 같은 패키지의 ReportAdminMapper 가 담당한다.
+import java.util.List;
+
+// 신고 "접수"(+사유 목록) 매퍼. 신고 처리(복원/삭제/블라인드) 조회·조치는 admin.sanction 의 ReportAdminMapper 가 담당한다.
 @Mapper
 public interface ReportMapper {
+
+    // 신고 사유 카테고리 목록 (reasons 테이블, 노출 순서 오름차순)
+    List<ReportReasonResponse> findReasons();
 
     // 신고 접수
     void insertReport(@Param("reporterId") Long reporterId,

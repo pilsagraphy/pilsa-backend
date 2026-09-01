@@ -1,5 +1,6 @@
 package com.back.board.report.service;
 
+import com.back.board.report.dto.ReportReasonResponse;
 import com.back.board.report.dto.ReportRequest;
 import com.back.board.report.exception.ReportException;
 import com.back.board.report.mapper.ReportMapper;
@@ -9,6 +10,8 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 /**
  * 신고 접수 서비스.
@@ -22,6 +25,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class ReportService {
 
     private final ReportMapper reportMapper;
+
+    // 신고 사유 카테고리 목록 (신고 모달 셀렉트바). 로그인 회원 공통
+    @Transactional(readOnly = true)
+    public List<ReportReasonResponse> getReasons() {
+        return reportMapper.findReasons();
+    }
 
     // 게시글/댓글 신고 접수
     @Transactional

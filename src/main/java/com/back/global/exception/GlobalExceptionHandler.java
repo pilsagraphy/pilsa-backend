@@ -9,6 +9,8 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -33,7 +35,8 @@ public class GlobalExceptionHandler {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("message", e.getMessage());
         body.put("banType", e.getBanType());          // temporary / permanent
-        body.put("bannedUntil", e.getBannedUntil());  // 영구차단이면 null
+        // ISO 가 아니라 화면 표기 그대로('yyyy.MM.dd HH:mm') — 안내 화면이 쓰는 형태가 하나뿐이라 포맷을 서버가 확정한다
+        body.put("bannedUntil", BannedException.formatBannedUntil(e.getBannedUntil()));  // 영구차단이면 null
         return ResponseEntity.status(e.getStatus()).body(body);
     }
 
@@ -54,6 +57,22 @@ public class GlobalExceptionHandler {
                 .orElse("요청 값이 올바르지 않습니다.");
         log.debug("검증 실패: {}", message);
         return ResponseEntity.badRequest().body(Map.of("message", message));
+    }
+
+    // 업로드 용량 초과 → 413. catch-all 로 가면 500 "서버 오류"가 되어
+    // 프론트가 "파일이 너무 크다"를 사용자에게 안내할 수 없다 (한도: spring.servlet.multipart)
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<Map<String, Object>> handleUploadTooLarge(MaxUploadSizeExceededException e) {
+        log.debug("업로드 용량 초과: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(Map.of("message", "업로드 가능한 최대 용량을 초과했습니다."));
+    }
+
+    // multipart 요청에 파일 파트가 아예 없을 때 → 400 (파일 업로드 API 의 계약)
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<Map<String, Object>> handleMissingPart(MissingServletRequestPartException e) {
+        log.debug("multipart 파트 누락: {}", e.getMessage());
+        return ResponseEntity.badRequest().body(Map.of("message", "업로드할 파일이 없습니다."));
     }
 
     // 존재하지 않는 경로/정적 리소스는 404로 응답한다.

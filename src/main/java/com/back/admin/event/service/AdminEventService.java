@@ -35,12 +35,32 @@ public class AdminEventService {
         }
     }
 
+    /**
+     * 카테고리 정규화 — event_categories 에 등록된 이름만 허용하고, 저장은 항상 **정본 표기**로 한다.
+     *
+     * 존재 확인(boolean)이 아니라 이름을 되받아 쓰는 이유: 콜레이션이 대소문자를 무시해서(utf8mb4_0900_ai_ci)
+     * "mt" 도 검증을 통과하는데, 그대로 저장하면 events.category 에 정본("MT")과 다른 표기가 섞인다.
+     * 앞뒤 공백도 여기서 털어낸다 — 프론트가 " MT " 를 보내도 400 이 되지 않게.
+     * 빈 값은 NULL 로 통일한다(카테고리 미지정). 빈 문자열이 그대로 저장되던 것을 막는다.
+     */
+    private String normalizeCategory(String category) {
+        if (category == null || category.isBlank()) {
+            return null;
+        }
+        String name = adminEventMapper.findActiveCategoryName(category.trim());
+        if (name == null) {
+            throw new EventException("유효하지 않은 일정 카테고리입니다. (GET /api/event/categories 참고)", HttpStatus.BAD_REQUEST);
+        }
+        return name;
+    }
+
     @Transactional
     public EventResponse createEvent(EventRequest request) {
         checkAdminRole();
 
         // 날짜 선후 관계 검증
         validateExecutionDates(request.getStartDate(), request.getEndDate());
+        request.setCategory(normalizeCategory(request.getCategory()));
 
         // 등록 시에는 ERD 구조상 누가 등록했는지(user_id)가 필요하므로 가져옴
         Long userId = AuthUtils.currentUserId();
@@ -69,8 +89,17 @@ public class AdminEventService {
     public EventResponse updateEvent(Long eventId, EventUpdateRequest request) {
         checkAdminRole(); // 권한만 확인
 
+        // 존재 확인이 먼저다 — 없는 일정에 잘못된 카테고리를 보냈을 때 400 이 아니라 404 가 나가야 한다.
+        // (UPDATE 결과로만 판정하면 카테고리 검증이 앞서 실행돼 순서가 뒤집힌다)
+        if (!adminEventMapper.existsEvent(eventId)) {
+            throw new EventException("해당 일정을 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
+        }
+        // 부분 수정이므로 미전송(null)이면 기존 값을 그대로 둔다 — 빈 문자열도 여기서 null 이 되어 손대지 않는다
+        request.setCategory(normalizeCategory(request.getCategory()));
+
         int updated = adminEventMapper.updateEvent(eventId, request);
         if (updated == 0) {
+            // 확인과 UPDATE 사이에 삭제된 경우
             throw new EventException("해당 일정을 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
         }
 

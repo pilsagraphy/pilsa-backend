@@ -113,9 +113,10 @@ public interface BoardMapper {
     /** 삭제 대상 첨부의 물리 경로 조회 (소프트삭제 전에 확보 → 디스크 고아 파일 방지) */
     List<String> findAttachmentUrls(@Param("postId") Long postId, @Param("attachmentIds") List<Long> attachmentIds);
 
-    // 첨부파일 정보 DB 등록
+    // 첨부파일 정보 DB 등록 (발행 시점에 함께 올린 파일 — 언제나 첨부 목록용 usage_type=attachment)
     void insertAttachment(
             @Param("postId") Long postId,
+            @Param("uploaderId") Long uploaderId,
             @Param("originName") String originName,
             @Param("fileUrl") String fileUrl,
             @Param("fileSize") Long fileSize,

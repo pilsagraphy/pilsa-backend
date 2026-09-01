@@ -4,6 +4,8 @@ import com.back.auth.dto.WithdrawRequest;
 import com.back.auth.dto.WithdrawTarget;
 import com.back.auth.exception.AuthException;
 import com.back.auth.mapper.WithdrawMapper;
+import com.back.board.attachment.service.AttachmentService;
+import com.back.board.draft.mapper.DraftMapper;
 import com.back.global.security.AuthUtils;
 import com.back.mypage.notification.mapper.NotificationDeviceMapper;
 import com.back.mypage.notification.mapper.NotificationMapper;
@@ -39,6 +41,9 @@ public class WithdrawService {
     private final WithdrawMapper withdrawMapper;
     private final NotificationDeviceMapper notificationDeviceMapper;
     private final NotificationMapper notificationMapper;
+    // 초안·초안 첨부 정리용 (탈퇴자는 재로그인이 불가해 초안 삭제 API 를 다시 탈 수 없다)
+    private final DraftMapper draftMapper;
+    private final AttachmentService attachmentService;
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate redisTemplate;
 
@@ -93,6 +98,16 @@ public class WithdrawService {
         // 알림 수신 기기(웹 푸시 수신 주소도 개인정보)와 본인 알림함 정리
         notificationDeviceMapper.deleteByUserId(userId);
         notificationMapper.softDeleteAllByUser(userId);
+
+        // 임시저장(초안)과 초안에 묶인 선업로드 파일 정리 — 초안은 본인만 보던 미발행 개인 작업물이라
+        // 개인정보 즉시 파기 원칙의 대상이고, 여기서 지우지 않으면 어떤 배치도 못 지운다:
+        // 탈퇴자는 재로그인 불가(초안 삭제 API 재진입 불가), 04:50 정리 배치는 초안 귀속 파일을 명시 제외,
+        // 04:30 탈퇴 행 배치가 users 를 지울 때는 FK CASCADE 로 행만 사라져 디스크 파일이 영구 고아가 된다.
+        // 초안 삭제 API 와 같은 순서: 첨부 행+파일(커밋 후) 명시 삭제 → drafts DELETE
+        for (Long draftId : draftMapper.findDraftIdsByUser(userId)) {
+            attachmentService.deleteDraftAttachments(draftId);
+            draftMapper.deleteDraft(draftId, userId);
+        }
 
         // 잔여 인증 상태 정리 (인증번호·인증 통과 플래그) — 실패해도 탈퇴는 성공
         try {

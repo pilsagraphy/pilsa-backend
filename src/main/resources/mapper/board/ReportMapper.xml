@@ -2,6 +2,18 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.back.board.report.mapper.ReportMapper">
 
+    <!-- 신고 사유 카테고리 목록 (reasons 테이블 노출 — FE 하드코딩 제거용) -->
+    <!-- 활성 사유(is_active=1)만, 노출 순서 오름차순 -->
+    <select id="findReasons" resultType="com.back.board.report.dto.ReportReasonResponse">
+        SELECT reason_id     AS reasonId,
+               code,
+               label,
+               display_order AS displayOrder
+        FROM reasons
+        WHERE is_active = 1
+        ORDER BY display_order ASC
+    </select>
+
     <insert id="insertReport">
         INSERT INTO reports_log (reporter_id, target_type, target_id, reason_id, detail, status, created_at)
         VALUES (#{reporterId}, #{targetType}, #{targetId}, #{reasonId}, #{detail}, 'pending', NOW())

@@ -29,8 +29,18 @@
         JOIN users   u  ON p.user_id = u.user_id
         JOIN reasons rs ON r.reason_id = rs.reason_id
         <where>
-            <if test="status != null and status != ''">AND r.status = #{status}</if>
+            <!-- 상태 필터: state 지정 시 해당 표시상태(blind/deleted)만.
+                 미지정 시 기본은 대표 신고가 반려(rejected)된 것만 제외 → pending·blind·deleted(=복구 안 된 것) 노출.
+                 (반려=복구된 대상은 status=rejected 로만 구분된다. 표시상태 normal 로 제외하면 미조치 pending 신고까지 사라지므로 status 기준으로 판정) -->
+            <choose>
+                <when test="state != null and state != ''">AND p.state = #{state}</when>
+                <otherwise>AND r.status &lt;&gt; 'rejected'</otherwise>
+            </choose>
             <if test="boardId != null">AND p.board_id = #{boardId}</if>
+            <if test="keyword != null and keyword != ''">
+                AND (p.content LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\'
+                     OR u.name LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\')
+            </if>
         </where>
     </sql>
 
@@ -76,8 +86,18 @@
         JOIN users    u ON c.user_id = u.user_id
         JOIN reasons  rs ON r.reason_id = rs.reason_id
         <where>
-            <if test="status != null and status != ''">AND r.status = #{status}</if>
+            <!-- 상태 필터: state 지정 시 해당 표시상태(blind/deleted)만.
+                 미지정 시 기본은 대표 신고가 반려(rejected)된 것만 제외 → pending·blind·deleted(=복구 안 된 것) 노출.
+                 (반려=복구된 대상은 status=rejected 로만 구분된다. 표시상태 normal 로 제외하면 미조치 pending 신고까지 사라지므로 status 기준으로 판정) -->
+            <choose>
+                <when test="state != null and state != ''">AND c.state = #{state}</when>
+                <otherwise>AND r.status &lt;&gt; 'rejected'</otherwise>
+            </choose>
             <if test="boardId != null">AND p.board_id = #{boardId}</if>
+            <if test="keyword != null and keyword != ''">
+                AND (c.content LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\'
+                     OR u.name LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\')
+            </if>
         </where>
     </sql>
 

@@ -129,8 +129,8 @@ UPDATE api_endpoints SET confirmed_at = CURDATE() WHERE endpoint_id IN (…);
 | 34 | 11 | `PATCH /api/user/boards/{boardId}/posts/{postId}/comments/{commentId}/delete` | 공통게시판 페이지 - 댓글/대댓글 삭제 (소프트, 본인만) | ☐ |
 | 35 | 8 | `PATCH /api/user/boards/{boardId}/posts/{postId}/delete` | 공통게시판 페이지 - 게시글 삭제 (소프트, 작성자 본인만) | ☐ |
 | 36 | 12 | `PATCH /api/user/boards/{boardId}/posts/{postId}/like` | 공통게시판 페이지 - 좋아요 토글 | ☐ |
-| 37 | 136 | `POST /api/user/mypage/toast/devices` | 알림 수신 기기 등록 (웹 푸시) | ☐ |
-| 38 | 137 | `DELETE /api/user/mypage/toast/devices` | 알림 수신 기기 해제 | ☐ |
+| 37 | 136 | `PUT /api/user/mypage/toast/devices` | 알림 수신 동의/거부 (토글, 등록·해제 통합) | ☐ |
+| 38 | 137 | `GET /api/user/mypage/toast/devices` | 알림 수신 동의 상태 조회 (기기 목록) | ☐ |
 | 42 | 20 | `POST /api/user/reports` | 공통게시판/댓글 신고 페이지 - 게시글/댓글 신고 접수 | ☐ |
 | 42-1 | 139 | `PATCH /api/user/mypage/withdraw` | 회원 탈퇴 (개인정보 파기 — **맨 마지막에, 버릴 계정으로**) | ☐ |
 | 42-2 | 140 | `PATCH /api/admin/users/{userId}/withdraw` | 회원 강제 탈퇴 (관리자 — 관리자 계정 대상 시 400 확인) | ☐ |
@@ -728,10 +728,11 @@ END:VCALENDAR
 {"message":"좋아요 +1"}  또는  {"message":"좋아요 취소"}
 ```
 
-#### 37) `POST /api/user/mypage/toast/devices` — 알림 수신 기기 등록 (웹 푸시)  (id 136)
-**입력**
+#### 37) `PUT /api/user/mypage/toast/devices` — 알림 수신 동의/거부 (토글)  (id 136)
+**입력 (동의)**
 ```
 {
+  "enabled": true,
   "endpoint": "https://fcm.googleapis.com/fcm/send/abc...",
   "keys": { "p256dh": "BNc...", "auth": "k8J..." }
 }
@@ -739,27 +740,39 @@ END:VCALENDAR
    프론트가 없으므로 **위 더미 문자열을 그대로 넣어** 저장까지 확인하면 된다.
    (실제 발송 검증은 알림 담당자 과제 — HANDOFF-notification-tasks.md 에 방법을 넣어뒀다)
 ```
+**입력 (거부)** — 같은 endpoint 로 이어서 호출
+```
+{"enabled": false, "endpoint": "https://fcm.googleapis.com/fcm/send/abc..."}
+```
 **기대 출력**
 ```
-{"message":"알림 기기가 등록되었습니다."}
+{"enabled":true,"deviceCount":1,"message":"이 기기로 알림을 받습니다."}
+{"enabled":false,"deviceCount":0,"message":"이 기기에서는 알림을 받지 않습니다."}
 
-실패: 400 {"message":"기기 등록 정보가 올바르지 않습니다."}
+실패: 400 {"message":"enabled 값이 필요합니다. (true=수신 동의, false=수신 거부)"}
+     400 {"message":"기기 endpoint 가 필요합니다."}
+     400 {"message":"기기 등록 정보가 올바르지 않습니다."}   ← enabled=true 인데 keys 누락
 ```
-> 확인: 같은 endpoint 로 **다시 등록해도 행이 늘지 않아야**(UPSERT) 하고,
-> `endpoint` 를 비우거나 `keys` 를 빼면 **400**. `SELECT * FROM notification_devices;` 로 대조.
-> 알림 켜기(권한 허용) 시 호출. 한 회원이 여러 기기 가능. 캘린더 구독과 무관한 웹 푸시 전달 채널. 테이블 notification_devices(세션성 — 물리삭제 예외)
+> 확인: ① 같은 endpoint 로 **동의를 두 번 해도 행이 늘지 않아야**(UPSERT) 하고 `deviceCount` 도 그대로.
+> ② `enabled=false` 를 두 번 보내도 둘 다 **200**(멱등). ③ `enabled` 를 아예 빼면 400 —
+> 여기서 false 로 조용히 처리되면 안 된다(수신 동의가 의도치 않게 꺼지는 사고).
+> ④ 거부 후 `SELECT * FROM notification_devices;` 로 **행이 사라졌는지** 확인 — 세션성 데이터라 물리 삭제다.
+> 등록·해제를 하나로 합친 API. 한 회원이 여러 기기 가능하고, 거부는 해당 기기만 빠진다. 캘린더 구독과 무관한 웹 푸시 전달 채널.
 
-#### 38) `DELETE /api/user/mypage/toast/devices` — 알림 수신 기기 해제  (id 137)
+#### 38) `GET /api/user/mypage/toast/devices` — 알림 수신 동의 상태 조회  (id 137)
 **입력**
 ```
-{"endpoint": "https://fcm.googleapis.com/fcm/send/abc..."}
+없음 (쿼리 파라미터 없음)
 ```
 **기대 출력**
 ```
-{"message":"알림 기기가 해제되었습니다."}
-(이미 없는 기기여도 200)
+{"deviceCount":1,
+ "devices":[{"endpoint":"https://fcm.googleapis.com/fcm/send/abc...","registeredAt":"2026-08-17 09:14:02"}]}
 ```
-> 알림 끄기·로그아웃 시 프론트가 pushManager 해제와 함께 호출. 본인 기기만 해제. 발송 응답 404/410 인 기기는 서버가 자동 정리
+> 확인: ① 37번으로 동의한 직후 이 목록에 **그 endpoint 가 보여야** 하고, 거부 후에는 사라져야 한다.
+> ② 응답에 `p256dh`·`auth` 가 **절대 포함되면 안 된다** — 유출되면 그 기기로 임의 푸시를 보낼 수 있다.
+> ③ 다른 회원 토큰으로 호출하면 그 회원 기기만 나와야 한다(남의 기기 노출 없음).
+> 프론트는 이 목록을 자기 `subscription.endpoint` 와 대조해 토글 초기값을 정한다.
 
 #### 42) `POST /api/user/reports` — 공통게시판/댓글 신고 페이지 - 게시글/댓글 신고 접수  (id 20)
 **입력**

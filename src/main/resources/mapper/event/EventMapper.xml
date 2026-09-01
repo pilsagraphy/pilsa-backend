@@ -4,17 +4,29 @@
 
     <!-- 캘린더 구독(ICS) 피드: 종일 일정 규격에 맞춰 SQL 에서 날짜를 포맷한다.
          DTEND 는 배타적이라 종료일 + 1일, DTSTAMP 는 UTC 로 변환 -->
+    <!-- 전체 피드와 단일 일정이 같은 컬럼·같은 변환 규칙을 쓰도록 한곳에 둔다 -->
+    <sql id="calendarRowColumns">
+        event_id AS eventId,
+        title,
+        category,
+        description,
+        DATE_FORMAT(start_at, '%Y%m%d')                          AS startDate,
+        DATE_FORMAT(DATE_ADD(end_at, INTERVAL 1 DAY), '%Y%m%d')  AS endDateExclusive,
+        DATE_FORMAT(CONVERT_TZ(updated_at, '+09:00', '+00:00'), '%Y%m%dT%H%i%sZ') AS dtstamp
+    </sql>
+
     <select id="findAllForCalendar" resultType="com.back.event.dto.EventCalendarRow">
-        SELECT event_id AS eventId,
-               title,
-               category,
-               description,
-               DATE_FORMAT(start_at, '%Y%m%d')                          AS startDate,
-               DATE_FORMAT(DATE_ADD(end_at, INTERVAL 1 DAY), '%Y%m%d')  AS endDateExclusive,
-               DATE_FORMAT(CONVERT_TZ(updated_at, '+09:00', '+00:00'), '%Y%m%dT%H%i%sZ') AS dtstamp
+        SELECT <include refid="calendarRowColumns"/>
         FROM events
         WHERE state = 'normal'
         ORDER BY start_at ASC, event_id ASC
+    </select>
+
+    <select id="findOneForCalendar" resultType="com.back.event.dto.EventCalendarRow">
+        SELECT <include refid="calendarRowColumns"/>
+        FROM events
+        WHERE event_id = #{eventId}
+          AND state = 'normal'
     </select>
 
     <select id="findEventsByPeriod" resultType="com.back.event.dto.EventDataResponse">
@@ -30,6 +42,27 @@
           AND start_at &lt;= #{to}
           AND end_at &gt;= #{from}
         ORDER BY start_at ASC
+    </select>
+
+    <select id="findEventById" resultType="com.back.event.dto.EventDataResponse">
+        SELECT
+            event_id AS eventId,
+            title,
+            category,
+            description,
+            DATE_FORMAT(start_at, '%Y-%m-%d') AS startDate,
+            DATE_FORMAT(end_at, '%Y-%m-%d') AS endDate
+        FROM events
+        WHERE event_id = #{eventId} AND state = 'normal'
+    </select>
+
+    <!-- 일정 카테고리 목록 (event_categories 가 events.category 값의 정본) -->
+    <select id="findActiveEventCategories" resultType="com.back.event.dto.EventCategoryResponse">
+        SELECT event_category_id AS eventCategoryId,
+               name
+        FROM event_categories
+        WHERE is_active = 1
+        ORDER BY display_order ASC, event_category_id ASC
     </select>
 
 </mapper>

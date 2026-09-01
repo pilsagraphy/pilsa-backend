@@ -33,6 +33,20 @@ public class EventServiceImpl implements EventService {
         return new EventPageResponse("일정 목록을 성공적으로 불러왔습니다.", events);
     }
 
+    @Override
+    public EventResponse getEventById(Long eventId) {
+        EventDataResponse event = eventMapper.findEventById(eventId);
+        if (event == null) {
+            throw new EventException("해당 일정을 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
+        }
+        return new EventResponse("일정 상세 정보를 성공적으로 불러왔습니다.", event);
+    }
+
+    @Override
+    public List<EventCategoryResponse> getEventCategories() {
+        return eventMapper.findActiveEventCategories();
+    }
+
     /**
      * 구글 캘린더 "URL로 추가" 구독용 iCalendar(ICS) 피드.
      *
@@ -44,6 +58,28 @@ public class EventServiceImpl implements EventService {
      */
     @Override
     public String buildCalendarFeed() {
+        return buildIcs(eventMapper.findAllForCalendar());
+    }
+
+    /**
+     * 일정 1건짜리 ICS.
+     *
+     * 안드로이드는 구독(URL) 경로가 없다 — 구글 캘린더 앱에 "URL로 추가"가 없고 webcal:// 을 받는 앱도 없다.
+     * 그래서 전체 구독 대신 "이 일정만 담기"로 대신한다. 받은 쪽에서는 구독이 아니라 가져오기(import)라
+     * 이후 수정은 반영되지 않는다 — 전체 구독(calendar.ics)과 용도가 다르다.
+     */
+    @Override
+    public String buildEventFeed(Long eventId) {
+        EventCalendarRow row = eventMapper.findOneForCalendar(eventId);
+        if (row == null) {
+            throw new EventException("존재하지 않거나 삭제된 일정입니다.", HttpStatus.NOT_FOUND);
+        }
+        return buildIcs(List.of(row));
+    }
+
+    // VCALENDAR 헤더 + VEVENT 들 + 푸터.
+    // 전체 피드와 단일 일정이 같은 규칙(UID·종일 처리·이스케이프)을 쓰도록 한곳에 모아 둔다.
+    private String buildIcs(List<EventCalendarRow> rows) {
         StringBuilder sb = new StringBuilder();
         line(sb, "BEGIN:VCALENDAR");
         line(sb, "VERSION:2.0");
@@ -53,7 +89,7 @@ public class EventServiceImpl implements EventService {
         line(sb, "X-WR-CALNAME:필사그래피 일정");
         line(sb, "X-WR-TIMEZONE:Asia/Seoul");
 
-        for (EventCalendarRow row : eventMapper.findAllForCalendar()) {
+        for (EventCalendarRow row : rows) {
             line(sb, "BEGIN:VEVENT");
             // UID 는 일정마다 고정 — 같은 UID 로 다시 내려가면 구글이 "수정"으로 인식한다
             line(sb, "UID:pilsa-event-" + row.getEventId() + "@pilsagraphy");
