@@ -142,7 +142,7 @@ public class BoardController {
 
                     ### 요청 예시
                     ```
-                    GET /api/user/boards/2/posts/171?sort=created
+                    GET /api/user/boards/2/posts/171
                     ```
 
                     ### 응답 예시
@@ -161,7 +161,9 @@ public class BoardController {
                     }
                     ```
                     ※ 익명글: authorName="익명", userId=null (관리자·작성자 본인 제외)
-                    ※ prevPost/nextPost: 첫 글·마지막 글이면 null
+                    ※ prevPost/nextPost: **목록 정렬과 무관하게 작성일 순**으로 이 글의 바로 앞뒤 글입니다 —
+                      prevPost=이 글보다 먼저 쓰인 글, nextPost=나중에 쓰인 글. 첫 글이면 prevPost, 마지막 글이면 nextPost 가 null.
+                      상단 고정(중요) 글도 작성일 자리에 그대로 섞여 나오므로 목록에 보이는 순서와는 다를 수 있습니다.
                     ※ 상세에서만 created(작성일)와 updated(수정일)가 함께 내려갑니다.
                     ※ attachments 에는 **본문에 삽입된 이미지가 포함되지 않습니다** — 본문에 이미 보이는 이미지가
                       첨부 목록에 중복 노출되지 않게 서버가 걸러냅니다(첨부 목록용 파일만).
@@ -171,11 +173,9 @@ public class BoardController {
     @GetMapping("/posts/{postId}")
     public ResponseEntity<BoardDetailResponse> getPostDetail(
             @Parameter(description = BOARD_ID_DESC, example = "2") @PathVariable Long boardId,
-            @Parameter(description = "게시글 ID", example = "140") @PathVariable Long postId,
-            @Parameter(description = "이전글/다음글 정렬 기준: created(기본값), viewCount", example = "created")
-            @RequestParam(required = false, defaultValue = "created") String sort) {
-        log.info("게시글 상세 조회 요청 - boardId: {}, postId: {}, sort: {}", boardId, postId, sort);
-        BoardDetailResponse response = boardService.getPostDetail(boardId, postId, sort);
+            @Parameter(description = "게시글 ID", example = "140") @PathVariable Long postId) {
+        log.info("게시글 상세 조회 요청 - boardId: {}, postId: {}", boardId, postId);
+        BoardDetailResponse response = boardService.getPostDetail(boardId, postId);
         return ResponseEntity.ok(response);
     }
 
