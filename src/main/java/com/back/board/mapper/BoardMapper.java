@@ -65,11 +65,10 @@ public interface BoardMapper {
             @Param("keyword") String keyword
     );
 
-    // 게시글 단일 상세 조회 (이전글/다음글 포함)
+    // 게시글 단일 상세 조회 (이전글/다음글 포함 — 이웃 글은 항상 작성일 순이라 목록 sort 를 받지 않는다)
     BoardDetailResponse findPostDetailById(
             @Param("postId") Long postId,
-            @Param("boardId") Long boardId,
-            @Param("sort") String sort
+            @Param("boardId") Long boardId
     );
 
     // 게시글 조회수 증가

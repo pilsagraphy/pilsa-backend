@@ -98,16 +98,16 @@ public class BoardServiceImpl implements BoardService {
     // 게시글 단일 상세 조회 (조회수 증가, 첨부/좋아요/댓글 수 포함 — 댓글 본문은 getComments 별도 API)
     @Override
     @Transactional
-    public BoardDetailResponse getPostDetail(Long boardId, Long postId, String sort) {
-        return buildDetail(boardId, postId, sort);
+    public BoardDetailResponse getPostDetail(Long boardId, Long postId) {
+        return buildDetail(boardId, postId);
     }
 
     // 상세 응답 조립
-    private BoardDetailResponse buildDetail(Long boardId, Long postId, String sort) {
+    private BoardDetailResponse buildDetail(Long boardId, Long postId) {
         boardPolicyService.requireReadable(boardId);
         Long currentUserId = AuthUtils.currentUserId();
 
-        BoardDetailResponse detail = boardMapper.findPostDetailById(postId, boardId, sort);
+        BoardDetailResponse detail = boardMapper.findPostDetailById(postId, boardId);
         if (detail == null) {
             throw new BoardException("존재하지 않는 게시글입니다.", HttpStatus.NOT_FOUND);
         }

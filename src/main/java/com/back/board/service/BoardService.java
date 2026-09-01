@@ -20,7 +20,7 @@ public interface BoardService {
     BoardPageResponse getPostList(Long boardId, int page, int size, Long categoryId, String keyword, String sort);
 
     // 단일글 상세 조회 (댓글 미포함 — 댓글은 getComments 로 따로 조회)
-    BoardDetailResponse getPostDetail(Long boardId, Long postId, String sort);
+    BoardDetailResponse getPostDetail(Long boardId, Long postId);
 
     // 게시글의 댓글 목록 (블라인드·삭제 댓글 제외, 익명/비밀댓글 마스킹 적용)
     List<CommentDetailResponse> getComments(Long boardId, Long postId);
