@@ -13,6 +13,8 @@ public class AdminPostListResponse {
     private String boardName;   // boards.name (한글 게시판명)
     private String title;
     private String authorName;   // 관리자 화면에는 익명글도 실제 작성자명 표시
+    private String authorLoginId;   // 조치 확인 모달 '대상 회원' 표기용 (users.login_id)
+    private String authorStudentId; // 조치 확인 모달 '대상 회원' 표기용 (users.student_no)
     private int commentCount;
     private int likeCount;
     private int viewCount;

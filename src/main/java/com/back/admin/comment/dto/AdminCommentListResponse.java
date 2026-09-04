@@ -26,6 +26,12 @@ public class AdminCommentListResponse {
     @Schema(description = "작성자명 (관리자 화면에는 익명 댓글도 실제 작성자명 표시)")
     private String authorName;
 
+    @Schema(description = "작성자 로그인 ID (조치 확인 모달 '대상 회원' 표기용, users.login_id)", example = "ch400")
+    private String authorLoginId;
+
+    @Schema(description = "작성자 학번 (조치 확인 모달 '대상 회원' 표기용, users.student_no)", example = "2026000000")
+    private String authorStudentId;
+
     @Schema(description = "댓글 내용")
     private String content;
 

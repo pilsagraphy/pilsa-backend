@@ -2,6 +2,7 @@ package com.back.admin.sanction.controller;
 
 import com.back.admin.sanction.dto.BulkResultResponse;
 import com.back.admin.sanction.dto.ReportBulkRequest;
+import com.back.admin.sanction.dto.ReportEntryResponse;
 import com.back.admin.sanction.dto.ReportPageResponse;
 import com.back.admin.sanction.service.ReportAdminService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -11,6 +12,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+import static com.back.admin.moderation.service.ModerationServiceImpl.TARGET_COMMENT;
+import static com.back.admin.moderation.service.ModerationServiceImpl.TARGET_POST;
 
 /**
  * 신고 관리(관리자).
@@ -128,6 +134,77 @@ public class ReportAdminController {
             @RequestParam(value = "sort", defaultValue = "latest") String sort) {
         log.info("[관리자] 댓글 신고 목록 - state:{}, keyword:{}, boardId:{}, sort:{}", state, keyword, boardId, sort);
         return ResponseEntity.ok(reportAdminService.getReportedComments(page, size, state, keyword, boardId, sort));
+    }
+
+    // 게시글 1건에 들어온 개별 신고 목록 (신고 처리 모달 '신고자 목록')
+    @Operation(
+            summary = "게시글 개별 신고 목록 (관리자)",
+            description = """
+                    신고된 게시글 행을 눌러 신고 처리 모달을 열 때 호출된다.
+                    목록(GET /api/admin/reports/posts)이 대표 사유 1개로 접어 보여주는 것과 달리,
+                    이 API는 해당 게시글에 들어온 신고를 신고자별 개별 행으로 내려준다(사유가 신고자마다 다를 수 있으므로).
+                    createdAt 오름차순 — 프론트가 이 순서대로 익명A·익명B… 를 붙인다.
+                    detail 은 '기타' 사유일 때만 값이 있고 그 외에는 null(프론트는 null 을 '-' 로 표시).
+                    신고자 회원 ID·이름은 담지 않는다(신고자 정보 비공개 정책).
+
+                    ### 요청 예시
+                    ```
+                    GET /api/admin/reports/posts/234
+                    ```
+
+                    ### 응답 예시
+                    ```json
+                    [
+                      {"reportId": 25, "reasonLabel": "스팸 · 홍보/도배", "detail": null, "createdAt": "2026-09-04T17:19:13"},
+                      {"reportId": 28, "reasonLabel": "기타", "detail": "근거 없는 정보", "createdAt": "2026-09-04T17:21:19"}
+                    ]
+                    ```
+                    신고가 없거나 없는 대상이면 빈 배열([]).
+
+                    실패: 401 {"message":"..."} (미인증)
+                    실패: 403 {"message":"..."} (관리자 권한 없음)
+                    """)
+    @GetMapping("/api/admin/reports/posts/{targetId}")
+    public ResponseEntity<List<ReportEntryResponse>> getPostReports(
+            @Parameter(description = "게시글 ID", example = "234")
+            @PathVariable("targetId") Long targetId) {
+        log.info("[관리자] 게시글 개별 신고 목록 - targetId:{}", targetId);
+        return ResponseEntity.ok(reportAdminService.getReportsByTarget(TARGET_POST, targetId));
+    }
+
+    // 댓글 1건에 들어온 개별 신고 목록 (신고 처리 모달 '신고자 목록')
+    @Operation(
+            summary = "댓글 개별 신고 목록 (관리자)",
+            description = """
+                    신고된 댓글 행을 눌러 신고 처리 모달을 열 때 호출된다.
+                    목록(GET /api/admin/reports/comments)이 대표 사유 1개로 접어 보여주는 것과 달리,
+                    이 API는 해당 댓글에 들어온 신고를 신고자별 개별 행으로 내려준다.
+                    createdAt 오름차순 — 프론트가 이 순서대로 익명A·익명B… 를 붙인다.
+                    detail 은 '기타' 사유일 때만 값이 있고 그 외에는 null(프론트는 null 을 '-' 로 표시).
+                    신고자 회원 ID·이름은 담지 않는다(신고자 정보 비공개 정책).
+
+                    ### 요청 예시
+                    ```
+                    GET /api/admin/reports/comments/200
+                    ```
+
+                    ### 응답 예시
+                    ```json
+                    [
+                      {"reportId": 31, "reasonLabel": "욕설 · 비방 · 혐오 표현", "detail": null, "createdAt": "2026-09-04T18:00:00"}
+                    ]
+                    ```
+                    신고가 없거나 없는 대상이면 빈 배열([]).
+
+                    실패: 401 {"message":"..."} (미인증)
+                    실패: 403 {"message":"..."} (관리자 권한 없음)
+                    """)
+    @GetMapping("/api/admin/reports/comments/{targetId}")
+    public ResponseEntity<List<ReportEntryResponse>> getCommentReports(
+            @Parameter(description = "댓글 ID", example = "200")
+            @PathVariable("targetId") Long targetId) {
+        log.info("[관리자] 댓글 개별 신고 목록 - targetId:{}", targetId);
+        return ResponseEntity.ok(reportAdminService.getReportsByTarget(TARGET_COMMENT, targetId));
     }
 
     // 선택 복원 (=신고 반려). 사유를 받지 않는다

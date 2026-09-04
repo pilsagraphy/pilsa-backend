@@ -21,6 +21,8 @@
             p.board_id   AS boardId,
             b.name       AS boardName,
             u.name       AS authorName,
+            u.login_id   AS authorLoginId,
+            u.student_no AS authorStudentId,
             c.content,
             c.created_at AS created,
             c.state

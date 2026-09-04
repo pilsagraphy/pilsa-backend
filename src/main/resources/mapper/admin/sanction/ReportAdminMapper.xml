@@ -125,6 +125,22 @@
         <include refid="reportedCommentsFrom"/>
     </select>
 
+    <!-- ===================== 대상 기준 개별 신고 목록 (신고 처리 모달 '신고자 목록') ===================== -->
+    <!-- 신고자 id/이름은 select 하지 않는다 — 응답에 실리면 화면상 익명이어도 개발자도구로 노출되므로.
+         created_at 오름차순: 프론트가 이 순서대로 익명A·익명B… 를 붙인다.
+         detail 은 신고자가 적은 상세(기타 사유일 때만 값, 그 외 null). post/comment 공용(target_type 파라미터로 구분). -->
+    <select id="findReportsByTarget" resultType="com.back.admin.sanction.dto.ReportEntryResponse">
+        SELECT r.report_id   AS reportId,
+               rs.label      AS reasonLabel,
+               r.detail      AS detail,
+               r.created_at  AS createdAt
+        FROM reports_log r
+        LEFT JOIN reasons rs ON r.reason_id = rs.reason_id
+        WHERE r.target_type = #{targetType}
+          AND r.target_id = #{targetId}
+        ORDER BY r.created_at ASC, r.report_id ASC
+    </select>
+
     <!-- ===================== 조치 보조 ===================== -->
     <select id="findLatestReasonId" resultType="long">
         SELECT reason_id

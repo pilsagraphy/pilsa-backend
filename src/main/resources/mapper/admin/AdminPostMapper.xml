@@ -21,6 +21,8 @@
             b.name AS boardName,
             p.title,
             u.name AS authorName,
+            u.login_id AS authorLoginId,
+            u.student_no AS authorStudentId,
             (SELECT COUNT(*) FROM comments cm WHERE cm.post_id = p.post_id) AS commentCount,
             (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.post_id) AS likeCount,
             p.view_count AS viewCount,
