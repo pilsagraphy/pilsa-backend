@@ -114,7 +114,7 @@
         FROM posts
         WHERE board_id = #{boardId}
           AND state = 'normal'
-        ORDER BY is_pinned DESC, created_at DESC
+        ORDER BY is_pinned DESC, created_at DESC, post_id DESC
         LIMIT #{limit}
     </select>
 
@@ -171,8 +171,8 @@
         </if>
         ORDER BY p.is_pinned DESC,
         <choose>
-            <when test="sort == 'viewCount'">p.view_count DESC</when>
-            <otherwise>p.created_at DESC</otherwise>
+            <when test="sort == 'viewCount'">p.view_count DESC, p.post_id DESC</when>
+            <otherwise>p.created_at DESC, p.post_id DESC</otherwise>
         </choose>
         LIMIT #{size} OFFSET #{offset}
     </select>
@@ -213,22 +213,25 @@
         p.is_anonymous AS isAnonymous,
         p.is_pinned AS isPinned,
         ct.name AS categoryName,
-        <choose>
-            <when test="sort == 'viewCount'">
-                (SELECT post_id FROM posts
-                WHERE board_id = #{boardId} AND state = 'normal' AND post_id != p.post_id
-                AND (view_count &gt; p.view_count OR (view_count = p.view_count AND post_id &gt; p.post_id))
-                ORDER BY view_count ASC, post_id ASC LIMIT 1) AS prevPostId,
-                (SELECT post_id FROM posts
-                WHERE board_id = #{boardId} AND state = 'normal' AND post_id != p.post_id
-                AND (view_count &lt; p.view_count OR (view_count = p.view_count AND post_id &lt; p.post_id))
-                ORDER BY view_count DESC, post_id DESC LIMIT 1) AS nextPostId
-            </when>
-            <otherwise>
-                (SELECT MAX(post_id) FROM posts WHERE board_id = #{boardId} AND state = 'normal' AND post_id &lt; #{postId}) AS prevPostId,
-                (SELECT MIN(post_id) FROM posts WHERE board_id = #{boardId} AND state = 'normal' AND post_id &gt; #{postId}) AS nextPostId
-            </otherwise>
-        </choose>
+        <!-- 이전글/다음글은 목록 정렬과 무관하게 **작성일(created_at) 순**으로만 잇는다 (PM 확정).
+             중요(is_pinned)도 보지 않는다 — 상단 고정은 목록 노출 순서일 뿐이고, 상세 하단 내비게이션은
+             "지금 보고 있는 글 바로 앞뒤에 쓰인 글"이어야 한다. 목록의 sort 파라미터도 여기엔 영향이 없다.
+               prevPostId = 이 글보다 먼저 쓰인 글 중 가장 나중 것
+               nextPostId = 이 글보다 나중에 쓰인 글 중 가장 먼저 것
+             created_at 이 같으면 post_id 로 갈라 순서를 확정한다 — 같은 초에 등록된 글이 있어도
+             prev/next 가 서로 어긋나거나 한쪽을 건너뛰지 않게 하는 장치다.
+             board_id 로 게시판마다 분리되고, state='normal' 만 대상이다(블라인드·삭제 글은 건너뛴다).
+             (board_id, created_at) 복합 인덱스(idx_posts_board_created)를 그대로 타는 형태다. -->
+        (SELECT sub.post_id FROM posts sub
+        WHERE sub.board_id = #{boardId} AND sub.state = 'normal'
+        AND (sub.created_at &lt; p.created_at
+        OR (sub.created_at = p.created_at AND sub.post_id &lt; p.post_id))
+        ORDER BY sub.created_at DESC, sub.post_id DESC LIMIT 1) AS prevPostId,
+        (SELECT sub.post_id FROM posts sub
+        WHERE sub.board_id = #{boardId} AND sub.state = 'normal'
+        AND (sub.created_at &gt; p.created_at
+        OR (sub.created_at = p.created_at AND sub.post_id &gt; p.post_id))
+        ORDER BY sub.created_at ASC, sub.post_id ASC LIMIT 1) AS nextPostId
         FROM posts p
         JOIN users u ON p.user_id = u.user_id
         LEFT JOIN categories ct ON p.category_id = ct.category_id
