@@ -51,7 +51,7 @@ public class ReportService {
 
         // 사유 검증 + detail 정책 강제. 정본(POST /api/user/reports)이 "detail 은 기타 사유일 때만"이라
         // 규정하지만, 프론트 모달만 믿으면 API 직접 호출로 아무 사유에나 상세가 실린다 —
-        // 관리자 신고 목록·모달이 그 값을 신고자가 적은 상세로 표시하므로 접수 시점에 막는다.
+        // 관리자 신고 목록·모달이 그 값을 신고자가 적은 상세로 표시하므로 접수 시점에 정리한다.
         String reasonCode = reportMapper.findActiveReasonCode(request.getReasonId());
         if (reasonCode == null) {
             throw new ReportException("존재하지 않거나 사용하지 않는 신고 사유입니다.", HttpStatus.BAD_REQUEST);
@@ -64,8 +64,10 @@ public class ReportService {
             if (detail.length() > DETAIL_MAX_LENGTH) {
                 throw new ReportException("상세 내용은 " + DETAIL_MAX_LENGTH + "자 이하로 입력해 주세요.", HttpStatus.BAD_REQUEST);
             }
-        } else if (detail != null) {
-            throw new ReportException("상세 내용은 '기타' 사유일 때만 입력할 수 있습니다.", HttpStatus.BAD_REQUEST);
+        } else {
+            // 기타가 아니면 상세는 버리고 접수한다 — 거절하면 사유를 바꿀 때 입력칸을 비우는 책임이
+            // 프론트로 넘어간다. 신고 자체는 유효하므로 서버가 정리하고 통과시키는 편이 맞다.
+            detail = null;
         }
 
         Long authorId = "post".equals(request.getTargetType())
