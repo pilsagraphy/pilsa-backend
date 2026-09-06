@@ -66,6 +66,30 @@
           AND sync_status &lt;&gt; 'DELETED'
     </select>
 
+    <!-- 재시도 대상.
+         updated_at 으로 백오프를 건다 — 실패 직후 바로 다시 두드리면 구글이 잠깐 흔들렸을 때
+         상한(retry_count)만 빠르게 소진하고 정작 복구된 뒤에는 시도하지 않게 된다.
+         간격은 시도 횟수에 비례해 벌린다(10분 → 20분 → 30분 …).
+         오래 실패한 것부터 처리한다 — 새 실패가 계속 끼어들어 굶는 행이 없게. -->
+    <select id="findRetryTargets" resultType="com.back.mypage.calendar.dto.UserCalendarEvent">
+        SELECT <include refid="mappingColumns"/>
+        FROM user_calendar_events
+        WHERE sync_status = 'FAILED'
+          AND retry_count &lt; #{maxRetry}
+          AND updated_at &lt; DATE_SUB(NOW(), INTERVAL (retry_count + 1) * 10 MINUTE)
+        ORDER BY updated_at ASC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 상한까지 실패해 자동 복구가 멈춘 건수. 재연동을 안내할 근거다 -->
+    <select id="countExhausted" resultType="int">
+        SELECT COUNT(*)
+        FROM user_calendar_events
+        WHERE user_id = #{userId}
+          AND sync_status = 'FAILED'
+          AND retry_count &gt;= #{maxRetry}
+    </select>
+
     <select id="countByUserAndStatus" resultType="int">
         SELECT COUNT(*)
         FROM user_calendar_events

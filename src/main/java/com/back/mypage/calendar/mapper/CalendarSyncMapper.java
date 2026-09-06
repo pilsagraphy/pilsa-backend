@@ -23,6 +23,17 @@ public interface CalendarSyncMapper {
     /** 일정 하나에 대한 전체 사용자 매핑 (일정 수정/삭제 팬아웃용). */
     List<UserCalendarEvent> findMappingsByEvent(@Param("eventId") Long eventId);
 
+    /**
+     * 재시도 대상 (FAILED 이고 아직 상한에 닿지 않은 것).
+     *
+     * @param maxRetry 이 횟수에 도달하면 더 시도하지 않는다
+     * @param limit    한 번에 처리할 최대 건수 — 배치가 오래 끌지 않게 자른다
+     */
+    List<UserCalendarEvent> findRetryTargets(@Param("maxRetry") int maxRetry, @Param("limit") int limit);
+
+    /** 재시도 상한에 걸려 더는 자동 복구하지 않는 건수 (사용자 안내용). */
+    int countExhausted(@Param("userId") Long userId, @Param("maxRetry") int maxRetry);
+
     int countByUserAndStatus(@Param("userId") Long userId, @Param("syncStatus") String syncStatus);
 
     int upsertMapping(UserCalendarEvent mapping);

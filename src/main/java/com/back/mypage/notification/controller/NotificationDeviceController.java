@@ -95,7 +95,7 @@ public class NotificationDeviceController {
                     구독이 남아 있는 것이 "사용자가 알림을 끈 게 아니다"의 유일한 근거다. 로그아웃에서
                     unsubscribe 까지 하면 재로그인 시 복구할 근거가 없어져 **로그인할 때마다 알림이 꺼진 채**가 된다.
                     재로그인 직후 구독이 살아 있으면 이 API 를 enabled=true 로 한 번 호출해 조용히 되살린다
-                    (권한이 이미 granted 라 사용자에게 다시 묻지 않는다). 절차는 HANDOFF-notification.md 3-2-1·3-2-2.
+                    (권한이 이미 granted 라 사용자에게 다시 묻지 않는다).
 
                     ### 요청 예시 (동의)
                     ```json

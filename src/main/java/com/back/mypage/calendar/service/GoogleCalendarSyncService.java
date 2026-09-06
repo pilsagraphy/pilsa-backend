@@ -30,6 +30,14 @@ import java.util.List;
 @RequiredArgsConstructor
 public class GoogleCalendarSyncService {
 
+    /**
+     * 자동 복구를 포기하는 시도 횟수.
+     *
+     * 재시도 배치와 연동 상태 조회가 같은 값을 봐야 한다 — 배치가 아직 재시도할 건을
+     * 상태 조회가 "실패"로 세면 곧 복구될 일에 재연동을 안내하게 된다.
+     */
+    public static final int MAX_RETRY = 5;
+
     private final GoogleCalendarMapper calendarMapper;
     private final CalendarSyncMapper syncMapper;
     private final GoogleOAuthClient oauthClient;
@@ -51,7 +59,7 @@ public class GoogleCalendarSyncService {
         log.info("일정 등록 팬아웃 시작 - eventId={}, 대상={}명", eventId, targets.size());
 
         for (GoogleCalendarLink link : targets) {
-            insertForUser(link, event);
+            syncIfAbsent(link, event);
         }
     }
 
@@ -71,21 +79,8 @@ public class GoogleCalendarSyncService {
         log.info("일정 수정 팬아웃 시작 - eventId={}, 대상={}명", eventId, targets.size());
 
         for (GoogleCalendarLink link : targets) {
-            UserCalendarEvent mapping = syncMapper.findMapping(link.getUserId(), eventId);
-
-            if (mapping == null || mapping.getGoogleEventId() == null) {
-                insertForUser(link, event);
-                continue;
-            }
-
-            try {
-                String accessToken = accessTokenOf(link);
-                calendarClient.updateEvent(accessToken, link.calendarIdOrDefault(), mapping.getGoogleEventId(), event);
-                syncMapper.markSynced(link.getUserId(), eventId, mapping.getGoogleEventId());
-            } catch (Exception e) {
-                log.warn("일정 수정 동기화 실패 - userId={}, eventId={}, {}", link.getUserId(), eventId, e.getMessage());
-                syncMapper.markFailed(link.getUserId(), eventId, e.getMessage());
-            }
+            // 수정은 이미 반영된 사용자도 다시 밀어야 하므로 SYNCED 를 걸러내지 않는다
+            syncOne(link, event, syncMapper.findMapping(link.getUserId(), eventId));
         }
     }
 
@@ -131,9 +126,51 @@ public class GoogleCalendarSyncService {
         log.info("초기 동기화 시작 - userId={}, 일정={}건", userId, events.size());
 
         for (EventCalendarRow event : events) {
-            insertForUser(link, event);
+            syncIfAbsent(link, event);
         }
         calendarMapper.updateLastSyncedAt(userId);
+    }
+
+    /**
+     * 실패한 동기화를 다시 시도한다 (스케줄러가 주기적으로 부른다).
+     *
+     * 팬아웃은 구글이 잠깐 흔들리거나 액세스 토큰 갱신이 실패해도 그대로 실패로 끝난다.
+     * 그 상태로 두면 사용자 캘린더가 조용히 어긋난 채 남으므로 여기서 주워 담는다.
+     *
+     * 상한(maxRetry)을 넘긴 행은 다시 건드리지 않는다 — 권한 회수나 캘린더 삭제처럼
+     * 재시도로 풀리지 않는 원인이면 무한히 두드려 봐야 할당량만 태운다.
+     * 그런 행은 마이페이지 연동 상태의 실패 건수로 드러나고, 사용자가 재연동하면 정리된다.
+     *
+     * @return 이번 회차에 복구한 건수
+     */
+    public int retryFailed(int maxRetry, int limit) {
+        List<UserCalendarEvent> targets = syncMapper.findRetryTargets(maxRetry, limit);
+        if (targets.isEmpty()) {
+            return 0;
+        }
+
+        int recovered = 0;
+        for (UserCalendarEvent mapping : targets) {
+            GoogleCalendarLink link = calendarMapper.findByUserId(mapping.getUserId());
+            if (link == null) {
+                // 그사이 연동을 해제했다 — 더 시도할 이유가 없다
+                syncMapper.markDeleted(mapping.getUserId(), mapping.getEventId());
+                continue;
+            }
+
+            EventCalendarRow event = syncMapper.findEventForSync(mapping.getEventId());
+            if (event == null) {
+                // 일정이 삭제됐다(state != normal). 넣어둔 게 있으면 캘린더에서도 지운다
+                removeFromCalendar(link, mapping);
+                continue;
+            }
+
+            if (syncOne(link, event, mapping)) {
+                recovered++;
+            }
+        }
+        log.info("캘린더 동기화 재시도 - 대상 {}건, 복구 {}건", targets.size(), recovered);
+        return recovered;
     }
 
     /**
@@ -178,30 +215,68 @@ public class GoogleCalendarSyncService {
 
     // ─────────────────────── 내부 ───────────────────────
 
-    private void insertForUser(GoogleCalendarLink link, EventCalendarRow event) {
-        Long userId = link.getUserId();
-        Long eventId = event.getEventId();
-
-        // 이미 들어간 일정을 또 넣으면 사용자 캘린더에 중복으로 쌓인다
-        UserCalendarEvent existing = syncMapper.findMapping(userId, eventId);
+    /** 아직 반영되지 않은 일정만 넣는다 — 이미 들어간 것을 또 넣으면 사용자 캘린더에 중복으로 쌓인다. */
+    private void syncIfAbsent(GoogleCalendarLink link, EventCalendarRow event) {
+        UserCalendarEvent existing = syncMapper.findMapping(link.getUserId(), event.getEventId());
         if (existing != null && UserCalendarEvent.SYNCED.equals(existing.getSyncStatus())) {
             return;
         }
+        syncOne(link, event, existing);
+    }
 
-        UserCalendarEvent mapping = new UserCalendarEvent();
-        mapping.setUserId(userId);
-        mapping.setEventId(eventId);
-        mapping.setSyncStatus(UserCalendarEvent.PENDING);
-        mapping.setRetryCount(existing == null ? 0 : existing.getRetryCount());
-        syncMapper.upsertMapping(mapping);
+    /**
+     * 사용자 캘린더에 일정 하나를 반영한다 — 아직 없으면 넣고, 이미 있으면 고친다.
+     * 추가·수정·재시도가 전부 이 경로를 지나므로 상태 기록이 한 곳에서만 일어난다.
+     *
+     * @param mapping 기존 매핑 (없으면 null)
+     * @return 성공 여부
+     */
+    private boolean syncOne(GoogleCalendarLink link, EventCalendarRow event, UserCalendarEvent mapping) {
+        Long userId = link.getUserId();
+        Long eventId = event.getEventId();
+        String googleEventId = mapping == null ? null : mapping.getGoogleEventId();
+
+        if (googleEventId == null) {
+            // 넣기 전에 흔적을 먼저 남긴다 — 호출 도중 죽어도 재시도 대상으로 잡히게
+            UserCalendarEvent pending = new UserCalendarEvent();
+            pending.setUserId(userId);
+            pending.setEventId(eventId);
+            pending.setSyncStatus(UserCalendarEvent.PENDING);
+            pending.setRetryCount(mapping == null ? 0 : mapping.getRetryCount());
+            syncMapper.upsertMapping(pending);
+        }
 
         try {
             String accessToken = accessTokenOf(link);
-            String googleEventId = calendarClient.insertEvent(accessToken, link.calendarIdOrDefault(), event);
+            if (googleEventId == null) {
+                googleEventId = calendarClient.insertEvent(accessToken, link.calendarIdOrDefault(), event);
+            } else {
+                calendarClient.updateEvent(accessToken, link.calendarIdOrDefault(), googleEventId, event);
+            }
             syncMapper.markSynced(userId, eventId, googleEventId);
+            return true;
         } catch (Exception e) {
-            log.warn("일정 추가 동기화 실패 - userId={}, eventId={}, {}", userId, eventId, e.getMessage());
+            log.warn("캘린더 동기화 실패 - userId={}, eventId={}, {}", userId, eventId, e.getMessage());
             syncMapper.markFailed(userId, eventId, e.getMessage());
+            return false;
+        }
+    }
+
+    /** 사용자 캘린더에서 일정 하나를 지운다 (일정이 삭제됐거나 연동을 정리할 때). */
+    private void removeFromCalendar(GoogleCalendarLink link, UserCalendarEvent mapping) {
+        if (mapping.getGoogleEventId() == null) {
+            // 애초에 들어간 적이 없다
+            syncMapper.markDeleted(mapping.getUserId(), mapping.getEventId());
+            return;
+        }
+        try {
+            String accessToken = accessTokenOf(link);
+            calendarClient.deleteEvent(accessToken, link.calendarIdOrDefault(), mapping.getGoogleEventId());
+            syncMapper.markDeleted(mapping.getUserId(), mapping.getEventId());
+        } catch (Exception e) {
+            log.warn("캘린더 일정 삭제 실패 - userId={}, eventId={}, {}",
+                    mapping.getUserId(), mapping.getEventId(), e.getMessage());
+            syncMapper.markFailed(mapping.getUserId(), mapping.getEventId(), e.getMessage());
         }
     }
 

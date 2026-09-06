@@ -108,12 +108,14 @@ public class GoogleCalendarService {
             return CalendarLinkStatusResponse.notLinked();
         }
 
+        // 실패 건수는 "재시도 배치가 손을 뗀 것"만 센다. 아직 재시도 대기 중인 건까지 세면
+        // 곧 저절로 복구될 일에 대고 사용자에게 재연동을 안내하게 된다.
         return new CalendarLinkStatusResponse(
                 true,
                 link.getGoogleEmail(),
                 link.getLastSyncedAt() == null ? null : link.getLastSyncedAt().format(FORMATTER),
                 syncMapper.countByUserAndStatus(userId, UserCalendarEvent.SYNCED),
-                syncMapper.countByUserAndStatus(userId, UserCalendarEvent.FAILED)
+                syncMapper.countExhausted(userId, GoogleCalendarSyncService.MAX_RETRY)
         );
     }
 
