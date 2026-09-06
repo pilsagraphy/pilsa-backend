@@ -13,6 +13,9 @@ public interface ReportMapper {
     // 신고 사유 카테고리 목록 (reasons 테이블, 노출 순서 오름차순)
     List<ReportReasonResponse> findReasons();
 
+    // 활성 사유의 code (없거나 비활성이면 null) — 사유 존재 검증 + detail 정책(ETC 일 때만) 판정에 쓴다
+    String findActiveReasonCode(@Param("reasonId") Long reasonId);
+
     // 신고 접수
     void insertReport(@Param("reporterId") Long reporterId,
                        @Param("targetType") String targetType,

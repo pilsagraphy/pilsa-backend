@@ -24,6 +24,11 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ReportService {
 
+    // reasons.code — 상세 사유(detail)를 받는 유일한 사유
+    private static final String REASON_ETC = "ETC";
+    // reports_log.detail 은 varchar(500) — 넘기면 제약 위반으로 500 이 난다
+    private static final int DETAIL_MAX_LENGTH = 500;
+
     private final ReportMapper reportMapper;
 
     // 신고 사유 카테고리 목록 (신고 모달 셀렉트바). 로그인 회원 공통
@@ -42,6 +47,27 @@ public class ReportService {
         }
         if (request.getTargetId() == null || request.getReasonId() == null) {
             throw new ReportException("신고 대상과 사유는 필수입니다.", HttpStatus.BAD_REQUEST);
+        }
+
+        // 사유 검증 + detail 정책 강제. 정본(POST /api/user/reports)이 "detail 은 기타 사유일 때만"이라
+        // 규정하지만, 프론트 모달만 믿으면 API 직접 호출로 아무 사유에나 상세가 실린다 —
+        // 관리자 신고 목록·모달이 그 값을 신고자가 적은 상세로 표시하므로 접수 시점에 정리한다.
+        String reasonCode = reportMapper.findActiveReasonCode(request.getReasonId());
+        if (reasonCode == null) {
+            throw new ReportException("존재하지 않거나 사용하지 않는 신고 사유입니다.", HttpStatus.BAD_REQUEST);
+        }
+        String detail = normalizeDetail(request.getDetail());
+        if (REASON_ETC.equals(reasonCode)) {
+            if (detail == null) {
+                throw new ReportException("'기타' 사유는 상세 내용을 입력해 주세요.", HttpStatus.BAD_REQUEST);
+            }
+            if (detail.length() > DETAIL_MAX_LENGTH) {
+                throw new ReportException("상세 내용은 " + DETAIL_MAX_LENGTH + "자 이하로 입력해 주세요.", HttpStatus.BAD_REQUEST);
+            }
+        } else {
+            // 기타가 아니면 상세는 버리고 접수한다 — 거절하면 사유를 바꿀 때 입력칸을 비우는 책임이
+            // 프론트로 넘어간다. 신고 자체는 유효하므로 서버가 정리하고 통과시키는 편이 맞다.
+            detail = null;
         }
 
         Long authorId = "post".equals(request.getTargetType())
@@ -66,10 +92,19 @@ public class ReportService {
 
         try {
             reportMapper.insertReport(reporterId, request.getTargetType(), request.getTargetId(),
-                    request.getReasonId(), request.getDetail());
+                    request.getReasonId(), detail);
         } catch (DuplicateKeyException e) {
             // reports_log의 uq_reports_active(reporter_id, target_type, target_id, active_flag) 유니크 제약 위반
             throw new ReportException("이미 신고한 게시글/댓글입니다.", HttpStatus.CONFLICT);
         }
+    }
+
+    // 공백만 들어온 detail 은 미입력으로 본다 — 사유를 바꾼 뒤 입력창을 비우지 않고 보내는 경우를 400 으로 만들지 않기 위해
+    private String normalizeDetail(String detail) {
+        if (detail == null) {
+            return null;
+        }
+        String trimmed = detail.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

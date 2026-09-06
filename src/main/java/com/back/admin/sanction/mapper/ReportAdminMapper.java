@@ -1,5 +1,6 @@
 package com.back.admin.sanction.mapper;
 
+import com.back.admin.sanction.dto.ReportEntryResponse;
 import com.back.admin.sanction.dto.ReportedItemResponse;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
@@ -40,6 +41,13 @@ public interface ReportAdminMapper {
             @Param("state") String state,
             @Param("keyword") String keyword,
             @Param("boardId") Long boardId
+    );
+
+    // 대상(게시글/댓글) 1건에 들어온 개별 신고 목록 — 신고 처리 모달의 '신고자 목록'.
+    // 신고자 id/이름은 담지 않는다(프라이버시). created_at 오름차순(익명A·B 순).
+    List<ReportEntryResponse> findReportsByTarget(
+            @Param("targetType") String targetType,
+            @Param("targetId") Long targetId
     );
 
     // 대상의 대표(최신) 신고 사유 reason_id — 삭제 시 moderation_log 에 기록

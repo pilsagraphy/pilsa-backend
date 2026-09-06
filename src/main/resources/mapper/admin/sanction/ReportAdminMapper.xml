@@ -12,7 +12,10 @@
     </sql>
 
     <!-- ===================== 게시글 신고 ===================== -->
-    <!-- 대상별로 그룹핑: 최초 신고일시/누적건수/대표(최신)신고 -->
+    <!-- 대상별로 그룹핑: 최초 신고일시/누적건수/대표(최신)신고.
+         반려(rejected)는 집계에서 뺀다 — 근거 없다고 판정된 신고라 건수·최초신고일·대표사유 어디에도 들어가면 안 되고,
+         개별 조회(GET /api/admin/reports/posts/{targetId})가 내려주는 행 수와 reportCount 가 어긋나서도 안 된다.
+         신고가 전부 반려된 대상은 그룹 행 자체가 없어 목록에서 빠진다(=복원된 대상). 재신고되면 다시 잡힌다. -->
     <sql id="reportedPostsFrom">
         FROM (
             SELECT target_id,
@@ -21,6 +24,7 @@
                    MAX(report_id)  AS last_report_id
             FROM reports_log
             WHERE target_type = 'post'
+              AND status &lt;&gt; 'rejected'
             GROUP BY target_id
         ) t
         JOIN reports_log r ON r.report_id = t.last_report_id
@@ -30,12 +34,8 @@
         JOIN reasons rs ON r.reason_id = rs.reason_id
         <where>
             <!-- 상태 필터: state 지정 시 해당 표시상태(blind/deleted)만.
-                 미지정 시 기본은 대표 신고가 반려(rejected)된 것만 제외 → pending·blind·deleted(=복구 안 된 것) 노출.
-                 (반려=복구된 대상은 status=rejected 로만 구분된다. 표시상태 normal 로 제외하면 미조치 pending 신고까지 사라지므로 status 기준으로 판정) -->
-            <choose>
-                <when test="state != null and state != ''">AND p.state = #{state}</when>
-                <otherwise>AND r.status &lt;&gt; 'rejected'</otherwise>
-            </choose>
+                 미지정 시 pending·blind·deleted 를 모두 노출한다 — 반려 제외는 위 집계 서브쿼리가 이미 처리했다. -->
+            <if test="state != null and state != ''">AND p.state = #{state}</if>
             <if test="boardId != null">AND p.board_id = #{boardId}</if>
             <if test="keyword != null and keyword != ''">
                 AND (p.content LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\'
@@ -69,6 +69,7 @@
     </select>
 
     <!-- ===================== 댓글 신고 ===================== -->
+    <!-- 반려 제외 이유는 위 reportedPostsFrom 주석과 같다 -->
     <sql id="reportedCommentsFrom">
         FROM (
             SELECT target_id,
@@ -77,6 +78,7 @@
                    MAX(report_id)  AS last_report_id
             FROM reports_log
             WHERE target_type = 'comment'
+              AND status &lt;&gt; 'rejected'
             GROUP BY target_id
         ) t
         JOIN reports_log r ON r.report_id = t.last_report_id
@@ -87,12 +89,8 @@
         JOIN reasons  rs ON r.reason_id = rs.reason_id
         <where>
             <!-- 상태 필터: state 지정 시 해당 표시상태(blind/deleted)만.
-                 미지정 시 기본은 대표 신고가 반려(rejected)된 것만 제외 → pending·blind·deleted(=복구 안 된 것) 노출.
-                 (반려=복구된 대상은 status=rejected 로만 구분된다. 표시상태 normal 로 제외하면 미조치 pending 신고까지 사라지므로 status 기준으로 판정) -->
-            <choose>
-                <when test="state != null and state != ''">AND c.state = #{state}</when>
-                <otherwise>AND r.status &lt;&gt; 'rejected'</otherwise>
-            </choose>
+                 미지정 시 pending·blind·deleted 를 모두 노출한다 — 반려 제외는 위 집계 서브쿼리가 이미 처리했다. -->
+            <if test="state != null and state != ''">AND c.state = #{state}</if>
             <if test="boardId != null">AND p.board_id = #{boardId}</if>
             <if test="keyword != null and keyword != ''">
                 AND (c.content LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\'
@@ -123,6 +121,26 @@
     <select id="countReportedComments" resultType="int">
         SELECT COUNT(*)
         <include refid="reportedCommentsFrom"/>
+    </select>
+
+    <!-- ===================== 대상 기준 개별 신고 목록 (신고 처리 모달 '신고자 목록') ===================== -->
+    <!-- 신고자 id/이름은 select 하지 않는다 — 응답에 실리면 화면상 익명이어도 개발자도구로 노출되므로.
+         created_at 오름차순: 프론트가 이 순서대로 익명A·익명B… 를 붙인다.
+         detail 은 신고자가 적은 상세(기타 사유일 때만 값, 그 외 null). post/comment 공용(target_type 파라미터로 구분).
+         반려(rejected)는 제외한다 — 동일 대상은 반려 후 다시 신고될 수 있어(uq_reports_active 가 pending 에만 걸린다)
+         옛 라운드의 무효 신고가 현재 신고자 목록에 섞인다. 남는 pending/resolved 는 status 로 구분해 내려준다. -->
+    <select id="findReportsByTarget" resultType="com.back.admin.sanction.dto.ReportEntryResponse">
+        SELECT r.report_id   AS reportId,
+               rs.label      AS reasonLabel,
+               r.detail      AS detail,
+               r.created_at  AS createdAt,
+               r.status      AS status
+        FROM reports_log r
+        LEFT JOIN reasons rs ON r.reason_id = rs.reason_id
+        WHERE r.target_type = #{targetType}
+          AND r.target_id = #{targetId}
+          AND r.status &lt;&gt; 'rejected'
+        ORDER BY r.created_at ASC, r.report_id ASC
     </select>
 
     <!-- ===================== 조치 보조 ===================== -->
