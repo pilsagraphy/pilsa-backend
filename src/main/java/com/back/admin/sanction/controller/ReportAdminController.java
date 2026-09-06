@@ -40,8 +40,10 @@ public class ReportAdminController {
             description = """
                     신고관리 페이지 진입 시와 필터(상태/게시판/검색/정렬) 변경 시 호출된다.
                     동일 게시글에 대한 중복 신고는 대상 단위로 그룹핑되어 reportCount로 합산된다.
-                    상태(state) 필터로 블라인드/삭제된 대상만 조회할 수 있고, 미지정 시 기본은 반려(복구)된 신고만 제외하고
-                    pending(미조치)·blind·deleted 를 모두 내려준다. → 복원(복구=반려)된 대상만 이 목록에서 제외된다(신규 신고는 계속 노출).
+                    반려(복원)된 신고는 집계에서 제외한다 — reportCount·firstReportedAt·대표 사유가 모두 유효 신고 기준이고,
+                    개별 조회(GET /api/admin/reports/posts/{targetId})의 행 수와 reportCount 가 항상 일치한다.
+                    신고가 전부 반려된 대상은 목록에서 빠지며, 다시 신고되면 그때부터 새로 잡힌다.
+                    상태(state) 필터로 블라인드/삭제된 대상만 조회할 수 있고, 미지정 시 pending(미조치)·blind·deleted 를 모두 내려준다.
 
                     ### 요청 예시
                     ```
@@ -91,8 +93,10 @@ public class ReportAdminController {
                     신고관리 페이지의 댓글 탭 진입 시와 필터 변경 시 호출된다.
                     댓글은 원문으로 이동할 수 있도록 소속 게시글의 postId가 함께 내려간다.
                     동일 댓글에 대한 중복 신고는 대상 단위로 그룹핑되어 reportCount로 합산된다.
-                    상태(state) 필터로 블라인드/삭제된 댓글만 조회할 수 있고, 미지정 시 기본은 반려(복구)된 신고만 제외하고
-                    pending(미조치)·blind·deleted 를 모두 내려준다. → 복원(복구=반려)된 댓글만 이 목록에서 제외된다(신규 신고는 계속 노출).
+                    반려(복원)된 신고는 집계에서 제외한다 — reportCount·firstReportedAt·대표 사유가 모두 유효 신고 기준이고,
+                    개별 조회(GET /api/admin/reports/comments/{targetId})의 행 수와 reportCount 가 항상 일치한다.
+                    신고가 전부 반려된 댓글은 목록에서 빠지며, 다시 신고되면 그때부터 새로 잡힌다.
+                    상태(state) 필터로 블라인드/삭제된 댓글만 조회할 수 있고, 미지정 시 pending(미조치)·blind·deleted 를 모두 내려준다.
 
                     ### 요청 예시
                     ```
@@ -163,7 +167,7 @@ public class ReportAdminController {
                     ]
                     ```
                     신고가 없거나(전부 반려됐거나) 없는 대상이면 빈 배열([]).
-                    ※ 목록 API 의 reportCount 는 반려분까지 포함한 누적 건수라, 반려 이력이 있는 대상은 이 응답의 행 수와 다를 수 있다.
+                    ※ 목록 API 의 reportCount 도 반려분을 제외하므로 이 응답의 행 수와 항상 일치한다.
 
                     실패: 401 {"message":"..."} (미인증)
                     실패: 403 {"message":"..."} (관리자 권한 없음)
@@ -202,7 +206,7 @@ public class ReportAdminController {
                     ]
                     ```
                     신고가 없거나(전부 반려됐거나) 없는 대상이면 빈 배열([]).
-                    ※ 목록 API 의 reportCount 는 반려분까지 포함한 누적 건수라, 반려 이력이 있는 대상은 이 응답의 행 수와 다를 수 있다.
+                    ※ 목록 API 의 reportCount 도 반려분을 제외하므로 이 응답의 행 수와 항상 일치한다.
 
                     실패: 401 {"message":"..."} (미인증)
                     실패: 403 {"message":"..."} (관리자 권한 없음)
