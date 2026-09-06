@@ -27,23 +27,32 @@ public class BoardPolicyService {
     private final BoardMapper boardMapper;
 
     /**
-     * 현재 사용자가 열람 가능한 게시판 목록 (네비게이션용).
+     * 게시판 목록 (네비게이션용).
      * 게시판이 데이터가 되었으므로 프론트가 메뉴를 하드코딩할 수 없어 이 API가 필요하다.
+     *
+     * 비로그인에게도 **어떤 게시판이 있는지는** 보여준다 — 메뉴가 통째로 비어 있으면
+     * 처음 온 사람이 이 사이트에 뭐가 있는지 알 수 없다. 대신 이름과 노출 순서까지만이고,
+     * 글 목록·상세는 `/api/user/boards/{id}/**` 가 로그인을 요구해 그대로 막힌다.
+     * 클릭하면 프론트가 로그인 화면으로 보낸다.
+     *
+     * 로그인 사용자에게는 종전대로 read_scope 로 걸러 자기가 볼 수 있는 것만 준다.
      */
     public List<BoardSummaryResponse> getReadableBoards() {
         String memberType = AuthUtils.memberType();
         int adminLevel = AuthUtils.adminLevel();
+        boolean anonymous = !AuthUtils.isLoggedIn();
 
         List<BoardSummaryResponse> result = new ArrayList<>();
         for (BoardPolicy policy : boardMapper.findBoardPolicies()) {
-            if (!policy.canRead(memberType, adminLevel)) {
+            if (!anonymous && !policy.canRead(memberType, adminLevel)) {
                 continue;
             }
             BoardSummaryResponse summary = new BoardSummaryResponse();
             summary.setBoardId(policy.getBoardId());
             summary.setBoardName(policy.getName());
             summary.setDisplayOrder(policy.getDisplayOrder());
-            summary.setCanWrite(policy.canWrite(memberType, adminLevel));
+            // 비로그인은 글쓰기 버튼이 뜨면 안 된다 (canWrite 판정 자체가 로그인 전제라 명시적으로 false)
+            summary.setCanWrite(!anonymous && policy.canWrite(memberType, adminLevel));
             summary.setAllowComment(policy.getAllowComment());
             summary.setAllowAttachment(policy.getAllowAttachment());
             summary.setCategoryMode(policy.getCategoryMode());

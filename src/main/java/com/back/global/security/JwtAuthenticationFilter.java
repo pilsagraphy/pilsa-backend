@@ -185,6 +185,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 || path.equals("/api/quotes/current")
                 // SecurityConfig 의 "/api/event/**" 에 대응 — 목록·상세·카테고리·구독 피드·1건 ICS 전부
                 || path.equals("/api/event") || path.startsWith("/api/event/")
+                // 게시판 목록만 공개 (하위 경로는 로그인 필요라 startsWith 가 아니라 equals 다)
+                || path.equals("/api/user/boards")
                 // 구글 캘린더 연동 콜백 — 구글이 리다이렉트로 부르므로 Authorization 헤더가 없다.
                 // 사용자 식별은 state 로 한다 (OAuthStateService).
                 || path.equals("/api/user/mypage/calendar/google/callback");
