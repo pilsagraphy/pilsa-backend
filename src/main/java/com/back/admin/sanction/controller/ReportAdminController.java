@@ -144,8 +144,11 @@ public class ReportAdminController {
                     목록(GET /api/admin/reports/posts)이 대표 사유 1개로 접어 보여주는 것과 달리,
                     이 API는 해당 게시글에 들어온 신고를 신고자별 개별 행으로 내려준다(사유가 신고자마다 다를 수 있으므로).
                     createdAt 오름차순 — 프론트가 이 순서대로 익명A·익명B… 를 붙인다.
-                    detail 은 '기타' 사유일 때만 값이 있고 그 외에는 null(프론트는 null 을 '-' 로 표시).
+                    detail 은 '기타'(code=ETC) 사유일 때만 값이 있고 그 외에는 null(프론트는 null 을 '-' 로 표시).
+                    접수 시 서버가 검증하므로 보장되는 값이다.
                     신고자 회원 ID·이름은 담지 않는다(신고자 정보 비공개 정책).
+                    반려(rejected)된 신고는 제외한다 — 근거 없다고 판정된 옛 신고가 현재 신고자 목록에 섞이지 않게 한다.
+                    남는 신고는 status 로 구분한다: pending(미처리) / resolved(삭제 조치로 종료).
 
                     ### 요청 예시
                     ```
@@ -155,11 +158,12 @@ public class ReportAdminController {
                     ### 응답 예시
                     ```json
                     [
-                      {"reportId": 25, "reasonLabel": "스팸 · 홍보/도배", "detail": null, "createdAt": "2026-09-04T17:19:13"},
-                      {"reportId": 28, "reasonLabel": "기타", "detail": "근거 없는 정보", "createdAt": "2026-09-04T17:21:19"}
+                      {"reportId": 25, "reasonLabel": "스팸 · 홍보/도배", "detail": null, "createdAt": "2026-09-04T17:19:13", "status": "pending"},
+                      {"reportId": 28, "reasonLabel": "기타", "detail": "근거 없는 정보", "createdAt": "2026-09-04T17:21:19", "status": "pending"}
                     ]
                     ```
-                    신고가 없거나 없는 대상이면 빈 배열([]).
+                    신고가 없거나(전부 반려됐거나) 없는 대상이면 빈 배열([]).
+                    ※ 목록 API 의 reportCount 는 반려분까지 포함한 누적 건수라, 반려 이력이 있는 대상은 이 응답의 행 수와 다를 수 있다.
 
                     실패: 401 {"message":"..."} (미인증)
                     실패: 403 {"message":"..."} (관리자 권한 없음)
@@ -180,8 +184,11 @@ public class ReportAdminController {
                     목록(GET /api/admin/reports/comments)이 대표 사유 1개로 접어 보여주는 것과 달리,
                     이 API는 해당 댓글에 들어온 신고를 신고자별 개별 행으로 내려준다.
                     createdAt 오름차순 — 프론트가 이 순서대로 익명A·익명B… 를 붙인다.
-                    detail 은 '기타' 사유일 때만 값이 있고 그 외에는 null(프론트는 null 을 '-' 로 표시).
+                    detail 은 '기타'(code=ETC) 사유일 때만 값이 있고 그 외에는 null(프론트는 null 을 '-' 로 표시).
+                    접수 시 서버가 검증하므로 보장되는 값이다.
                     신고자 회원 ID·이름은 담지 않는다(신고자 정보 비공개 정책).
+                    반려(rejected)된 신고는 제외한다 — 근거 없다고 판정된 옛 신고가 현재 신고자 목록에 섞이지 않게 한다.
+                    남는 신고는 status 로 구분한다: pending(미처리) / resolved(삭제 조치로 종료).
 
                     ### 요청 예시
                     ```
@@ -191,10 +198,11 @@ public class ReportAdminController {
                     ### 응답 예시
                     ```json
                     [
-                      {"reportId": 31, "reasonLabel": "욕설 · 비방 · 혐오 표현", "detail": null, "createdAt": "2026-09-04T18:00:00"}
+                      {"reportId": 31, "reasonLabel": "욕설 · 비방 · 혐오 표현", "detail": null, "createdAt": "2026-09-04T18:00:00", "status": "pending"}
                     ]
                     ```
-                    신고가 없거나 없는 대상이면 빈 배열([]).
+                    신고가 없거나(전부 반려됐거나) 없는 대상이면 빈 배열([]).
+                    ※ 목록 API 의 reportCount 는 반려분까지 포함한 누적 건수라, 반려 이력이 있는 대상은 이 응답의 행 수와 다를 수 있다.
 
                     실패: 401 {"message":"..."} (미인증)
                     실패: 403 {"message":"..."} (관리자 권한 없음)

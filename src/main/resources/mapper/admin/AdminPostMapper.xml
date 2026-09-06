@@ -21,8 +21,11 @@
             b.name AS boardName,
             p.title,
             u.name AS authorName,
-            u.login_id AS authorLoginId,
-            u.student_no AS authorStudentId,
+            <!-- 탈퇴 회원(is_deleted=1)은 login_id 가 deleted_{user_id} 더미고 student_no 는 재가입 차단 대조용
+                 SHA-256 해시라, 그대로 내려보내면 관리자 화면에 무의미한 값이 뜨고 대조 해시까지 노출된다.
+                 작성자 표기는 users.name('탈퇴한 회원')이 담당하므로 두 값은 null 로 내린다. -->
+            CASE WHEN u.is_deleted = 1 THEN NULL ELSE u.login_id   END AS authorLoginId,
+            CASE WHEN u.is_deleted = 1 THEN NULL ELSE u.student_no END AS authorStudentNo,
             (SELECT COUNT(*) FROM comments cm WHERE cm.post_id = p.post_id) AS commentCount,
             (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.post_id) AS likeCount,
             p.view_count AS viewCount,
