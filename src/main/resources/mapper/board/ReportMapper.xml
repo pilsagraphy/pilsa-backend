@@ -14,6 +14,15 @@
         ORDER BY display_order ASC
     </select>
 
+    <!-- 사유 존재/활성 검증 + detail 정책(code=ETC 일 때만 상세 입력) 판정용.
+         reason_id 는 reports_log 의 FK 라, 검증 없이 넣으면 잘못된 값이 제약 위반 500 으로 터진다. -->
+    <select id="findActiveReasonCode" resultType="string">
+        SELECT code
+        FROM reasons
+        WHERE reason_id = #{reasonId}
+          AND is_active = 1
+    </select>
+
     <insert id="insertReport">
         INSERT INTO reports_log (reporter_id, target_type, target_id, reason_id, detail, status, created_at)
         VALUES (#{reporterId}, #{targetType}, #{targetId}, #{reasonId}, #{detail}, 'pending', NOW())

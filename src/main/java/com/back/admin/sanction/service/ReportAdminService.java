@@ -1,6 +1,7 @@
 package com.back.admin.sanction.service;
 
 import com.back.admin.sanction.dto.BulkResultResponse;
+import com.back.admin.sanction.dto.ReportEntryResponse;
 import com.back.admin.sanction.dto.ReportPageResponse;
 
 import java.util.List;
@@ -18,6 +19,9 @@ public interface ReportAdminService {
 
     // 신고된 댓글 목록 (state=blind/deleted 필터·검색·게시판 필터. state 미지정 시 normal 제외)
     ReportPageResponse getReportedComments(int page, int size, String state, String keyword, Long boardId, String sort);
+
+    // 대상 1건에 들어온 개별 신고 목록 (신고 처리 모달 '신고자 목록'). created_at 오름차순, 신고자 익명
+    List<ReportEntryResponse> getReportsByTarget(String targetType, Long targetId);
 
     // 선택 복원(=신고 반려): 대상 복원(state=normal) + 신고 rejected. 사유를 받지 않는다
     BulkResultResponse selectRestore(String targetType, List<Long> targetIds);

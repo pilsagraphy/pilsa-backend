@@ -17,7 +17,7 @@ public class ReportedItemResponse {
     private String authorName;         // 대상 콘텐츠 작성자
     private String reasonLabel;        // 대표 신고 사유 (reasons.label)
     private LocalDateTime firstReportedAt; // 최초 신고일시 = MIN(created_at)
-    private int reportCount;           // 누적 신고 건수
-    private String reportStatus;       // 대표 신고 상태 pending/rejected/resolved
+    private int reportCount;           // 누적 신고 건수 (반려분 제외 — 개별 조회 .../{targetId} 의 행 수와 일치)
+    private String reportStatus;       // 대표 신고 상태 pending/resolved (반려된 신고는 목록에서 제외된다)
     private String state;              // 대상의 현재 표시 상태 normal/blind/deleted
 }

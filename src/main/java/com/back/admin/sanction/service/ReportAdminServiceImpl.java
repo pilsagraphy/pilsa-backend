@@ -3,6 +3,7 @@ package com.back.admin.sanction.service;
 import com.back.admin.moderation.dto.ModerationState;
 import com.back.admin.common.AdminServiceSupport;
 import com.back.admin.sanction.dto.BulkResultResponse;
+import com.back.admin.sanction.dto.ReportEntryResponse;
 import com.back.admin.sanction.dto.ReportPageResponse;
 import com.back.admin.sanction.dto.ReportedItemResponse;
 import com.back.admin.sanction.exception.ReportAdminException;
@@ -72,6 +73,14 @@ public class ReportAdminServiceImpl implements ReportAdminService {
         int offset = PageUtils.offset(page, size);
         List<ReportedItemResponse> items = reportAdminMapper.findReportedComments(state, keyword, boardId, sort, offset, size);
         return toPage(totalPages, totalCount, items);
+    }
+
+    @Override
+    public List<ReportEntryResponse> getReportsByTarget(String targetType, Long targetId) {
+        AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
+        validateTargetType(targetType);
+        // 존재하지 않거나 신고가 없는 대상이면 빈 목록(200 []) — 목록에서 진입하는 화면이라 404 로 막지 않는다
+        return reportAdminMapper.findReportsByTarget(targetType, targetId);
     }
 
     @Override
