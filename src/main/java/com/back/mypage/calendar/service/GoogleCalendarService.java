@@ -42,26 +42,34 @@ public class GoogleCalendarService {
     private final GoogleCalendarSyncService syncService;
     private final TokenCipher tokenCipher;
 
+    /** 동의 화면 URL 과 거기 실린 state — 컨트롤러가 state 를 쿠키로 브라우저에 묶는 데 쓴다 */
+    public record Authorize(String url, String state) {
+    }
+
     /**
      * 캘린더 연동 동의 화면 URL.
      * offline=true 로 refresh token 을 확보한다 — 관리자가 일정을 바꿀 때
      * 사용자가 접속해 있지 않아도 서버가 그 사람 캘린더를 고칠 수 있어야 한다.
+     *
+     * @param returnTo 동의가 끝난 뒤 돌아갈 프론트 경로. null 이면 마이페이지.
+     *                 캘린더 페이지의 [내 캘린더에 구독]이 그 자리에서 동의를 받고 캘린더로 돌아오는 데 쓴다.
      */
-    public String buildAuthorizeUrl(Long userId) {
-        String state = stateService.issue(OAuthStateService.PURPOSE_CALENDAR, userId);
-        return oauthClient.buildAuthorizeUrl(
+    public Authorize buildAuthorize(Long userId, String returnTo) {
+        String state = stateService.issue(OAuthStateService.PURPOSE_CALENDAR, userId, returnTo);
+        String url = oauthClient.buildAuthorizeUrl(
                 GoogleProperties.CALENDAR_SCOPE, properties.getCalendarRedirectUri(), state, true);
+        return new Authorize(url, state);
     }
 
     /**
-     * 연동 콜백. 구글이 브라우저 리다이렉트로 부르므로 인증 헤더가 없다 —
-     * 사용자는 state 로 식별한다.
+     * 연동 콜백 처리. 구글이 브라우저 리다이렉트로 부르므로 인증 헤더가 없다 —
+     * 사용자는 state 로 식별하며, state 검증·소비는 컨트롤러가 먼저 한다
+     * (실패·취소여도 시작한 화면으로 돌려보내려면 state 안의 returnTo 를 알아야 하기 때문이다).
      *
      * @return 초기 동기화를 시작할 사용자 id
      */
     @Transactional
-    public Long completeLink(String code, String state) {
-        Long userId = stateService.consume(state, OAuthStateService.PURPOSE_CALENDAR);
+    public Long completeLink(String code, Long userId) {
         if (userId == null) {
             throw new GoogleIntegrationException("잘못된 인증 요청입니다.", HttpStatus.BAD_REQUEST);
         }
