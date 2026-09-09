@@ -409,11 +409,11 @@ public class BoardServiceImpl implements BoardService {
 
             // 제목은 "어느 게시판 어느 글인지" — 알림만 보고 어디서 온 것인지 알 수 있어야 한다.
             // 조회가 실패하면(글이 그 사이 지워짐 등) 유형 기본 문구로 물러선다.
-            String title = null;
+            // 람다에서 읽으므로 effectively final 이어야 한다 — 조건 대입 대신 삼항으로 한 번에 정한다
             Map<String, Object> context = boardMapper.findPostNotificationContext(postId);
-            if (context != null) {
-                title = "[" + context.get("boardName") + "] " + context.get("postTitle");
-            }
+            final String title = context == null
+                    ? null
+                    : "[" + context.get("boardName") + "] " + context.get("postTitle");
 
             recipients.forEach((receiverId, type) -> {
                 String finalTitle = truncate(title != null ? title : type.defaultTitle(), NOTIFICATION_TITLE_MAX);
