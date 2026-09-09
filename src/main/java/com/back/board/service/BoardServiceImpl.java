@@ -132,12 +132,14 @@ public class BoardServiceImpl implements BoardService {
         detail.setIsLiked(boardMapper.existsLikeByPostIdAndUserId(postId, currentUserId));
 
         // 익명 글 작성자 마스킹 — 마스킹은 서버 책임 (프론트 마스킹은 API 직접 호출로 우회된다)
-        // 일반 게시판 화면에서는 관리자에게도 가린다 — 실작성자 확인은 관리자 페이지(/api/admin)에서만 한다.
-        // 수정·삭제 버튼은 프론트가 adminLevel 로 판정하므로 userId 를 가려도 관리 기능은 그대로다.
-        if (Boolean.TRUE.equals(detail.getIsAnonymous())
-                && !currentUserId.equals(detail.getUserId())) {
+        // 이름은 작성자 본인 화면에서도 '익명'으로 보인다 — 익명으로 썼는데 실명이 뜨면 익명의 의미가 없다.
+        // userId 는 본인일 때만 남긴다: 프론트가 이 값으로 '내 글'을 판정해 수정·삭제 버튼을 그리기 때문이다.
+        // 관리자에게도 가린다 — 실작성자 확인은 관리자 페이지(/api/admin)에서만 한다.
+        if (Boolean.TRUE.equals(detail.getIsAnonymous())) {
             detail.setAuthorName("익명");
-            detail.setUserId(null);
+            if (!currentUserId.equals(detail.getUserId())) {
+                detail.setUserId(null);
+            }
         }
 
         return detail;
@@ -172,9 +174,12 @@ public class BoardServiceImpl implements BoardService {
             if (Boolean.TRUE.equals(comment.getIsPrivate()) && !admin && !commentAuthor && !postAuthor) {
                 comment.setContent("비밀댓글입니다.");
             }
-            if (Boolean.TRUE.equals(comment.getIsAnonymous()) && !commentAuthor) {
+            // 게시글과 같은 규칙 — 이름은 본인에게도 가리고, userId 는 본인 것만 남겨 수정·삭제 버튼이 유지되게 한다
+            if (Boolean.TRUE.equals(comment.getIsAnonymous())) {
                 comment.setAuthorName("익명");
-                comment.setUserId(null);
+                if (!commentAuthor) {
+                    comment.setUserId(null);
+                }
             }
         }
         return comments;
