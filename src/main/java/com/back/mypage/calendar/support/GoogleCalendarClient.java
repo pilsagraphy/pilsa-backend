@@ -90,6 +90,10 @@ public class GoogleCalendarClient {
         body.put("start", Map.of("date", toDashedDate(event.getStartDate())));
         body.put("end", Map.of("date", toDashedDate(event.getEndDateExclusive())));
 
+        // 사용자 캘린더에서 우리 일정을 회색으로 고정한다 — 개인 일정 색과 겹치지 않는 무채색.
+        // 구글 이벤트 색상 팔레트에서 8 = Graphite. update 도 같은 body 를 쓰므로 기존 일정도 갱신 시 회색이 된다.
+        body.put("colorId", "8");
+
         // 우리가 넣은 일정임을 사용자 캘린더에서 구분할 수 있게 표시해 둔다.
         // 나중에 "우리가 넣은 것만 정리" 할 때도 근거가 된다.
         body.put("source", Map.of("title", "필사그래피", "url", "https://pilsa.co.kr"));
