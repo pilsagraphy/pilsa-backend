@@ -132,9 +132,10 @@ public class BoardServiceImpl implements BoardService {
         detail.setIsLiked(boardMapper.existsLikeByPostIdAndUserId(postId, currentUserId));
 
         // 익명 글 작성자 마스킹 — 마스킹은 서버 책임 (프론트 마스킹은 API 직접 호출로 우회된다)
-        // 관리자와 작성자 본인에게만 실작성자를 보여준다.
+        // 일반 게시판 화면에서는 관리자에게도 가린다 — 실작성자 확인은 관리자 페이지(/api/admin)에서만 한다.
+        // 수정·삭제 버튼은 프론트가 adminLevel 로 판정하므로 userId 를 가려도 관리 기능은 그대로다.
         if (Boolean.TRUE.equals(detail.getIsAnonymous())
-                && !AuthUtils.isAdmin() && !currentUserId.equals(detail.getUserId())) {
+                && !currentUserId.equals(detail.getUserId())) {
             detail.setAuthorName("익명");
             detail.setUserId(null);
         }
@@ -160,7 +161,7 @@ public class BoardServiceImpl implements BoardService {
     /**
      * 댓글 목록 서버측 마스킹.
      *  - 비밀댓글: 관리자 / 댓글 작성자 / 원글 작성자만 내용 열람, 그 외에는 내용을 가린다
-     *  - 익명댓글: 관리자 / 댓글 작성자 외에는 실명·userId를 가린다
+     *  - 익명댓글: 댓글 작성자 외에는 실명·userId를 가린다 (관리자도 일반 화면에서는 못 본다)
      */
     private List<CommentDetailResponse> maskComments(List<CommentDetailResponse> comments,
                                                      Long postAuthorId, Long currentUserId) {
@@ -171,7 +172,7 @@ public class BoardServiceImpl implements BoardService {
             if (Boolean.TRUE.equals(comment.getIsPrivate()) && !admin && !commentAuthor && !postAuthor) {
                 comment.setContent("비밀댓글입니다.");
             }
-            if (Boolean.TRUE.equals(comment.getIsAnonymous()) && !admin && !commentAuthor) {
+            if (Boolean.TRUE.equals(comment.getIsAnonymous()) && !commentAuthor) {
                 comment.setAuthorName("익명");
                 comment.setUserId(null);
             }
