@@ -39,8 +39,21 @@ public class NotificationPublisher {
      */
     public void publish(Long receiverId, NotificationType type,
                         String targetType, Long targetId, Long boardId) {
-        String title = type.defaultTitle();
-        String message = null; // 현재 목록·푸시는 title 만 사용. 본문이 필요해지면 여기서 채운다.
+        publish(receiverId, type, targetType, targetId, boardId, type.defaultTitle(), null);
+    }
+
+    /**
+     * 제목·본문을 직접 지정하는 발행.
+     *
+     * 댓글 알림처럼 "어느 게시판 어느 글에 어떤 내용이 달렸는지"를 알려야 하는 경우에 쓴다.
+     * 알림함 목록과 OS 푸시가 같은 값을 그대로 쓰므로 여기서 만든 문구가 두 곳에 함께 나간다.
+     *
+     * @param title   notifications.title 은 varchar(100) — 호출부에서 잘라 넘길 것
+     * @param message notifications.message 는 varchar(500), nullable
+     */
+    public void publish(Long receiverId, NotificationType type,
+                        String targetType, Long targetId, Long boardId,
+                        String title, String message) {
 
         NotificationCreate command = new NotificationCreate(
                 receiverId, type.name(), title, message, targetType, targetId);

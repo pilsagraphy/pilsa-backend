@@ -371,7 +371,8 @@ public class BoardServiceImpl implements BoardService {
         boardMapper.insertComment(postId, userId, request);
 
         // 댓글/답글 알림 발행 (부가기능 — 실패해도 댓글 등록은 성공해야 하므로 내부에서 예외를 삼킨다)
-        publishCommentNotifications(boardId, postId, userId, parentCommentId);
+        publishCommentNotifications(boardId, postId, userId, parentCommentId,
+                request.getContent(), Boolean.TRUE.equals(request.getIsPrivate()));
 
         return new CommentResponse("댓글이 성공적으로 등록되었습니다.");
     }
@@ -388,7 +389,8 @@ public class BoardServiceImpl implements BoardService {
      * 알림은 부가기능이라 발행 실패가 본 기능(댓글 등록)을 롤백·500 시키면 안 된다 → 전체를 try/catch 로 감싸 로그만 남긴다.
      * (외부 HTTP 푸시는 NotificationPushService 가 @Async 로 이미 분리되어 있어 지연·실패가 이 흐름에 영향을 주지 않는다.)
      */
-    private void publishCommentNotifications(Long boardId, Long postId, Long actorId, Long parentCommentId) {
+    private void publishCommentNotifications(Long boardId, Long postId, Long actorId, Long parentCommentId,
+                                             String commentContent, boolean privateComment) {
         try {
             // 수신자 → 알림유형. 삽입 순서(REPLY 먼저)를 유지해 동일인 중복 시 putIfAbsent 가 REPLY 를 남기게 한다.
             Map<Long, NotificationType> recipients = new LinkedHashMap<>();
@@ -403,12 +405,49 @@ public class BoardServiceImpl implements BoardService {
                 recipients.putIfAbsent(postAuthorId, NotificationType.COMMENT); // 이미 REPLY 로 잡혔으면 유지
             }
             recipients.remove(actorId); // 본인 제외 (내 글/내 댓글에 내가 달아도 나에겐 안 감)
+            if (recipients.isEmpty()) return;
 
-            recipients.forEach((receiverId, type) ->
-                    notificationPublisher.publish(receiverId, type, "post", postId, boardId));
+            // 제목은 "어느 게시판 어느 글인지" — 알림만 보고 어디서 온 것인지 알 수 있어야 한다.
+            // 조회가 실패하면(글이 그 사이 지워짐 등) 유형 기본 문구로 물러선다.
+            String title = null;
+            Map<String, Object> context = boardMapper.findPostNotificationContext(postId);
+            if (context != null) {
+                title = "[" + context.get("boardName") + "] " + context.get("postTitle");
+            }
+
+            recipients.forEach((receiverId, type) -> {
+                String finalTitle = truncate(title != null ? title : type.defaultTitle(), NOTIFICATION_TITLE_MAX);
+                notificationPublisher.publish(receiverId, type, "post", postId, boardId,
+                        finalTitle, buildCommentNotificationMessage(type, commentContent, privateComment));
+            });
         } catch (Exception e) {
             log.warn("댓글 알림 발행 실패 - postId: {}, parentCommentId: {}, {}", postId, parentCommentId, e.getMessage());
         }
+    }
+
+    // notifications.title varchar(100) / message varchar(500) — 넘치면 INSERT 가 깨지므로 여기서 자른다
+    private static final int NOTIFICATION_TITLE_MAX = 100;
+    private static final int NOTIFICATION_MESSAGE_MAX = 200;
+
+    /**
+     * 알림 본문 — "새 댓글: 종강 축하해요!" 처럼 유형과 내용을 함께 담는다.
+     *
+     * 비밀댓글은 내용을 싣지 않는다. 답글 알림의 수신자(부모 댓글 작성자)는 그 비밀댓글을
+     * 화면에서 볼 권한이 없을 수 있는데, 푸시로 내보내면 그 경로로 새어 나간다.
+     */
+    private String buildCommentNotificationMessage(NotificationType type, String content, boolean privateComment) {
+        String label = type == NotificationType.REPLY ? "답글" : "새 댓글";
+        if (privateComment) {
+            return label + ": 비밀댓글이 달렸어요";
+        }
+        String body = content == null ? "" : content.replaceAll("\\s+", " ").trim();
+        if (body.isEmpty()) return label;
+        return truncate(label + ": " + body, NOTIFICATION_MESSAGE_MAX);
+    }
+
+    private String truncate(String value, int max) {
+        if (value == null || value.length() <= max) return value;
+        return value.substring(0, max - 1) + "…";
     }
 
     // 댓글 수정: 관리자이거나 작성자 본인일 경우 가능

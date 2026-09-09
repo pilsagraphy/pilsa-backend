@@ -98,6 +98,9 @@ public interface BoardMapper {
     // 게시글 수정 및 삭제 권한 확인을 위한 작성자 ID 조회
     Long findAuthorIdByPostId(@Param("postId") Long postId);
 
+    // 알림 문구용 — 그 글이 어느 게시판의 무슨 글인지. { boardName, postTitle }
+    java.util.Map<String, Object> findPostNotificationContext(@Param("postId") Long postId);
+
     // 게시글 수정. isPinned 는 카테고리로 재판정된 값 (중요 → 일반 카테고리로 바꾸면 자동 해제)
     int updatePost(@Param("postId") Long postId,
                    @Param("request") BoardUpdateRequest request,

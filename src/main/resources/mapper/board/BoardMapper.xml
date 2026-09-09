@@ -332,6 +332,14 @@
         SELECT user_id FROM posts WHERE post_id = #{postId}
     </select>
 
+    <!-- 알림 문구용 — 그 글이 어느 게시판의 무슨 글인지 (제목: "[자유게시판] 종강하고싶어요") -->
+    <select id="findPostNotificationContext" resultType="map">
+        SELECT b.name AS boardName, p.title AS postTitle
+        FROM posts p
+                 JOIN boards b ON b.board_id = p.board_id
+        WHERE p.post_id = #{postId}
+    </select>
+
     <!-- 게시글 수정. 블라인드/삭제 처리된 글은 작성자도 수정 불가(state = normal 조건)
          - 조치된 콘텐츠를 몰래 덮어쓰는 것을 방지 (moderation_log 증적 보호) -->
     <update id="updatePost">
