@@ -54,8 +54,13 @@ public class GoogleOAuthClient {
                 .queryParam("include_granted_scopes", "true");
 
         if (offline) {
+            // select_account: 폰(안드로이드 크롬)에 들어있는 구글 계정 목록을 먼저 보여 준다. 거기서 고르면
+            // 비밀번호 입력도 2단계 인증(숫자 맞추기)도 없이 지나간다 — 네이티브 앱의 계정 선택과 같은 경험.
+            // 이게 없으면 크롬에 구글 세션이 없는 사람은 곧장 새 로그인으로 떨어져 2단계 인증을 타고,
+            // 같은 폰에서는 알림을 여는 순간 숫자가 적힌 화면이 가려져 연동을 못 끝낸다(2026-09-09 실제 사례).
+            // consent 는 그대로 — 재연동 때 refresh token 을 다시 받으려면 필요하다.
             builder.queryParam("access_type", "offline")
-                   .queryParam("prompt", "consent");
+                   .queryParam("prompt", "select_account consent");
         }
         return builder.build().encode().toUriString();
     }
