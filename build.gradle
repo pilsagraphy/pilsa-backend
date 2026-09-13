@@ -20,6 +20,11 @@ configurations {
     }
 }
 
+// 소스에 한글 주석·문자열이 많다. javac 기본 인코딩은 OS 마다 달라(윈도우 MS949) 빌드하는 곳에 따라 깨지므로 고정한다
+tasks.withType(JavaCompile).configureEach {
+	options.encoding = 'UTF-8'
+}
+
 repositories {
     mavenCentral()
 }

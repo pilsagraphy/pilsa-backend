@@ -55,42 +55,46 @@ public class MailServiceImpl implements MailService {
 
         String html =
                 "<div style='background-color: #ffffff; padding: 24px 0;'>" +
-                        "<div style='font-family: " + fontStack + "; max-width: 560px; margin: 0 auto; padding: 32px 24px; color: " + BRAND_COLOR + "; border: 1px solid #eeeeee; border-radius: 12px;'>" +
-                        // 로고 + 워드마크 (이미지가 차단돼도 alt 와 아래 워드마크로 누가 보냈는지 알 수 있다)
-                        "  <div style='margin: 0 0 28px;'>" +
-                        "    <img src='" + LOGO_URL + "' width='56' height='56' alt='필사그래피' style='display: block; width: 56px; height: 56px; border: 0; margin: 0 0 12px;'>" +
-                        "    <span style='font-size: 15px; font-weight: 700; letter-spacing: 3px; color: " + BRAND_COLOR + ";'>PILSAGRAPHY</span>" +
+                        "<div style='font-family: " + fontStack + "; max-width: 480px; margin: 0 auto; padding: 28px 24px; color: " + BRAND_COLOR + "; border: 1px solid #eeeeee; border-radius: 12px;'>" +
+                        // 로고 + 워드마크 (이미지가 차단돼도 alt 와 워드마크로 누가 보냈는지 알 수 있다)
+                        "  <div style='margin: 0 0 20px; text-align: center;'>" +
+                        "    <img src='" + LOGO_URL + "' width='36' height='36' alt='필사그래피' style='display: inline-block; width: 36px; height: 36px; border: 0; margin: 0 0 8px;'>" +
+                        "    <span style='font-size: 12px; font-weight: 700; letter-spacing: 2.5px; color: " + BRAND_COLOR + ";'>PILSAGRAPHY</span>" +
                         "  </div>" +
-                        "  <h2 style='margin: 0 0 16px; font-size: 20px; font-weight: 700; color: " + BRAND_COLOR + ";'>이메일 인증번호 안내</h2>" +
-                        "  <p style='margin: 0 0 12px; font-size: 15px; line-height: 1.75; color: " + BRAND_COLOR + ";'>안녕하세요, 경희대학교 국제캠퍼스 중앙동아리 <strong>필사그래피</strong>입니다.</p>" +
-                        "  <p style='margin: 0 0 12px; font-size: 15px; line-height: 1.75; color: " + BRAND_COLOR + ";'>필사그래피 홈페이지에서 <strong>회원가입</strong> 또는 <strong>비밀번호 재설정</strong>을 위해 이 주소로 인증을 요청하셨습니다. 아래 여섯 자리 인증번호를 입력하시면 다음 단계로 넘어갈 수 있습니다.</p>" +
-                        "  <div style='background-color: #f5f5f5; padding: 22px; margin: 20px 0; border-radius: 8px; text-align: center;'>" +
-                        "    <span style='font-size: 30px; font-weight: 700; letter-spacing: 6px; color: " + BRAND_COLOR + ";'>" + code + "</span>" +
+                        // 인증번호를 맨 위에 — 대부분은 이 숫자만 보고 창을 닫는다
+                        "  <p style='margin: 0 0 8px; font-size: 13px; color: #757575; text-align: center;'>이메일 인증번호</p>" +
+                        "  <div style='background-color: #f5f5f5; padding: 18px; margin: 0 0 20px; border-radius: 8px; text-align: center;'>" +
+                        "    <span style='font-size: 30px; font-weight: 700; letter-spacing: 7px; color: " + BRAND_COLOR + ";'>" + code + "</span>" +
                         "  </div>" +
-                        "  <p style='margin: 0 0 12px; font-size: 14px; line-height: 1.75; color: " + BRAND_COLOR + ";'>인증번호는 발송 시각으로부터 <strong>3분</strong> 동안만 유효합니다. 시간이 지났다면 홈페이지에서 인증번호 재발송을 눌러 주세요.</p>" +
-                        "  <p style='margin: 0 0 24px; font-size: 14px; line-height: 1.75; color: " + BRAND_COLOR + ";'>본인이 요청하지 않으셨다면 이 메일을 무시하셔도 됩니다. 인증번호를 입력하지 않으면 아무 일도 일어나지 않으며, 다른 사람에게 알려 주지 마세요.</p>" +
-                        "  <hr style='border: none; border-top: 1px solid #eeeeee; margin: 0 0 18px;'>" +
-                        "  <p style='margin: 0 0 6px; font-size: 12px; line-height: 1.8; color: " + BRAND_COLOR + ";'><strong>필사그래피</strong> · " + CLUB_ADDRESS + "</p>" +
-                        "  <p style='margin: 0 0 6px; font-size: 12px; line-height: 1.8; color: " + BRAND_COLOR + ";'>홈페이지 <a href='" + SITE_URL + "' style='" + linkStyle + "'>pilsa.co.kr</a>" +
-                        " · 문의 <a href='" + INQUIRY_URL + "' style='" + linkStyle + "'>건의사항 보내기</a>" +
+                        "  <p style='margin: 0 0 16px; font-size: 14px; line-height: 1.6; color: " + BRAND_COLOR + "; text-align: center;'>필사그래피 홈페이지 <strong>회원가입 · 비밀번호 재설정</strong> 인증번호입니다.</p>" +
+                        // 안내는 서술형 대신 목록으로 — 읽는 부담을 줄인다
+                        "  <ul style='margin: 0 0 20px; padding-left: 18px; font-size: 13px; line-height: 1.9; color: #454545;'>" +
+                        "    <li>유효시간 <strong>3분</strong> — 지나면 홈페이지에서 재발송해 주세요</li>" +
+                        "    <li>요청하지 않으셨다면 이 메일을 무시하셔도 됩니다</li>" +
+                        "    <li>인증번호는 다른 사람에게 알려 주지 마세요</li>" +
+                        "  </ul>" +
+                        "  <hr style='border: none; border-top: 1px solid #eeeeee; margin: 0 0 14px;'>" +
+                        "  <p style='margin: 0 0 4px; font-size: 11px; line-height: 1.7; color: #919191; text-align: center;'><strong style='color: " + BRAND_COLOR + ";'>필사그래피</strong> · " + CLUB_ADDRESS + "</p>" +
+                        "  <p style='margin: 0 0 4px; font-size: 11px; line-height: 1.7; color: #919191; text-align: center;'>" +
+                        "<a href='" + SITE_URL + "' style='" + linkStyle + "'>홈페이지</a>" +
+                        " · <a href='" + INQUIRY_URL + "' style='" + linkStyle + "'>문의</a>" +
                         " · <a href='" + PRIVACY_URL + "' style='" + linkStyle + "'>개인정보처리방침</a></p>" +
-                        "  <p style='margin: 0; font-size: 12px; line-height: 1.8; color: " + BRAND_COLOR + ";'>이 메일은 회원 인증을 위해 발송된 안내 메일이며, 광고성 정보가 포함되어 있지 않습니다.</p>" +
+                        "  <p style='margin: 0; font-size: 11px; line-height: 1.7; color: #919191; text-align: center;'>회원 인증을 위해 발송된 안내 메일이며, 광고성 정보가 없습니다.</p>" +
                         "</div></div>";
 
-        String plain = "[필사그래피] 이메일 인증번호 안내\n\n"
-                + "안녕하세요, 경희대학교 국제캠퍼스 중앙동아리 필사그래피입니다.\n\n"
-                + "필사그래피 홈페이지에서 회원가입 또는 비밀번호 재설정을 위해 이 주소로 인증을 요청하셨습니다.\n"
-                + "아래 여섯 자리 인증번호를 입력하시면 다음 단계로 넘어갈 수 있습니다.\n\n"
-                + "  인증번호: " + code + "\n\n"
-                + "인증번호는 발송 시각으로부터 3분 동안만 유효합니다. 시간이 지났다면 홈페이지에서 인증번호 재발송을 눌러 주세요.\n"
-                + "본인이 요청하지 않으셨다면 이 메일을 무시하셔도 됩니다. 인증번호를 입력하지 않으면 아무 일도 일어나지 않으며,\n"
-                + "다른 사람에게 알려 주지 마세요.\n\n"
+        String plain = "[필사그래피] 이메일 인증번호\n\n"
+                + "  " + code + "\n\n"
+                + "필사그래피 홈페이지 회원가입 · 비밀번호 재설정 인증번호입니다.\n\n"
+                + "- 유효시간 3분 — 지나면 홈페이지에서 재발송해 주세요\n"
+                + "- 요청하지 않으셨다면 이 메일을 무시하셔도 됩니다\n"
+                + "- 인증번호는 다른 사람에게 알려 주지 마세요\n\n"
                 + "--------------------------------------------------\n"
                 + "필사그래피 · " + CLUB_ADDRESS + "\n"
                 + "홈페이지: " + SITE_URL + "\n"
-                + "문의(건의사항): " + INQUIRY_URL + "\n"
+                + "문의: " + INQUIRY_URL + "\n"
                 + "개인정보처리방침: " + PRIVACY_URL + "\n"
-                + "이 메일은 회원 인증을 위해 발송된 안내 메일이며, 광고성 정보가 포함되어 있지 않습니다.\n";
+                + "회원 인증을 위해 발송된 안내 메일이며, 광고성 정보가 없습니다.\n";
+
         asyncMailService.sendHtml(email, subject, html, plain);
 
         return CODE_TTL;
