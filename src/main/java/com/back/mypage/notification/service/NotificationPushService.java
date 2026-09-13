@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import nl.martijndwars.webpush.Encoding;
 import nl.martijndwars.webpush.Notification;
 import nl.martijndwars.webpush.PushService;
+import nl.martijndwars.webpush.Urgency;
 import org.apache.http.HttpResponse;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,6 +32,15 @@ import java.util.Map;
 @Slf4j
 @Service
 public class NotificationPushService {
+
+    /**
+     * 푸시 서비스가 이 알림을 들고 있어 줄 시간(초). 기기가 꺼져 있거나 절전 중이면 그동안 보관했다가 깨어날 때 준다.
+     *
+     * 라이브러리 기본값은 하루라, 저녁에 달린 댓글 알림이 한밤중에 도착하는 일이 있었다(2026-09-13 제보:
+     * 18:51 댓글 → 23:45 도착). '새 댓글' 은 시간이 지나면 알림으로서 쓸모가 없고, 늦게 울리면 오히려 방해다.
+     * 4시간이 지나면 버린다 — 알림함(notifications)에는 그대로 남으므로 내용을 잃지는 않는다.
+     */
+    private static final int PUSH_TTL_SECONDS = 4 * 60 * 60;
 
     private final NotificationDeviceMapper deviceMapper;
     private final ObjectMapper objectMapper;
@@ -91,15 +101,29 @@ public class NotificationPushService {
             try {
                 // 콘텐츠 암호화는 RFC 8291 aes128gcm 으로 명시한다. 이 라이브러리의 send(notification) 기본값은 구형 aesgcm
                 // (Crypto-Key 헤더)이라 Apple 푸시(web.push.apple.com — iPhone 홈 화면 앱)가 거절한다. 크롬/FCM 도 aes128gcm 이 표준.
-                HttpResponse response = pushService.send(
-                        new Notification(device.getEndpoint(), device.getP256dh(), device.getAuthSecret(), payload),
-                        Encoding.AES128GCM);
+                //
+                // TTL 과 urgency 를 함께 지정한다. urgency HIGH 는 절전 중인 기기도 바로 깨우라는 뜻으로,
+                // 사람이 기다리는 알림에 쓰는 값이다(기본값 normal 은 배터리를 아끼려 묶어 뒀다가 나중에 준다).
+                Notification push = Notification.builder()
+                        .endpoint(device.getEndpoint())
+                        .userPublicKey(device.getP256dh())
+                        .userAuth(device.getAuthSecret())
+                        .payload(payload)
+                        .ttl(PUSH_TTL_SECONDS)
+                        .urgency(Urgency.HIGH)
+                        .build();
+                HttpResponse response = pushService.send(push, Encoding.AES128GCM);
                 int status = response.getStatusLine().getStatusCode();
                 if (status == 404 || status == 410) {
                     deviceMapper.deleteById(device.getDeviceId());
                     log.info("만료된 알림 기기 정리 - deviceId: {}", device.getDeviceId());
                 } else if (status >= 400) {
                     log.warn("푸시 발송 실패 - deviceId: {}, status: {}", device.getDeviceId(), status);
+                } else {
+                    // 성공도 남긴다. 예전에는 실패만 찍어서 "몇 시에 보냈는지" 조차 사후에 확인할 수 없었고,
+                    // 알림이 늦게 왔다는 제보가 들어와도 발송이 늦은 것인지 배달이 늦은 것인지 가릴 수 없었다
+                    log.info("푸시 발송 - toastId: {}, userId: {}, deviceId: {}, status: {}",
+                            toastId, receiverId, device.getDeviceId(), status);
                 }
             } catch (Exception e) {
                 log.warn("푸시 발송 오류 - deviceId: {}, {}", device.getDeviceId(), e.getMessage());
