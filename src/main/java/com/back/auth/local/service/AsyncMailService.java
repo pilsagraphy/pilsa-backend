@@ -43,7 +43,8 @@ public class AsyncMailService {
     @Value("${mail.from.name:Pilsagraphy}")
     private String senderName;
 
-    @Async
+    // 알림과 같은 전용 풀 — 캘린더 동기화 뒤에 인증 메일이 줄 서면 가입이 막힌다 (AsyncConfig 참고)
+    @Async("notificationExecutor")
     public void sendHtml(String to, String subject, String html, String plainText) {
         try {
             MimeMessage mime = mailSender.createMimeMessage();
