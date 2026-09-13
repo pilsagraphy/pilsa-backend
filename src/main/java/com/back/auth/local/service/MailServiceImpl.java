@@ -29,7 +29,10 @@ public class MailServiceImpl implements MailService {
     // 로고는 cid 인라인이 아니라 원격 이미지다 — 인라인으로 넣으면 아이폰이 첨부파일로도 보여 준다.
     // 흰 바탕으로 구워 둔 파일이라 다크 모드 메일에서도 로고가 묻히지 않는다
     private static final String LOGO_URL = SITE_URL + "/icons/email-logo.png";
-    private static final String INQUIRY_URL = "https://forms.gle/ZyGebkpQrLoDk7e68"; // 홈페이지 건의사항 (푸터와 동일)
+    // 문의는 메일로 받는다. 인증 메일을 받아 본 사람이 그 자리에서 답장하듯 눌러 쓸 수 있는 것이 자연스럽고,
+    // 구글 폼은 로그인 화면을 거치는 사람이 있어 메일 안에서는 걸림돌이 된다.
+    private static final String INQUIRY_EMAIL = "help@pilsa.co.kr";
+    private static final String INQUIRY_URL = "mailto:" + INQUIRY_EMAIL;
     private static final String PRIVACY_URL = "https://help.pilsa.co.kr/privacy-policy.html";
     private static final String CLUB_ADDRESS = "경희대학교 국제캠퍼스 학생회관 614호";
 
@@ -71,12 +74,12 @@ public class MailServiceImpl implements MailService {
                         "  <p style='margin: 0 0 20px; font-size: 13px; line-height: 1.6; color: #757575; text-align: center;'>회원가입 · 비밀번호 재설정에 사용하는 번호입니다.</p>" +
                         // 안내는 서술형 대신 목록으로 — 읽는 부담을 줄인다
                         "  <ul style='margin: 0 0 22px; padding-left: 20px; font-size: 13px; line-height: 1.8; color: #454545;'>" +
-                        "    <li>유효시간 <strong>3분</strong> (지나면 재발송해 주세요)</li>" +
+                        "    <li>유효시간 <strong>3분</strong>이 지나면 재발송해 주세요</li>" +
                         "    <li>요청하지 않으셨다면 이 메일을 무시하셔도 됩니다</li>" +
                         "    <li>인증번호는 다른 사람에게 알려 주지 마세요</li>" +
                         "  </ul>" +
                         "  <hr style='border: none; border-top: 1px solid #eeeeee; margin: 0 0 14px;'>" +
-                        "  <p style='margin: 0 0 4px; font-size: 11px; line-height: 1.7; color: #919191; text-align: center;'><strong style='color: " + BRAND_COLOR + ";'>필사그래피</strong> · " + CLUB_ADDRESS + "</p>" +
+                        "  <p style='margin: 0 0 4px; font-size: 11px; line-height: 1.7; color: #919191; text-align: center;'>필사그래피 · " + CLUB_ADDRESS + "</p>" +
                         "  <p style='margin: 0 0 4px; font-size: 11px; line-height: 1.7; color: #919191; text-align: center;'>" +
                         "<a href='" + SITE_URL + "' style='" + linkStyle + "'>홈페이지</a>" +
                         " · <a href='" + INQUIRY_URL + "' style='" + linkStyle + "'>문의</a>" +
@@ -87,13 +90,13 @@ public class MailServiceImpl implements MailService {
         String plain = "[필사그래피] 이메일 인증번호\n\n"
                 + "  " + code + "\n\n"
                 + "회원가입 · 비밀번호 재설정에 사용하는 번호입니다.\n\n"
-                + "- 유효시간 3분 (지나면 재발송해 주세요)\n"
+                + "- 유효시간 3분이 지나면 재발송해 주세요\n"
                 + "- 요청하지 않으셨다면 이 메일을 무시하셔도 됩니다\n"
                 + "- 인증번호는 다른 사람에게 알려 주지 마세요\n\n"
                 + "--------------------------------------------------\n"
                 + "필사그래피 · " + CLUB_ADDRESS + "\n"
                 + "홈페이지: " + SITE_URL + "\n"
-                + "문의: " + INQUIRY_URL + "\n"
+                + "문의: " + INQUIRY_EMAIL + "\n"
                 + "개인정보처리방침: " + PRIVACY_URL + "\n"
                 + "회원 인증을 위해 발송된 안내 메일이며, 광고성 정보가 없습니다.\n";
 
