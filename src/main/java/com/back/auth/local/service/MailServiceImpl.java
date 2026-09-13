@@ -57,18 +57,20 @@ public class MailServiceImpl implements MailService {
                 "<div style='background-color: #ffffff; padding: 24px 0;'>" +
                         "<div style='font-family: " + fontStack + "; max-width: 480px; margin: 0 auto; padding: 28px 24px; color: " + BRAND_COLOR + "; border: 1px solid #eeeeee; border-radius: 12px;'>" +
                         // 로고 + 워드마크 (이미지가 차단돼도 alt 와 워드마크로 누가 보냈는지 알 수 있다)
-                        "  <div style='margin: 0 0 20px; text-align: center;'>" +
-                        "    <img src='" + LOGO_URL + "' width='36' height='36' alt='필사그래피' style='display: inline-block; width: 36px; height: 36px; border: 0; margin: 0 0 8px;'>" +
-                        "    <span style='font-size: 12px; font-weight: 700; letter-spacing: 2.5px; color: " + BRAND_COLOR + ";'>PILSAGRAPHY</span>" +
+                        "  <div style='margin: 0 0 22px; padding: 0 0 18px; border-bottom: 1px solid #f0f0f0; text-align: center;'>" +
+                        // margin: 0 auto — block 으로 두고 좌우 auto 여백을 줘야 자기 줄에서 가운데에 선다.
+                        // inline-block 이면 워드마크와 같은 줄에 붙어 baseline 기준으로 어긋나 보인다
+                        "    <img src='" + LOGO_URL + "' width='48' height='48' alt='필사그래피' style='display: block; width: 48px; height: 48px; border: 0; margin: 0 auto 10px;'>" +
+                        "    <span style='font-size: 13px; font-weight: 700; letter-spacing: 3px; color: " + BRAND_COLOR + ";'>PILSAGRAPHY</span>" +
                         "  </div>" +
                         // 인증번호를 맨 위에 — 대부분은 이 숫자만 보고 창을 닫는다
-                        "  <p style='margin: 0 0 8px; font-size: 13px; color: #757575; text-align: center;'>이메일 인증번호</p>" +
-                        "  <div style='background-color: #f5f5f5; padding: 18px; margin: 0 0 20px; border-radius: 8px; text-align: center;'>" +
-                        "    <span style='font-size: 30px; font-weight: 700; letter-spacing: 7px; color: " + BRAND_COLOR + ";'>" + code + "</span>" +
+                        "  <p style='margin: 0 0 10px; font-size: 12px; letter-spacing: 0.5px; color: #919191; text-align: center;'>이메일 인증번호</p>" +
+                        "  <div style='background-color: #f7f7f7; padding: 20px 12px; margin: 0 0 14px; border-radius: 10px; text-align: center;'>" +
+                        "    <span style='font-size: 32px; font-weight: 700; letter-spacing: 8px; color: " + BRAND_COLOR + ";'>" + code + "</span>" +
                         "  </div>" +
-                        "  <p style='margin: 0 0 16px; font-size: 14px; line-height: 1.6; color: " + BRAND_COLOR + "; text-align: center;'>필사그래피 홈페이지 <strong>회원가입 · 비밀번호 재설정</strong> 인증번호입니다.</p>" +
+                        "  <p style='margin: 0 0 20px; font-size: 13px; line-height: 1.6; color: #757575; text-align: center;'>회원가입 · 비밀번호 재설정에 사용하는 번호입니다.</p>" +
                         // 안내는 서술형 대신 목록으로 — 읽는 부담을 줄인다
-                        "  <ul style='margin: 0 0 20px; padding-left: 18px; font-size: 13px; line-height: 1.9; color: #454545;'>" +
+                        "  <ul style='margin: 0 0 22px; padding-left: 20px; font-size: 13px; line-height: 1.8; color: #454545;'>" +
                         "    <li>유효시간 <strong>3분</strong> — 지나면 홈페이지에서 재발송해 주세요</li>" +
                         "    <li>요청하지 않으셨다면 이 메일을 무시하셔도 됩니다</li>" +
                         "    <li>인증번호는 다른 사람에게 알려 주지 마세요</li>" +
@@ -84,7 +86,7 @@ public class MailServiceImpl implements MailService {
 
         String plain = "[필사그래피] 이메일 인증번호\n\n"
                 + "  " + code + "\n\n"
-                + "필사그래피 홈페이지 회원가입 · 비밀번호 재설정 인증번호입니다.\n\n"
+                + "회원가입 · 비밀번호 재설정에 사용하는 번호입니다.\n\n"
                 + "- 유효시간 3분 — 지나면 홈페이지에서 재발송해 주세요\n"
                 + "- 요청하지 않으셨다면 이 메일을 무시하셔도 됩니다\n"
                 + "- 인증번호는 다른 사람에게 알려 주지 마세요\n\n"

@@ -38,7 +38,9 @@ public class AsyncMailService {
     @Value("${mail.from.address:${spring.mail.username}}")
     private String senderAddress;
 
-    @Value("${mail.from.name:필사그래피}")
+    // 영문으로 둔다 — application.properties 는 ISO-8859-1 로 읽혀 한글을 적으면 보낸이가 깨진다(실제로 겪었다).
+    // 영문이면 설정 파일에 그대로 둘 수 있어 무엇이 나가는지 설정만 보고도 안다
+    @Value("${mail.from.name:Pilsagraphy}")
     private String senderName;
 
     @Async
