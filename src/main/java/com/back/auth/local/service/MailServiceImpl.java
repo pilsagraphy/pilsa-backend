@@ -60,7 +60,7 @@ public class MailServiceImpl implements MailService {
                         "  <div style='margin: 0 0 22px; padding: 0 0 18px; border-bottom: 1px solid #f0f0f0; text-align: center;'>" +
                         // margin: 0 auto — block 으로 두고 좌우 auto 여백을 줘야 자기 줄에서 가운데에 선다.
                         // inline-block 이면 워드마크와 같은 줄에 붙어 baseline 기준으로 어긋나 보인다
-                        "    <img src='" + LOGO_URL + "' width='48' height='48' alt='필사그래피' style='display: block; width: 48px; height: 48px; border: 0; margin: 0 auto 10px;'>" +
+                        "    <img src='" + LOGO_URL + "' width='48' height='48' alt='필사그래피' style='display: block; width: 48px; height: 48px; border: 0; border-radius: 12px; margin: 0 auto 10px;'>" +
                         "    <span style='font-size: 13px; font-weight: 700; letter-spacing: 3px; color: " + BRAND_COLOR + ";'>PILSAGRAPHY</span>" +
                         "  </div>" +
                         // 인증번호를 맨 위에 — 대부분은 이 숫자만 보고 창을 닫는다
@@ -71,7 +71,7 @@ public class MailServiceImpl implements MailService {
                         "  <p style='margin: 0 0 20px; font-size: 13px; line-height: 1.6; color: #757575; text-align: center;'>회원가입 · 비밀번호 재설정에 사용하는 번호입니다.</p>" +
                         // 안내는 서술형 대신 목록으로 — 읽는 부담을 줄인다
                         "  <ul style='margin: 0 0 22px; padding-left: 20px; font-size: 13px; line-height: 1.8; color: #454545;'>" +
-                        "    <li>유효시간 <strong>3분</strong> — 지나면 홈페이지에서 재발송해 주세요</li>" +
+                        "    <li>유효시간 <strong>3분</strong> (지나면 재발송해 주세요)</li>" +
                         "    <li>요청하지 않으셨다면 이 메일을 무시하셔도 됩니다</li>" +
                         "    <li>인증번호는 다른 사람에게 알려 주지 마세요</li>" +
                         "  </ul>" +
@@ -87,7 +87,7 @@ public class MailServiceImpl implements MailService {
         String plain = "[필사그래피] 이메일 인증번호\n\n"
                 + "  " + code + "\n\n"
                 + "회원가입 · 비밀번호 재설정에 사용하는 번호입니다.\n\n"
-                + "- 유효시간 3분 — 지나면 홈페이지에서 재발송해 주세요\n"
+                + "- 유효시간 3분 (지나면 재발송해 주세요)\n"
                 + "- 요청하지 않으셨다면 이 메일을 무시하셔도 됩니다\n"
                 + "- 인증번호는 다른 사람에게 알려 주지 마세요\n\n"
                 + "--------------------------------------------------\n"
