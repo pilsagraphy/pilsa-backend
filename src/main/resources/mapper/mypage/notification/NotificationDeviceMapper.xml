@@ -19,6 +19,15 @@
           AND endpoint = #{endpoint}
     </delete>
 
+    <!-- 설치형 앱(TWA)이 등록할 때 같은 회원의 다른 안드로이드 기기 행 정리.
+         Apple 푸시(web.push.apple.com)는 iPhone 홈 화면 앱이라 다른 기기 — 남긴다 -->
+    <delete id="deleteOthersExceptApple">
+        DELETE FROM notification_devices
+        WHERE user_id = #{userId}
+          AND endpoint != #{endpoint}
+          AND endpoint NOT LIKE 'https://web.push.apple.com/%'
+    </delete>
+
     <select id="findByUserId" resultType="com.back.mypage.notification.dto.NotificationDevice">
         SELECT device_id   AS deviceId,
                endpoint,

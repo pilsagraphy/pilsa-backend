@@ -85,6 +85,10 @@ public class NotificationDeviceController {
                       본인 소유 기기만 해제되고, 다른 기기의 수신 설정은 그대로 유지된다.
                     - **로그아웃 시에도 enabled=false 로 호출한다** — 호출하지 않으면 그 기기로 알림이 계속 가고,
                       공용 기기에서는 남의 알림 내용이 뜬다.
+                    - **replaceOthers=true (설치형 안드로이드 앱 전용)**: 이 기기를 등록하면서 같은 회원의 다른 안드로이드
+                      (비-Apple) 기기 행을 함께 지운다. 앱이 Chrome 으로 고정되기 전 삼성 인터넷으로 열린 앱이 남긴 브라우저 구독이
+                      그대로 남으면 같은 알림이 두 번 오기 때문이다. iPhone 홈 화면 앱(web.push.apple.com)은 다른 기기라 남긴다.
+                      브라우저·iOS 에서는 보내지 않는다(미전달 = false).
 
                     ### 프론트 주의 — 토글 OFF 와 로그아웃은 브라우저 쪽 처리가 다르다
                     | | 서버 기기 행 | `subscription.unsubscribe()` |
@@ -105,6 +109,7 @@ public class NotificationDeviceController {
                       "keys": { "p256dh": "BNc...", "auth": "k8J..." }
                     }
                     ```
+                    설치형 안드로이드 앱에서는 `"replaceOthers": true` 를 함께 보낸다.
 
                     ### 요청 예시 (거부)
                     ```json

@@ -28,6 +28,13 @@ public class NotificationDeviceRequest {
     @Schema(description = "페이로드 암호화 키. enabled=true 일 때만 필수")
     private Keys keys;
 
+    // 설치형 앱(안드로이드 TWA)이 등록할 때만 true 로 보낸다 — 같은 회원의 다른 안드로이드(비-Apple) 기기 행을 함께 정리한다.
+    // 앱이 Chrome 으로 고정되기 전 삼성 인터넷으로 열린 앱이 남긴 브라우저 구독이 그대로 남으면 같은 알림이 두 번 온다.
+    // Boolean 래퍼: 미전달(null)은 false 와 같다 (기존 호출부 호환)
+    @Schema(description = "true 면 이 기기를 등록하면서 같은 회원의 다른 안드로이드(비-Apple) 기기 등록을 정리한다 — 설치형 앱 전용",
+            example = "false")
+    private Boolean replaceOthers;
+
     @Getter
     @Setter
     public static class Keys {

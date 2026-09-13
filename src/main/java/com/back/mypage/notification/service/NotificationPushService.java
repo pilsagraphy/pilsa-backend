@@ -4,6 +4,7 @@ import com.back.mypage.notification.dto.NotificationDevice;
 import com.back.mypage.notification.mapper.NotificationDeviceMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import nl.martijndwars.webpush.Encoding;
 import nl.martijndwars.webpush.Notification;
 import nl.martijndwars.webpush.PushService;
 import org.apache.http.HttpResponse;
@@ -88,8 +89,11 @@ public class NotificationPushService {
 
         for (NotificationDevice device : devices) {
             try {
+                // 콘텐츠 암호화는 RFC 8291 aes128gcm 으로 명시한다. 이 라이브러리의 send(notification) 기본값은 구형 aesgcm
+                // (Crypto-Key 헤더)이라 Apple 푸시(web.push.apple.com — iPhone 홈 화면 앱)가 거절한다. 크롬/FCM 도 aes128gcm 이 표준.
                 HttpResponse response = pushService.send(
-                        new Notification(device.getEndpoint(), device.getP256dh(), device.getAuthSecret(), payload));
+                        new Notification(device.getEndpoint(), device.getP256dh(), device.getAuthSecret(), payload),
+                        Encoding.AES128GCM);
                 int status = response.getStatusLine().getStatusCode();
                 if (status == 404 || status == 410) {
                     deviceMapper.deleteById(device.getDeviceId());

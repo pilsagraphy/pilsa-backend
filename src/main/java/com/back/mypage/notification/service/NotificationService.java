@@ -147,6 +147,14 @@ public class NotificationService {
             }
             notificationDeviceMapper.upsertDevice(userId,
                     request.getEndpoint(), request.getKeys().getP256dh(), request.getKeys().getAuth());
+            // 설치형 앱(TWA)의 등록은 그 폰의 정본 채널이다 — 같은 폰의 브라우저 구독(삼성 인터넷·크롬 탭)이 남아 있으면
+            // 같은 알림이 두 번 오므로 함께 정리한다. Apple(web.push.apple.com)은 다른 기기(iPhone)라 남긴다.
+            if (Boolean.TRUE.equals(request.getReplaceOthers())) {
+                int removed = notificationDeviceMapper.deleteOthersExceptApple(userId, request.getEndpoint());
+                if (removed > 0) {
+                    log.info("설치형 앱 등록으로 같은 회원의 다른 안드로이드 기기 정리 - userId: {}, removed: {}", userId, removed);
+                }
+            }
         } else {
             // 세션성 데이터라 소프트삭제 예외 — 행을 물리 삭제한다
             notificationDeviceMapper.deleteByEndpoint(userId, request.getEndpoint());

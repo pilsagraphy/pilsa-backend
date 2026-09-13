@@ -23,6 +23,9 @@ public interface NotificationDeviceMapper {
     /** 본인 기기만 해제 */
     int deleteByEndpoint(@Param("userId") Long userId, @Param("endpoint") String endpoint);
 
+    /** 설치형 앱 등록 시 같은 회원의 다른 안드로이드(비-Apple) 기기 정리 — 같은 폰의 브라우저 구독이 남아 알림이 두 번 오는 것 방지 */
+    int deleteOthersExceptApple(@Param("userId") Long userId, @Param("endpoint") String endpoint);
+
     /** 발송용 — 암호화 키를 포함한다. 화면 응답에 그대로 쓰지 말 것 */
     List<NotificationDevice> findByUserId(@Param("userId") Long userId);
 
