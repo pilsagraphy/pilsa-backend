@@ -45,10 +45,11 @@ public class AsyncMailService {
     public void sendHtml(String to, String subject, String html, String plainText) {
         try {
             MimeMessage mime = mailSender.createMimeMessage();
-            // 첨부·인라인이 없으므로 alternative(평문+HTML) 한 겹이면 충분하다
+            // 평문+HTML 두 벌(multipart/alternative)을 실으므로 multipart 모드여야 한다.
+            // MULTIPART_MODE_NO 로 두면 setText(plain, html) 이 "Not in multipart mode" 로 던진다.
             MimeMessageHelper helper = new MimeMessageHelper(
                     mime,
-                    MimeMessageHelper.MULTIPART_MODE_NO,
+                    MimeMessageHelper.MULTIPART_MODE_MIXED,
                     StandardCharsets.UTF_8.name()
             );
 
