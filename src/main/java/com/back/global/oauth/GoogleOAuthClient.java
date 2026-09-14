@@ -51,16 +51,19 @@ public class GoogleOAuthClient {
                 .queryParam("response_type", "code")
                 .queryParam("scope", scope)
                 .queryParam("state", state)
-                .queryParam("include_granted_scopes", "true");
+                .queryParam("include_granted_scopes", "true")
+                // select_account: 어느 흐름이든 구글 계정 선택 화면을 먼저 보여 준다.
+                //  - 폰(안드로이드 크롬)에 들어있는 계정을 고르면 비밀번호도 2단계 인증(숫자 맞추기)도 없이 지나간다.
+                //    이게 없으면 크롬에 구글 세션이 없는 사람은 곧장 새 로그인으로 떨어져 2단계 인증을 타고,
+                //    같은 폰에서는 알림을 여는 순간 숫자가 적힌 화면이 가려져 연동을 못 끝낸다(2026-09-09 실제 사례).
+                //  - 예전에는 캘린더(offline)에만 붙어 있어서, 계정 연결을 해제하고 다시 연결하면 구글이 직전
+                //    계정을 묻지도 않고 그대로 써 버렸다(2026-09-14 제보). 다른 계정으로 바꿀 길이 없었다.
+                .queryParam("prompt", offline ? "select_account consent" : "select_account");
 
         if (offline) {
-            // select_account: 폰(안드로이드 크롬)에 들어있는 구글 계정 목록을 먼저 보여 준다. 거기서 고르면
-            // 비밀번호 입력도 2단계 인증(숫자 맞추기)도 없이 지나간다 — 네이티브 앱의 계정 선택과 같은 경험.
-            // 이게 없으면 크롬에 구글 세션이 없는 사람은 곧장 새 로그인으로 떨어져 2단계 인증을 타고,
-            // 같은 폰에서는 알림을 여는 순간 숫자가 적힌 화면이 가려져 연동을 못 끝낸다(2026-09-09 실제 사례).
-            // consent 는 그대로 — 재연동 때 refresh token 을 다시 받으려면 필요하다.
-            builder.queryParam("access_type", "offline")
-                   .queryParam("prompt", "select_account consent");
+            // consent: 구글은 이미 동의한 사용자에게는 refresh token 을 다시 주지 않는다.
+            // 재연동 때도 확실히 받으려면 동의 화면을 매번 띄워야 한다.
+            builder.queryParam("access_type", "offline");
         }
         return builder.build().encode().toUriString();
     }
