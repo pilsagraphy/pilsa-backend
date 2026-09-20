@@ -9,6 +9,7 @@ import lombok.Setter;
 @Setter
 public class AdminCommentResponse {
     private Long commentId;
+    private Long parentCommentId;  // 답글이면 부모 댓글. 관리자 상세에서 부모·자식 관계를 보여 주기 위해
     private String content;
     private Long userId;
     private String authorName;

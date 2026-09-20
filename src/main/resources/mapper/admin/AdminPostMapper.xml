@@ -87,6 +87,7 @@
     <!-- 댓글: state 필터 없음 (블라인드/삭제 댓글까지 관리자에게 노출) -->
     <select id="findComments" resultType="com.back.admin.post.dto.AdminCommentResponse">
         SELECT c.comment_id   AS commentId,
+               c.parent_comment_id AS parentCommentId,
                c.content,
                c.user_id      AS userId,
                u.name         AS authorName,
