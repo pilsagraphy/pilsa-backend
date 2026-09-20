@@ -30,4 +30,13 @@ public interface ReportMapper {
     // 신고 대상의 현재 표시 상태 (normal/blind/deleted) — 이미 삭제된 대상 접수 차단용
     String findPostState(@Param("postId") Long postId);
     String findCommentState(@Param("commentId") Long commentId);
+
+    // 자동 블라인드 판정용 — 대상에 쌓인 대기 신고를 신고자 수로 센다 (같은 사람이 여러 번은 유니크로 막혀 있다)
+    int countPendingReporters(@Param("targetType") String targetType, @Param("targetId") Long targetId);
+
+    // 비밀 댓글인가 — 비밀 댓글은 원글 작성자 한 사람만 볼 수 있어 신고도 한 건이 최대다
+    Boolean isPrivateComment(@Param("commentId") Long commentId);
+
+    // policy_settings 값 (없으면 null)
+    String findPolicySetting(@Param("code") String code);
 }

@@ -45,4 +45,20 @@
         SELECT state FROM comments WHERE comment_id = #{commentId}
     </select>
 
+
+    <select id="countPendingReporters" resultType="int">
+        SELECT COUNT(DISTINCT reporter_id)
+        FROM reports_log
+        WHERE target_type = #{targetType}
+          AND target_id = #{targetId}
+          AND status = 'pending'
+    </select>
+
+    <select id="isPrivateComment" resultType="boolean">
+        SELECT is_private = 1 FROM comments WHERE comment_id = #{commentId}
+    </select>
+
+    <select id="findPolicySetting" resultType="string">
+        SELECT setting_value FROM policy_settings WHERE code = #{code}
+    </select>
 </mapper>
