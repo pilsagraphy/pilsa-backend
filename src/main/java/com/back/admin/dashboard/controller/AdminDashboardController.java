@@ -1,6 +1,7 @@
 package com.back.admin.dashboard.controller;
 
 import com.back.admin.dashboard.dto.AdminDashboardResponse;
+import com.back.admin.dashboard.dto.AdminPolicySummaryResponse;
 import com.back.admin.dashboard.dto.RecentMemberResponse;
 import com.back.admin.dashboard.dto.RecentReportResponse;
 import com.back.admin.dashboard.service.AdminDashboardService;
@@ -83,5 +84,24 @@ public class AdminDashboardController {
             @Parameter(description = "표시 건수 (기본 5, 1~100)")
             @RequestParam(defaultValue = "5") int size) {
         return ResponseEntity.ok(adminDashboardService.getRecentMembers(size));
+    }
+
+    @Operation(summary = "운영 정책 요약 (관리자 홈)",
+            description = """
+            관리자 홈의 '운영 정책' 칸. 신고·제재·탈퇴에 관련된 policy_settings 값과 ban_policy 를 그대로 준다 —
+            코드가 실제로 읽어 쓰는 값이라 문서와 어긋나지 않는다.
+
+            ### 응답 예시
+            ```json
+            { "settings": { "auto_blind_threshold": "1", "caution_per_delete": "2", "cautions_per_warning": "10",
+                            "caution_ttl_days": "365", "warning_ttl_days": "365",
+                            "rejoin_cooldown_days": "30", "withdrawn_purge_days": "90" },
+              "banPolicies": [ { "warningNo": 1, "banType": "temporary", "banDays": 7, "description": "경고 1점: 1주일 정지" },
+                               { "warningNo": 2, "banType": "temporary", "banDays": 30, "description": "경고 2점: 한달 정지" },
+                               { "warningNo": 3, "banType": "permanent", "banDays": null, "description": "경고 3점: 영구 차단" } ] }
+            ```""")
+    @GetMapping("/api/admin/dashboard/policies")
+    public ResponseEntity<AdminPolicySummaryResponse> getPolicySummary() {
+        return ResponseEntity.ok(adminDashboardService.getPolicySummary());
     }
 }

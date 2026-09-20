@@ -100,4 +100,19 @@
         LIMIT #{limit}
     </select>
 
+
+    <!-- 운영 정책 요약: 관리자 홈에 보여 줄 항목만 골라 읽는다 -->
+    <select id="findPolicySettings" resultType="com.back.admin.dashboard.dto.PolicySettingRow">
+        SELECT code, setting_value AS settingValue, description
+        FROM policy_settings
+        WHERE code IN
+        <foreach collection="codes" item="c" open="(" separator="," close=")">#{c}</foreach>
+    </select>
+
+    <select id="findBanPolicies" resultType="com.back.admin.sanction.dto.BanPolicyDto">
+        SELECT ban_policy_id AS banPolicyId, code, warning_no AS warningNo,
+               ban_type AS banType, ban_days AS banDays, description
+        FROM ban_policy
+        ORDER BY warning_no ASC
+    </select>
 </mapper>

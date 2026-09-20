@@ -2,6 +2,8 @@ package com.back.admin.dashboard.mapper;
 
 import com.back.admin.dashboard.dto.RecentMemberResponse;
 import com.back.admin.dashboard.dto.RecentReportResponse;
+import com.back.admin.dashboard.dto.PolicySettingRow;
+import com.back.admin.sanction.dto.BanPolicyDto;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -27,4 +29,10 @@ public interface AdminDashboardMapper {
 
     // 최근 가입 회원 N명 (영구차단/탈퇴 제외)
     List<RecentMemberResponse> findRecentMembers(@Param("limit") int limit);
+
+    // 운영 정책 요약 — 고른 코드만
+    List<PolicySettingRow> findPolicySettings(@Param("codes") List<String> codes);
+
+    // 경고 횟수별 정지 규칙
+    List<BanPolicyDto> findBanPolicies();
 }
