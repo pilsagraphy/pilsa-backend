@@ -19,4 +19,5 @@ public class AdminCommentResponse {
     private LocalDateTime created;
     private LocalDateTime updated;
     private ModerationNoteResponse moderation;  // 마지막 조치 (없으면 null)
+    private java.util.List<com.back.admin.moderation.revision.ContentRevisionResponse> revisions;  // 이전 본문
 }

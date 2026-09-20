@@ -4,6 +4,7 @@ import com.back.admin.moderation.dto.ModerationLogEntry;
 import com.back.admin.moderation.dto.ModerationState;
 import com.back.admin.moderation.exception.ModerationException;
 import com.back.admin.moderation.mapper.ModerationMapper;
+import com.back.admin.moderation.revision.ContentRevisionService;
 import com.back.admin.sanction.service.PenaltyEscalationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -20,9 +21,12 @@ public class ModerationServiceImpl implements ModerationService {
 
     private final ModerationMapper moderationMapper;
     private final PenaltyEscalationService penaltyEscalationService;
+    private final ContentRevisionService contentRevisionService;
 
     @Override
     public void blind(String targetType, Long targetId, Long actorId, Long reasonId, String detail) {
+        // 조치 근거로 그 순간의 본문을 남긴다 (자동 블라인드는 actorId 가 null)
+        contentRevisionService.snapshot(targetType, targetId, ContentRevisionService.TRIGGER_MODERATION, actorId);
         if (!changeState(targetType, targetId, ModerationState.BLIND)) return; // 이미 blind면 no-op
         writeLog(targetType, targetId, ModerationState.BLIND, reasonId, detail, actorId);
     }
@@ -38,6 +42,7 @@ public class ModerationServiceImpl implements ModerationService {
 
     @Override
     public Long softDelete(String targetType, Long targetId, Long actorId, Long reasonId, String detail) {
+        contentRevisionService.snapshot(targetType, targetId, ContentRevisionService.TRIGGER_MODERATION, actorId);
         boolean stateChanged = changeState(targetType, targetId, ModerationState.DELETED);
         // 대상에 아직 살아있는 주의 포인트가 있다 = 관리자가 이미 삭제 조치한 대상.
         // 이 값으로 "관리자 재삭제"와 "작성자가 먼저 지운 글"을 구분한다 — state 만으로는 둘이 똑같이 deleted 라 갈리지 않는다.

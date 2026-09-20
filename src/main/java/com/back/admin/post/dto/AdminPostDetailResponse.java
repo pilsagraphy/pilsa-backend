@@ -26,6 +26,7 @@ public class AdminPostDetailResponse {
     private LocalDateTime created;
     private LocalDateTime updated;
     private ModerationNoteResponse moderation;  // 마지막 조치 (없으면 null). 삭제인데 없으면 작성자 삭제
+    private List<com.back.admin.moderation.revision.ContentRevisionResponse> revisions;  // 이전 본문 (신고·수정·조치 시점)
     private List<AdminAttachmentResponse> attachments;
     private List<AdminCommentResponse> comments;   // 블라인드/삭제 댓글까지 포함
 }

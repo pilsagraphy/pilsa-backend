@@ -5,6 +5,7 @@ import com.back.board.draft.mapper.DraftMapper;
 import com.back.board.dto.*;
 import com.back.board.exception.BoardException;
 import com.back.board.mapper.BoardMapper;
+import com.back.admin.moderation.revision.ContentRevisionService;
 import com.back.global.security.AuthUtils;
 import com.back.global.util.FileStorageUtil;
 import com.back.global.util.PageUtils;
@@ -39,6 +40,7 @@ public class BoardServiceImpl implements BoardService {
     private static final int MAX_TOP_POSTS = 50;
 
     private final BoardMapper boardMapper;
+    private final ContentRevisionService contentRevisionService;
     private final BoardPolicyService boardPolicyService;
     private final FileStorageUtil fileStorageUtil;
     private final AttachmentService attachmentService;
@@ -303,6 +305,9 @@ public class BoardServiceImpl implements BoardService {
         }
         boolean pinned = resolvePinned(policy, request.getCategoryId());
 
+        // 고치기 전 문장을 남긴다 (신고·조치 검토용). 실패해도 수정은 진행된다
+        contentRevisionService.snapshot("post", postId, ContentRevisionService.TRIGGER_EDIT, currentUserId);
+
         int updated = boardMapper.updatePost(postId, request, pinned);
         if (updated == 0) {
             // state != normal (블라인드/삭제) 이거나 존재하지 않는 글
@@ -472,6 +477,7 @@ public class BoardServiceImpl implements BoardService {
         if (!policy.isAnonymousAllowed()) request.setIsAnonymous(false);
         if (!policy.isPrivateCommentAllowed()) request.setIsPrivate(false);
 
+        contentRevisionService.snapshot("comment", commentId, ContentRevisionService.TRIGGER_EDIT, currentUserId);
         boardMapper.updateComment(commentId, request);
         return new CommentResponse("댓글이 성공적으로 수정되었습니다.");
     }

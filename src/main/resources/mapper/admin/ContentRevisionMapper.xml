@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!-- 글·댓글 본문 스냅샷 (content_revisions). 신고 · 작성자 수정 직전 · 관리자 조치 시점 -->
+<mapper namespace="com.back.admin.moderation.revision.ContentRevisionMapper">
+
+    <!-- 대상 표에서 그 순간의 값을 그대로 복사한다 -->
+    <insert id="snapshotPost">
+        INSERT INTO content_revisions (target_type, target_id, trigger_type, title, content, saved_by, created_at)
+        SELECT 'post', p.post_id, #{trigger}, p.title, p.content, #{savedBy}, NOW()
+        FROM posts p
+        WHERE p.post_id = #{postId}
+    </insert>
+
+    <insert id="snapshotComment">
+        INSERT INTO content_revisions (target_type, target_id, trigger_type, title, content, saved_by, created_at)
+        SELECT 'comment', c.comment_id, #{trigger}, NULL, c.content, #{savedBy}, NOW()
+        FROM comments c
+        WHERE c.comment_id = #{commentId}
+    </insert>
+
+    <sql id="columns">
+        cr.revision_id  AS revisionId,
+        cr.target_type  AS targetType,
+        cr.target_id    AS targetId,
+        cr.trigger_type AS triggerType,
+        cr.title,
+        cr.content,
+        cr.saved_by     AS savedBy,
+        u.name          AS savedByName,
+        cr.created_at   AS createdAt
+    </sql>
+
+    <select id="findByPost" resultType="com.back.admin.moderation.revision.ContentRevisionResponse">
+        SELECT <include refid="columns"/>
+        FROM content_revisions cr
+        LEFT JOIN users u ON u.user_id = cr.saved_by
+        WHERE cr.target_type = 'post' AND cr.target_id = #{postId}
+        ORDER BY cr.revision_id ASC
+    </select>
+
+    <select id="findByPostComments" resultType="com.back.admin.moderation.revision.ContentRevisionResponse">
+        SELECT <include refid="columns"/>
+        FROM content_revisions cr
+        LEFT JOIN users u ON u.user_id = cr.saved_by
+        WHERE cr.target_type = 'comment'
+          AND cr.target_id IN (SELECT comment_id FROM comments WHERE post_id = #{postId})
+        ORDER BY cr.revision_id ASC
+    </select>
+</mapper>

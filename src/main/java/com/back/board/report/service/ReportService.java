@@ -5,6 +5,7 @@ import com.back.board.report.dto.ReportRequest;
 import com.back.board.report.exception.ReportException;
 import com.back.board.report.mapper.ReportMapper;
 import com.back.admin.moderation.service.ModerationService;
+import com.back.admin.moderation.revision.ContentRevisionService;
 import com.back.global.security.AuthUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,6 +44,7 @@ public class ReportService {
 
     private final ReportMapper reportMapper;
     private final ModerationService moderationService;
+    private final ContentRevisionService contentRevisionService;
 
     // 신고 사유 카테고리 목록 (신고 모달 셀렉트바). 로그인 회원 공통
     @Transactional(readOnly = true)
@@ -110,6 +112,10 @@ public class ReportService {
             // reports_log의 uq_reports_active(reporter_id, target_type, target_id, active_flag) 유니크 제약 위반
             throw new ReportException("이미 신고한 게시글/댓글입니다.", HttpStatus.CONFLICT);
         }
+
+        // 신고자가 본 그 문장을 남긴다 — 작성자가 나중에 고쳐도 관리자는 이걸 본다
+        contentRevisionService.snapshot(request.getTargetType(), request.getTargetId(),
+                ContentRevisionService.TRIGGER_REPORT, reporterId);
 
         autoBlindIfNeeded(request.getTargetType(), request.getTargetId(), request.getReasonId(), state);
     }

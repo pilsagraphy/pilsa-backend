@@ -2,6 +2,8 @@ package com.back.admin.post.service;
 
 import com.back.admin.common.AdminServiceSupport;
 import com.back.admin.post.dto.AdminPostDetailResponse;
+import com.back.admin.moderation.revision.ContentRevisionResponse;
+import com.back.admin.moderation.revision.ContentRevisionService;
 import com.back.admin.post.dto.AdminCommentResponse;
 import com.back.admin.post.dto.ModerationNoteResponse;
 import com.back.admin.post.dto.AdminPostListResponse;
@@ -24,6 +26,7 @@ import java.util.List;
 public class AdminPostServiceImpl implements AdminPostService {
 
     private final AdminPostMapper adminPostMapper;
+    private final ContentRevisionService contentRevisionService;
 
     @Override
     public AdminPostPageResponse getPostList(int page, int size, Long boardId, String keyword) {
@@ -63,6 +66,16 @@ public class AdminPostServiceImpl implements AdminPostService {
         }
         for (AdminCommentResponse comment : detail.getComments()) {
             comment.setModeration(byComment.get(comment.getCommentId()));
+        }
+
+        // 이전 본문 — 신고·수정·조치 시점의 스냅샷. 작성자가 고친 뒤라도 그때 문장을 본다
+        detail.setRevisions(contentRevisionService.findByPost(postId));
+        java.util.Map<Long, java.util.List<ContentRevisionResponse>> revisionsByComment = new java.util.HashMap<>();
+        for (ContentRevisionResponse rev : contentRevisionService.findByPostComments(postId)) {
+            revisionsByComment.computeIfAbsent(rev.getTargetId(), k -> new java.util.ArrayList<>()).add(rev);
+        }
+        for (AdminCommentResponse comment : detail.getComments()) {
+            comment.setRevisions(revisionsByComment.getOrDefault(comment.getCommentId(), java.util.List.of()));
         }
         return detail;
     }
