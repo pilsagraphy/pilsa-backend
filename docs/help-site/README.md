@@ -7,8 +7,8 @@ Next.js 앱과 무관한 순수 HTML 이라 프론트 배포에 딸려 가지 �
 |---|---|
 | `terms-of-service.html` | https://help.pilsa.co.kr/terms-of-service.html |
 | `privacy-policy.html` | https://help.pilsa.co.kr/privacy-policy.html |
-| `sanction-policy.html` | https://help.pilsa.co.kr/sanction-policy.html |
-| `account-deletion.html` | https://help.pilsa.co.kr/account-deletion.html |
+| `account-policy.html` | https://help.pilsa.co.kr/account-policy.html — 1부 이용 제한(제재) 정책 `#sanction`, 2부 계정 및 데이터 삭제 `#deletion` |
+| `sanction-policy.html` · `account-deletion.html` | 옛 주소. 위 문서로 넘기는 껍데기만 남겼다 — Play Console 의 계정 삭제 URL 이 `account-deletion.html` 이라 지우면 안 된다 |
 | `child-safety.html` | https://help.pilsa.co.kr/child-safety.html |
 
 프론트에서 이 주소들은 `constants/routes.js` 의 `HELP_LINKS` · `SANCTION_POLICY_URL` 이 들고 있다.
@@ -19,7 +19,7 @@ Next.js 앱과 무관한 순수 HTML 이라 프론트 배포에 딸려 가지 �
 
 ```bash
 scp docs/help-site/*.html pilsa:~/
-ssh pilsa 'for f in terms-of-service privacy-policy sanction-policy account-deletion child-safety; do
+ssh pilsa 'for f in terms-of-service privacy-policy account-policy sanction-policy account-deletion child-safety; do
   sudo cp ~/$f.html /usr/share/nginx/help/$f.html
   sudo chown root:root /usr/share/nginx/help/$f.html
   sudo chmod 644 /usr/share/nginx/help/$f.html
