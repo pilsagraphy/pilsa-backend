@@ -1,10 +1,11 @@
 # help.pilsa.co.kr 정적 페이지
 
-Play 스토어 등록에 필요한 정책 문서 4종. **이 폴더가 원본이고, 서버에는 복사본이 올라간다.**
+Play 스토어·구글 OAuth 인증에 필요한 정책 문서 5종. **이 폴더가 원본이고, 서버에는 복사본이 올라간다.**
 Next.js 앱과 무관한 순수 HTML 이라 프론트 배포에 딸려 가지 않는다 — 고친 뒤 아래 절차로 직접 올려야 한다.
 
 | 파일 | 주소 |
 |---|---|
+| `terms-of-service.html` | https://help.pilsa.co.kr/terms-of-service.html |
 | `privacy-policy.html` | https://help.pilsa.co.kr/privacy-policy.html |
 | `sanction-policy.html` | https://help.pilsa.co.kr/sanction-policy.html |
 | `account-deletion.html` | https://help.pilsa.co.kr/account-deletion.html |
@@ -18,7 +19,7 @@ Next.js 앱과 무관한 순수 HTML 이라 프론트 배포에 딸려 가지 �
 
 ```bash
 scp docs/help-site/*.html pilsa:~/
-ssh pilsa 'for f in privacy-policy sanction-policy account-deletion child-safety; do
+ssh pilsa 'for f in terms-of-service privacy-policy sanction-policy account-deletion child-safety; do
   sudo cp ~/$f.html /usr/share/nginx/help/$f.html
   sudo chown root:root /usr/share/nginx/help/$f.html
   sudo chmod 644 /usr/share/nginx/help/$f.html
