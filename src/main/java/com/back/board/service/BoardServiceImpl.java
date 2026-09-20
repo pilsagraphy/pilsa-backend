@@ -520,6 +520,12 @@ public class BoardServiceImpl implements BoardService {
      */
     private Long resolveCategoryId(BoardPolicy policy, Long requestedCategoryId) {
         if (!policy.isCategoryUsed()) {
+            // 카테고리를 안 쓰는 게시판(공지사항)이라도 관리자의 '중요'(상단 고정)는 받는다 —
+            // 고정이 카테고리에서 파생되므로, 여기서 버리면 그 게시판에서는 고정을 영영 못 쓴다 (2026-09-20)
+            if (requestedCategoryId != null && AuthUtils.isAdmin()
+                    && boardMapper.isPinnedCategory(requestedCategoryId, policy.getBoardId())) {
+                return requestedCategoryId;
+            }
             return null;
         }
         if (requestedCategoryId == null || !boardMapper.existsCategory(requestedCategoryId, policy.getBoardId())) {
