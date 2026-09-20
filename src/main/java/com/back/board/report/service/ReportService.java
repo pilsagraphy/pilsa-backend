@@ -31,6 +31,8 @@ public class ReportService {
     private static final String REASON_ETC = "ETC";
     // reports_log.detail 은 varchar(500) — 넘기면 제약 위반으로 500 이 난다
     private static final int DETAIL_MAX_LENGTH = 500;
+    // '기타'는 최소 5자 — 한두 글자로는 무엇을 신고했는지 알 수 없다
+    private static final int DETAIL_MIN_LENGTH = 5;
 
     // 자동 블라인드: 대기 신고가 이 수(신고자 수)에 닿으면 관리자 손을 거치지 않고 가린다.
     // 값은 policy_settings.auto_blind_threshold. 행이 없으면 3.
@@ -69,8 +71,8 @@ public class ReportService {
         }
         String detail = normalizeDetail(request.getDetail());
         if (REASON_ETC.equals(reasonCode)) {
-            if (detail == null) {
-                throw new ReportException("'기타' 사유는 상세 내용을 입력해 주세요.", HttpStatus.BAD_REQUEST);
+            if (detail == null || detail.length() < DETAIL_MIN_LENGTH) {
+                throw new ReportException("'기타' 사유는 상세 내용을 " + DETAIL_MIN_LENGTH + "자 이상 적어 주세요.", HttpStatus.BAD_REQUEST);
             }
             if (detail.length() > DETAIL_MAX_LENGTH) {
                 throw new ReportException("상세 내용은 " + DETAIL_MAX_LENGTH + "자 이하로 입력해 주세요.", HttpStatus.BAD_REQUEST);

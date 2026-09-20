@@ -64,4 +64,7 @@ public interface ReportAdminMapper {
             @Param("status") String status,
             @Param("resolutionActionId") Long resolutionActionId
     );
+
+    /** 사유 코드 (없거나 비활성이면 null) — '기타'일 때 상세 사유를 요구하기 위해 */
+    String findActiveReasonCode(@Param("reasonId") Long reasonId);
 }

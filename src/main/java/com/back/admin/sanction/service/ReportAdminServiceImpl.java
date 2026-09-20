@@ -93,6 +93,7 @@ public class ReportAdminServiceImpl implements ReportAdminService {
     @Override
     @Transactional
     public BulkResultResponse selectDelete(String targetType, List<Long> targetIds, Long reasonId, String detail) {
+        requireDetailIfEtc(reasonId, detail);
         return execute(targetType, targetIds, "삭제할",
                 (adminId, targetId) -> reportBulkExecutor.deleteItem(targetType, targetId, adminId, reasonId, detail));
     }
@@ -100,8 +101,24 @@ public class ReportAdminServiceImpl implements ReportAdminService {
     @Override
     @Transactional
     public BulkResultResponse selectBlind(String targetType, List<Long> targetIds, Long reasonId, String detail) {
+        requireDetailIfEtc(reasonId, detail);
         return execute(targetType, targetIds, "블라인드 처리할",
                 (adminId, targetId) -> reportBulkExecutor.blindItem(targetType, targetId, adminId, reasonId, detail));
+    }
+
+    // '기타' 사유는 상세를 5자 이상 적어야 한다. '.' 하나로 지운 조치가 실제로 있었고(2026-09-19),
+    // 그러면 제재 내역에 '삭제 사유: 기타 (.)' 만 남아 당사자도 운영진도 왜 지웠는지 알 수 없다.
+    private static final String REASON_ETC = "ETC";
+    private static final int DETAIL_MIN_LENGTH = 5;
+
+    private void requireDetailIfEtc(Long reasonId, String detail) {
+        if (reasonId == null) return;
+        if (!REASON_ETC.equals(reportAdminMapper.findActiveReasonCode(reasonId))) return;
+        String trimmed = detail == null ? "" : detail.trim();
+        if (trimmed.length() < DETAIL_MIN_LENGTH) {
+            throw new ReportAdminException("'기타' 사유는 상세 내용을 " + DETAIL_MIN_LENGTH + "자 이상 적어 주세요.",
+                    HttpStatus.BAD_REQUEST);
+        }
     }
 
     // 조치 1건을 실행하는 동작 (executor 호출부만 다르다)

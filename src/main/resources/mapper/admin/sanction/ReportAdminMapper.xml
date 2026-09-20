@@ -164,4 +164,8 @@
           AND status = 'pending'
     </update>
 
+
+    <select id="findActiveReasonCode" resultType="string">
+        SELECT code FROM reasons WHERE reason_id = #{reasonId} AND is_active = 1
+    </select>
 </mapper>
