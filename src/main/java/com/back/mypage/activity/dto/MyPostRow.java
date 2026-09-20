@@ -14,5 +14,7 @@ public class MyPostRow {
     private String title;
     private int likeCount;
     private int viewCount;
+    private int commentCount;   // 살아있는 댓글 수 (목록의 댓글 아이콘)
+    private String categoryName;  // 글의 카테고리 (없는 게시판이면 null)
     private LocalDateTime created;
 }

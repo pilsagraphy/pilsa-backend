@@ -21,9 +21,12 @@
             b.name        AS boardName,
             p.title,
             p.view_count  AS viewCount,
+            c.name        AS categoryName,
             p.created_at  AS created,
-            (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.post_id) AS likeCount
+            (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.post_id) AS likeCount,
+            (SELECT COUNT(*) FROM comments cm WHERE cm.post_id = p.post_id AND cm.state = 'normal') AS commentCount
         FROM posts p
+        LEFT JOIN categories c ON c.category_id = p.category_id AND c.is_active = 1
         INNER JOIN boards b ON p.board_id = b.board_id
         WHERE p.user_id = #{userId}
           AND p.state = 'normal'
@@ -44,6 +47,7 @@
     <select id="countMyPosts" resultType="long">
         SELECT COUNT(*)
         FROM posts p
+        LEFT JOIN categories c ON c.category_id = p.category_id AND c.is_active = 1
         INNER JOIN boards b ON p.board_id = b.board_id
         WHERE p.user_id = #{userId}
           AND p.state = 'normal'
@@ -64,9 +68,11 @@
             cm.created_at AS created,
             p.post_id     AS postId,
             p.board_id    AS boardId,
-            p.title       AS postTitle
+            p.title       AS postTitle,
+            c.name        AS categoryName
         FROM comments cm
         INNER JOIN posts p  ON cm.post_id = p.post_id
+        LEFT JOIN categories c ON c.category_id = p.category_id AND c.is_active = 1
         INNER JOIN boards b ON p.board_id = b.board_id
         WHERE cm.user_id = #{userId}
           AND cm.state = 'normal'
@@ -85,6 +91,7 @@
         SELECT COUNT(*)
         FROM comments cm
         INNER JOIN posts p  ON cm.post_id = p.post_id
+        LEFT JOIN categories c ON c.category_id = p.category_id AND c.is_active = 1
         INNER JOIN boards b ON p.board_id = b.board_id
         WHERE cm.user_id = #{userId}
           AND cm.state = 'normal'
@@ -106,10 +113,13 @@
             b.name        AS boardName,
             p.title,
             p.view_count  AS viewCount,
+            c.name        AS categoryName,
             p.created_at  AS created,
-            (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.post_id) AS likeCount
+            (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.post_id) AS likeCount,
+            (SELECT COUNT(*) FROM comments cm WHERE cm.post_id = p.post_id AND cm.state = 'normal') AS commentCount
         FROM post_likes pl
         INNER JOIN posts p  ON pl.post_id = p.post_id
+        LEFT JOIN categories c ON c.category_id = p.category_id AND c.is_active = 1
         INNER JOIN boards b ON p.board_id = b.board_id
         WHERE pl.user_id = #{userId}
           AND p.state = 'normal'
@@ -131,6 +141,7 @@
         SELECT COUNT(*)
         FROM post_likes pl
         INNER JOIN posts p  ON pl.post_id = p.post_id
+        LEFT JOIN categories c ON c.category_id = p.category_id AND c.is_active = 1
         INNER JOIN boards b ON p.board_id = b.board_id
         WHERE pl.user_id = #{userId}
           AND p.state = 'normal'
