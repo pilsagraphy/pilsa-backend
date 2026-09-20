@@ -25,7 +25,9 @@
             p.created_at  AS created,
             CASE WHEN p.is_anonymous = 1 THEN '익명' ELSE u.name END AS authorName,
             (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.post_id) AS likeCount,
-            (SELECT COUNT(*) FROM comments cm WHERE cm.post_id = p.post_id AND cm.state = 'normal') AS commentCount
+            (SELECT COUNT(*) FROM comments cm WHERE cm.post_id = p.post_id AND cm.state = 'normal') AS commentCount,
+            EXISTS (SELECT 1 FROM attachments a
+                     WHERE a.post_id = p.post_id AND a.state = 'normal' AND a.usage_type = 'attachment') AS hasAttachment
         FROM posts p
         LEFT JOIN categories c ON c.category_id = p.category_id AND c.is_active = 1
         INNER JOIN boards b ON p.board_id = b.board_id
@@ -119,7 +121,9 @@
             p.created_at  AS created,
             CASE WHEN p.is_anonymous = 1 THEN '익명' ELSE u.name END AS authorName,
             (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.post_id) AS likeCount,
-            (SELECT COUNT(*) FROM comments cm WHERE cm.post_id = p.post_id AND cm.state = 'normal') AS commentCount
+            (SELECT COUNT(*) FROM comments cm WHERE cm.post_id = p.post_id AND cm.state = 'normal') AS commentCount,
+            EXISTS (SELECT 1 FROM attachments a
+                     WHERE a.post_id = p.post_id AND a.state = 'normal' AND a.usage_type = 'attachment') AS hasAttachment
         FROM post_likes pl
         INNER JOIN posts p  ON pl.post_id = p.post_id
         LEFT JOIN categories c ON c.category_id = p.category_id AND c.is_active = 1
