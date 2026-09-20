@@ -125,6 +125,10 @@
     <!-- ===== 제재회원 관리 화면: 회원별 신고 내역 (report 패키지에서 이동, PM 피드백 4·5) ===== -->
 
     <!-- 회원이 작성한 '게시글'이 받은 신고 내역 -->
+    <!-- 회원이 작성한 '게시글'의 신고·처리 내역.
+         신고를 거친 건(reports_log)과, 신고 없이 관리자가 바로 조치한 건(moderation_log)을 합친다.
+         후자가 빠지면 주의 점수는 올라가 있는데 화면에는 아무 내역도 없는 상태가 된다 (2026-09-20 실제 발생).
+         신고를 처리하며 남긴 조치(resolution_action_id 로 이어진 것)는 앞쪽에 이미 있으니 뒤쪽에서 뺀다. -->
     <select id="findReportedPostsByAuthor" resultType="com.back.admin.sanction.dto.ReportedPostResponse">
         SELECT
             r.report_id        AS reportId,
@@ -147,7 +151,30 @@
         LEFT JOIN reasons rs ON r.reason_id = rs.reason_id
         WHERE r.target_type = 'post'
           AND p.user_id = #{userId}
-        ORDER BY r.created_at DESC
+        UNION ALL
+        SELECT
+            NULL               AS reportId,
+            p.post_id          AS postId,
+            bd.board_id        AS boardId,
+            bd.name            AS boardName,
+            p.title,
+            LEFT(p.content, 30) AS preview,
+            p.state,
+            m.reason_id        AS reasonId,
+            rs.label           AS reasonLabel,
+            m.detail,
+            'resolved'         AS status,
+            1                  AS activeFlag,
+            m.created_at       AS createdAt,
+            m.created_at       AS resolvedAt
+        FROM moderation_log m
+        JOIN posts p ON m.target_type = 'post' AND m.target_id = p.post_id
+        LEFT JOIN boards bd ON bd.board_id = p.board_id
+        LEFT JOIN reasons rs ON m.reason_id = rs.reason_id
+        WHERE p.user_id = #{userId}
+          AND m.applied_state IN ('blind', 'deleted')
+          AND NOT EXISTS (SELECT 1 FROM reports_log x WHERE x.resolution_action_id = m.action_id)
+        ORDER BY createdAt DESC
     </select>
 
     <!-- 회원이 작성한 '댓글'이 받은 신고 내역 (이동 경로는 댓글이 아니라 소속 게시글) -->
@@ -175,7 +202,32 @@
         LEFT JOIN reasons rs ON r.reason_id = rs.reason_id
         WHERE r.target_type = 'comment'
           AND c.user_id = #{userId}
-        ORDER BY r.created_at DESC
+        UNION ALL
+        SELECT
+            NULL               AS reportId,
+            c.comment_id       AS commentId,
+            cp.post_id         AS postId,
+            bd.board_id        AS boardId,
+            bd.name            AS boardName,
+            cp.title           AS postTitle,
+            LEFT(c.content, 30) AS preview,
+            c.state,
+            m.reason_id        AS reasonId,
+            rs.label           AS reasonLabel,
+            m.detail,
+            'resolved'         AS status,
+            1                  AS activeFlag,
+            m.created_at       AS createdAt,
+            m.created_at       AS resolvedAt
+        FROM moderation_log m
+        JOIN comments c ON m.target_type = 'comment' AND m.target_id = c.comment_id
+        LEFT JOIN posts cp ON c.post_id = cp.post_id
+        LEFT JOIN boards bd ON bd.board_id = cp.board_id
+        LEFT JOIN reasons rs ON m.reason_id = rs.reason_id
+        WHERE c.user_id = #{userId}
+          AND m.applied_state IN ('blind', 'deleted')
+          AND NOT EXISTS (SELECT 1 FROM reports_log x WHERE x.resolution_action_id = m.action_id)
+        ORDER BY createdAt DESC
     </select>
 
     <select id="countResolvedDeletionsByUser" resultType="int">
