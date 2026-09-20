@@ -15,6 +15,7 @@ public class MyPostRow {
     private int likeCount;
     private int viewCount;
     private int commentCount;   // 살아있는 댓글 수 (목록의 댓글 아이콘)
+    private String authorName;  // 글쓴이 — 익명 글은 '익명' (게시판 목록과 같은 규칙)
     private String categoryName;  // 글의 카테고리 (없는 게시판이면 null)
     private LocalDateTime created;
 }
