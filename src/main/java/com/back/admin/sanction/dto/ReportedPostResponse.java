@@ -32,4 +32,7 @@ public class ReportedPostResponse {
     private String actionState;       // blind / deleted (적용한 상태)
     private String actionReasonLabel; // 조치 사유 라벨
     private String actionDetail;      // 기타일 때 관리자가 적은 내용
+    private String reporterName;      // 신고자 이름 (신고를 거친 건만). 운영진에게는 숨기지 않는다
+    private String actorName;         // 조치한 관리자 이름. 자동 블라인드면 null
+    private Boolean isAuto;           // 신고 누적 자동 블라인드였는가 (acted_by 가 비어 있다)
 }

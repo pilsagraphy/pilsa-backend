@@ -16,6 +16,7 @@ public class ReportedItemResponse {
     private String boardName;          // boards.name (댓글은 소속 게시글의 게시판). 한글 게시판명
     private String authorName;         // 대상 콘텐츠 작성자
     private String reasonLabel;        // 대표 신고 사유 (reasons.label)
+    private String reporterNames;      // 신고자 이름들 (반려 제외, 신고순, ', ' 구분) — 운영진에게는 숨기지 않는다
     private LocalDateTime firstReportedAt; // 최초 신고일시 = MIN(created_at)
     private int reportCount;           // 누적 신고 건수 (반려분 제외 — 개별 조회 .../{targetId} 의 행 수와 일치)
     private String reportStatus;       // 대표 신고 상태 pending/resolved (반려된 신고는 목록에서 제외된다)

@@ -54,6 +54,10 @@
             b.name                       AS boardName,
             u.name                       AS authorName,
             rs.label                     AS reasonLabel,
+            (SELECT GROUP_CONCAT(DISTINCT ru.name ORDER BY r2.created_at SEPARATOR ', ')
+               FROM reports_log r2 JOIN users ru ON ru.user_id = r2.reporter_id
+              WHERE r2.target_type = 'post' AND r2.target_id = t.target_id
+                AND r2.status &lt;&gt; 'rejected') AS reporterNames,
             t.first_reported_at          AS firstReportedAt,
             t.report_count               AS reportCount,
             r.status                     AS reportStatus,
@@ -109,6 +113,10 @@
             b.name                       AS boardName,
             u.name                       AS authorName,
             rs.label                     AS reasonLabel,
+            (SELECT GROUP_CONCAT(DISTINCT ru.name ORDER BY r2.created_at SEPARATOR ', ')
+               FROM reports_log r2 JOIN users ru ON ru.user_id = r2.reporter_id
+              WHERE r2.target_type = 'comment' AND r2.target_id = t.target_id
+                AND r2.status &lt;&gt; 'rejected') AS reporterNames,
             t.first_reported_at          AS firstReportedAt,
             t.report_count               AS reportCount,
             r.status                     AS reportStatus,
@@ -131,11 +139,13 @@
          옛 라운드의 무효 신고가 현재 신고자 목록에 섞인다. 남는 pending/resolved 는 status 로 구분해 내려준다. -->
     <select id="findReportsByTarget" resultType="com.back.admin.sanction.dto.ReportEntryResponse">
         SELECT r.report_id   AS reportId,
+               ru.name       AS reporterName,
                rs.label      AS reasonLabel,
                r.detail      AS detail,
                r.created_at  AS createdAt,
                r.status      AS status
         FROM reports_log r
+        LEFT JOIN users ru ON ru.user_id = r.reporter_id
         LEFT JOIN reasons rs ON r.reason_id = rs.reason_id
         WHERE r.target_type = #{targetType}
           AND r.target_id = #{targetId}

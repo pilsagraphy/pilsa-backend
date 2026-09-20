@@ -55,10 +55,16 @@ public class BoardServiceImpl implements BoardService {
     @Override
     public List<CategoryResponse> getCategoryList(Long boardId) {
         BoardPolicy policy = boardPolicyService.requireReadable(boardId);
+        boolean admin = AuthUtils.isAdmin();
         if (!policy.isCategoryUsed()) {
-            return List.of();
+            // 카테고리를 안 쓰는 게시판(공지사항)이라도 관리자에게는 '중요'(상단 고정)만은 준다 —
+            // 빈 목록을 주면 글쓰기에 선택칸이 안 떠서 그 게시판에서는 고정을 못 쓴다 (2026-09-20)
+            if (!admin) return List.of();
+            return boardMapper.findCategoriesByBoardId(boardId, true).stream()
+                    .filter(c -> "PINNED".equals(c.getCode()))
+                    .toList();
         }
-        return boardMapper.findCategoriesByBoardId(boardId, AuthUtils.isAdmin());
+        return boardMapper.findCategoriesByBoardId(boardId, admin);
     }
 
     // 메인용 상단 N개 조회 (개수는 프론트가 정한다)

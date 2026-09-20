@@ -102,4 +102,37 @@
         ORDER BY c.created_at ASC
     </select>
 
+
+    <!-- 마지막 조치 한 줄. action_id 가 가장 큰 것이 마지막이다 -->
+    <sql id="moderationNoteColumns">
+        m.target_type    AS targetType,
+        m.target_id      AS targetId,
+        m.applied_state  AS appliedState,
+        au.name          AS actorName,
+        (m.acted_by IS NULL) AS isAuto,
+        rs.label         AS reasonLabel,
+        m.detail         AS detail,
+        m.created_at     AS createdAt
+    </sql>
+
+    <select id="findLatestModerationForPost" resultType="com.back.admin.post.dto.ModerationNoteResponse">
+        SELECT <include refid="moderationNoteColumns"/>
+        FROM moderation_log m
+        LEFT JOIN users au ON au.user_id = m.acted_by
+        LEFT JOIN reasons rs ON rs.reason_id = m.reason_id
+        WHERE m.target_type = 'post' AND m.target_id = #{postId}
+        ORDER BY m.action_id DESC
+        LIMIT 1
+    </select>
+
+    <select id="findLatestModerationsForComments" resultType="com.back.admin.post.dto.ModerationNoteResponse">
+        SELECT <include refid="moderationNoteColumns"/>
+        FROM moderation_log m
+        LEFT JOIN users au ON au.user_id = m.acted_by
+        LEFT JOIN reasons rs ON rs.reason_id = m.reason_id
+        WHERE m.target_type = 'comment'
+          AND m.target_id IN (SELECT comment_id FROM comments WHERE post_id = #{postId})
+          AND m.action_id = (SELECT MAX(x.action_id) FROM moderation_log x
+                              WHERE x.target_type = m.target_type AND x.target_id = m.target_id)
+    </select>
 </mapper>

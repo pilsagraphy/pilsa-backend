@@ -147,13 +147,18 @@
             r.resolved_at      AS resolvedAt,
             ma.applied_state   AS actionState,
             ars.label          AS actionReasonLabel,
-            ma.detail          AS actionDetail
+            ma.detail          AS actionDetail,
+            ru.name            AS reporterName,
+            au.name            AS actorName,
+            (ma.action_id IS NOT NULL AND ma.acted_by IS NULL) AS isAuto
         FROM reports_log r
         JOIN posts p ON r.target_id = p.post_id
         LEFT JOIN boards bd ON bd.board_id = p.board_id
         LEFT JOIN reasons rs ON r.reason_id = rs.reason_id
         LEFT JOIN moderation_log ma ON ma.action_id = r.resolution_action_id
         LEFT JOIN reasons ars ON ars.reason_id = ma.reason_id
+        LEFT JOIN users ru ON ru.user_id = r.reporter_id
+        LEFT JOIN users au ON au.user_id = ma.acted_by
         WHERE r.target_type = 'post'
           AND p.user_id = #{userId}
         UNION ALL
@@ -174,8 +179,12 @@
             m.created_at       AS resolvedAt,
             m.applied_state    AS actionState,
             rs.label           AS actionReasonLabel,
-            m.detail           AS actionDetail
+            m.detail           AS actionDetail,
+            NULL               AS reporterName,
+            au.name            AS actorName,
+            (m.acted_by IS NULL) AS isAuto
         FROM moderation_log m
+        LEFT JOIN users au ON au.user_id = m.acted_by
         JOIN posts p ON m.target_type = 'post' AND m.target_id = p.post_id
         LEFT JOIN boards bd ON bd.board_id = p.board_id
         LEFT JOIN reasons rs ON m.reason_id = rs.reason_id
@@ -205,7 +214,10 @@
             r.resolved_at      AS resolvedAt,
             ma.applied_state   AS actionState,
             ars.label          AS actionReasonLabel,
-            ma.detail          AS actionDetail
+            ma.detail          AS actionDetail,
+            ru.name            AS reporterName,
+            au.name            AS actorName,
+            (ma.action_id IS NOT NULL AND ma.acted_by IS NULL) AS isAuto
         FROM reports_log r
         JOIN comments c ON r.target_id = c.comment_id
         LEFT JOIN posts cp ON c.post_id = cp.post_id
@@ -213,6 +225,8 @@
         LEFT JOIN reasons rs ON r.reason_id = rs.reason_id
         LEFT JOIN moderation_log ma ON ma.action_id = r.resolution_action_id
         LEFT JOIN reasons ars ON ars.reason_id = ma.reason_id
+        LEFT JOIN users ru ON ru.user_id = r.reporter_id
+        LEFT JOIN users au ON au.user_id = ma.acted_by
         WHERE r.target_type = 'comment'
           AND c.user_id = #{userId}
         UNION ALL
@@ -234,8 +248,12 @@
             m.created_at       AS resolvedAt,
             m.applied_state    AS actionState,
             rs.label           AS actionReasonLabel,
-            m.detail           AS actionDetail
+            m.detail           AS actionDetail,
+            NULL               AS reporterName,
+            au.name            AS actorName,
+            (m.acted_by IS NULL) AS isAuto
         FROM moderation_log m
+        LEFT JOIN users au ON au.user_id = m.acted_by
         JOIN comments c ON m.target_type = 'comment' AND m.target_id = c.comment_id
         LEFT JOIN posts cp ON c.post_id = cp.post_id
         LEFT JOIN boards bd ON bd.board_id = cp.board_id

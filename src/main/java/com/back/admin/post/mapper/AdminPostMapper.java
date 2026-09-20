@@ -2,6 +2,7 @@ package com.back.admin.post.mapper;
 
 import com.back.admin.post.dto.AdminAttachmentResponse;
 import com.back.admin.post.dto.AdminCommentResponse;
+import com.back.admin.post.dto.ModerationNoteResponse;
 import com.back.admin.post.dto.AdminPostDetailResponse;
 import com.back.admin.post.dto.AdminPostListResponse;
 import org.apache.ibatis.annotations.Mapper;
@@ -35,4 +36,10 @@ public interface AdminPostMapper {
 
     // 게시글의 댓글 목록 (모든 state 포함)
     List<AdminCommentResponse> findComments(@Param("postId") Long postId);
+
+    /** 글의 마지막 조치 (없으면 null) */
+    ModerationNoteResponse findLatestModerationForPost(@Param("postId") Long postId);
+
+    /** 이 글의 댓글들에 남은 마지막 조치 — 댓글마다 한 줄 */
+    List<ModerationNoteResponse> findLatestModerationsForComments(@Param("postId") Long postId);
 }

@@ -10,8 +10,7 @@ import java.time.LocalDateTime;
  *
  * 신고 처리 모달의 '신고자 목록' 표를 채운다 — 대상 목록(ReportedItemResponse)이 대표 사유 1개로 접어
  * 보여주는 것과 달리, 신고자마다 다른 사유·상세를 개별 행으로 내려준다.
- * 신고자 회원 ID·이름은 담지 않는다("신고자 정보는 공개되지 않습니다" 정책 — 응답에 실리면 개발자도구로 노출되므로).
- * 프론트가 createdAt 오름차순 그대로 익명A·익명B… 를 붙인다.
+ * 신고자 이름을 담는다 — 운영진에게까지 숨기지 않기로 했다 (2026-09-20 PM). 일반 회원 화면에는 이 응답이 가지 않는다.
  *
  * 반려(rejected)된 신고는 내려주지 않는다 — 근거 없다고 판정된 신고를 현재 신고자 목록에 섞으면
  * 관리자가 옛 라운드의 무효 신고를 근거로 조치하게 된다. 남는 pending/resolved 는 status 로 구분한다.
@@ -22,6 +21,9 @@ public class ReportEntryResponse {
 
     @Schema(description = "신고 ID")
     private Long reportId;
+
+    @Schema(description = "신고자 이름 — 운영진에게는 숨기지 않는다 (2026-09-20 PM 결정)", example = "김선하")
+    private String reporterName;
 
     @Schema(description = "신고 사유 (reasons.label, 한글)", example = "스팸 · 홍보/도배")
     private String reasonLabel;

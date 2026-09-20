@@ -2,6 +2,8 @@ package com.back.admin.post.service;
 
 import com.back.admin.common.AdminServiceSupport;
 import com.back.admin.post.dto.AdminPostDetailResponse;
+import com.back.admin.post.dto.AdminCommentResponse;
+import com.back.admin.post.dto.ModerationNoteResponse;
 import com.back.admin.post.dto.AdminPostListResponse;
 import com.back.admin.post.dto.AdminPostPageResponse;
 import com.back.admin.post.exception.AdminPostException;
@@ -52,6 +54,16 @@ public class AdminPostServiceImpl implements AdminPostService {
         }
         detail.setAttachments(adminPostMapper.findAttachments(postId));
         detail.setComments(adminPostMapper.findComments(postId));  // 블라인드/삭제 댓글까지 포함
+
+        // 왜 이 상태인지 — 글과 댓글마다 마지막 조치를 붙인다 (관리자 조치 / 신고 누적 자동 / 없으면 작성자 삭제)
+        detail.setModeration(adminPostMapper.findLatestModerationForPost(postId));
+        java.util.Map<Long, ModerationNoteResponse> byComment = new java.util.HashMap<>();
+        for (ModerationNoteResponse note : adminPostMapper.findLatestModerationsForComments(postId)) {
+            byComment.put(note.getTargetId(), note);
+        }
+        for (AdminCommentResponse comment : detail.getComments()) {
+            comment.setModeration(byComment.get(comment.getCommentId()));
+        }
         return detail;
     }
 }

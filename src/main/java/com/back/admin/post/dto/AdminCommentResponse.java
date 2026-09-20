@@ -18,4 +18,5 @@ public class AdminCommentResponse {
     private String state;          // normal / blind / deleted
     private LocalDateTime created;
     private LocalDateTime updated;
+    private ModerationNoteResponse moderation;  // 마지막 조치 (없으면 null)
 }

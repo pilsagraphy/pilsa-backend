@@ -25,6 +25,7 @@ public class AdminPostDetailResponse {
     private String state;          // normal / blind / deleted
     private LocalDateTime created;
     private LocalDateTime updated;
+    private ModerationNoteResponse moderation;  // 마지막 조치 (없으면 null). 삭제인데 없으면 작성자 삭제
     private List<AdminAttachmentResponse> attachments;
     private List<AdminCommentResponse> comments;   // 블라인드/삭제 댓글까지 포함
 }
