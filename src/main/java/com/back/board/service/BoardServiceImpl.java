@@ -161,17 +161,18 @@ public class BoardServiceImpl implements BoardService {
     }
 
     /**
-     * 댓글 목록 서버측 마스킹.
-     *  - 비밀댓글: 관리자 / 댓글 작성자 / 원글 작성자만 내용 열람, 그 외에는 내용을 가린다
+     * 댓글 목록 서버측 마스킹 (회원 화면).
+     *  - 비밀댓글: 댓글 작성자 / 원글 작성자만 내용 열람, 그 외에는 내용을 가린다.
+     *    관리자도 회원 화면에서는 가린다 (2026-09-20 PM) — 운영진이 볼 자리는 관리자 게시글 상세(/api/admin/posts/{id})다.
+     *    회원 화면에서 남의 비밀 댓글이 그냥 보이면 '비밀'이라는 말이 믿기지 않는다.
      *  - 익명댓글: 댓글 작성자 외에는 실명·userId를 가린다 (관리자도 일반 화면에서는 못 본다)
      */
     private List<CommentDetailResponse> maskComments(List<CommentDetailResponse> comments,
                                                      Long postAuthorId, Long currentUserId) {
-        boolean admin = AuthUtils.isAdmin();
         boolean postAuthor = currentUserId.equals(postAuthorId);
         for (CommentDetailResponse comment : comments) {
             boolean commentAuthor = currentUserId.equals(comment.getUserId());
-            if (Boolean.TRUE.equals(comment.getIsPrivate()) && !admin && !commentAuthor && !postAuthor) {
+            if (Boolean.TRUE.equals(comment.getIsPrivate()) && !commentAuthor && !postAuthor) {
                 comment.setContent("비밀댓글입니다.");
             }
             // 게시글과 같은 규칙 — 이름은 본인에게도 가리고, userId 는 본인 것만 남겨 수정·삭제 버튼이 유지되게 한다
