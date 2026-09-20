@@ -26,4 +26,10 @@ public class ReportedPostResponse {
     private Integer activeFlag;
     private LocalDateTime createdAt;
     private LocalDateTime resolvedAt;
+
+    // 처리(관리자 조치) 쪽 사유. 신고 사유와 별개다 — 신고는 '기타'로 들어왔는데 관리자는 '욕설'로 지웠을 수 있다.
+    // 신고 없이 관리자가 바로 조치한 건은 reportId 가 null 이고 이 셋만 채워진다.
+    private String actionState;       // blind / deleted (적용한 상태)
+    private String actionReasonLabel; // 조치 사유 라벨
+    private String actionDetail;      // 기타일 때 관리자가 적은 내용
 }

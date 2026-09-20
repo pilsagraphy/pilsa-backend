@@ -144,11 +144,16 @@
             r.status,
             r.active_flag      AS activeFlag,
             r.created_at       AS createdAt,
-            r.resolved_at      AS resolvedAt
+            r.resolved_at      AS resolvedAt,
+            ma.applied_state   AS actionState,
+            ars.label          AS actionReasonLabel,
+            ma.detail          AS actionDetail
         FROM reports_log r
         JOIN posts p ON r.target_id = p.post_id
         LEFT JOIN boards bd ON bd.board_id = p.board_id
         LEFT JOIN reasons rs ON r.reason_id = rs.reason_id
+        LEFT JOIN moderation_log ma ON ma.action_id = r.resolution_action_id
+        LEFT JOIN reasons ars ON ars.reason_id = ma.reason_id
         WHERE r.target_type = 'post'
           AND p.user_id = #{userId}
         UNION ALL
@@ -160,13 +165,16 @@
             p.title,
             LEFT(p.content, 30) AS preview,
             p.state,
-            m.reason_id        AS reasonId,
-            rs.label           AS reasonLabel,
-            m.detail,
+            NULL               AS reasonId,
+            NULL               AS reasonLabel,
+            NULL               AS detail,
             'resolved'         AS status,
             1                  AS activeFlag,
             m.created_at       AS createdAt,
-            m.created_at       AS resolvedAt
+            m.created_at       AS resolvedAt,
+            m.applied_state    AS actionState,
+            rs.label           AS actionReasonLabel,
+            m.detail           AS actionDetail
         FROM moderation_log m
         JOIN posts p ON m.target_type = 'post' AND m.target_id = p.post_id
         LEFT JOIN boards bd ON bd.board_id = p.board_id
@@ -194,12 +202,17 @@
             r.status,
             r.active_flag      AS activeFlag,
             r.created_at       AS createdAt,
-            r.resolved_at      AS resolvedAt
+            r.resolved_at      AS resolvedAt,
+            ma.applied_state   AS actionState,
+            ars.label          AS actionReasonLabel,
+            ma.detail          AS actionDetail
         FROM reports_log r
         JOIN comments c ON r.target_id = c.comment_id
         LEFT JOIN posts cp ON c.post_id = cp.post_id
         LEFT JOIN boards bd ON bd.board_id = cp.board_id
         LEFT JOIN reasons rs ON r.reason_id = rs.reason_id
+        LEFT JOIN moderation_log ma ON ma.action_id = r.resolution_action_id
+        LEFT JOIN reasons ars ON ars.reason_id = ma.reason_id
         WHERE r.target_type = 'comment'
           AND c.user_id = #{userId}
         UNION ALL
@@ -212,13 +225,16 @@
             cp.title           AS postTitle,
             LEFT(c.content, 30) AS preview,
             c.state,
-            m.reason_id        AS reasonId,
-            rs.label           AS reasonLabel,
-            m.detail,
+            NULL               AS reasonId,
+            NULL               AS reasonLabel,
+            NULL               AS detail,
             'resolved'         AS status,
             1                  AS activeFlag,
             m.created_at       AS createdAt,
-            m.created_at       AS resolvedAt
+            m.created_at       AS resolvedAt,
+            m.applied_state    AS actionState,
+            rs.label           AS actionReasonLabel,
+            m.detail           AS actionDetail
         FROM moderation_log m
         JOIN comments c ON m.target_type = 'comment' AND m.target_id = c.comment_id
         LEFT JOIN posts cp ON c.post_id = cp.post_id
