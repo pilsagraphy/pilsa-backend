@@ -32,6 +32,9 @@ public class AdminBoardService {
     // 게시판 열람 대상은 반드시 로그인 회원 이상이다 — 전체 공개(ALL)는 선택지에서 제외한다
     private static final Set<String> ALLOWED_READ_SCOPES =
             Set.of(BoardPolicy.SCOPE_MEMBER, BoardPolicy.SCOPE_STUDENT, BoardPolicy.SCOPE_ALUMNI);
+    // 공지사항은 지울 수 없다. id 와 이름 둘 다로 막는다 — 어느 하나가 바뀌어도 남는 쪽이 지킨다
+    private static final Long NOTICE_BOARD_ID = 1L;
+    private static final String NOTICE_BOARD_NAME = "공지사항";
     private static final int MIN_WRITE_LEVEL = 0;
     private static final int MAX_WRITE_LEVEL = 3;
 
@@ -133,8 +136,13 @@ public class AdminBoardService {
     public void deleteBoard(Long boardId) {
         AuthUtils.requireAdmin();
 
-        if (boardMapper.findBoardPolicy(boardId) == null) {
+        BoardPolicy target = boardMapper.findBoardPolicy(boardId);
+        if (target == null) {
             throw new BoardException("존재하지 않는 게시판입니다.", HttpStatus.NOT_FOUND);
+        }
+        // 공지사항은 절대 지우지 않는다 (PM) — 메인 화면과 관리자 홈이 이 게시판을 전제로 그려진다
+        if (NOTICE_BOARD_ID.equals(boardId) || NOTICE_BOARD_NAME.equals(target.getName())) {
+            throw new BoardException("공지사항 게시판은 삭제할 수 없습니다.", HttpStatus.BAD_REQUEST);
         }
         // 글이 남아 있으면 삭제 금지 (글을 먼저 정리하게 유도 — 고아 게시글 방지)
         int postCount = adminBoardMapper.countPostsByBoard(boardId);
