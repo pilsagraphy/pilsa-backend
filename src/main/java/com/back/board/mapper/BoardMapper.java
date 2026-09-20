@@ -101,6 +101,12 @@ public interface BoardMapper {
     // 게시글 수정 및 삭제 권한 확인을 위한 작성자 ID 조회
     Long findAuthorIdByPostId(@Param("postId") Long postId);
 
+    /** 글의 현재 상태 (normal/blind/deleted). 이 게시판에 없으면 null — 알림을 눌러 들어온 사람에게 '왜 안 보이는지' 알려 주기 위해 */
+    String findPostStateInBoard(@Param("postId") Long postId, @Param("boardId") Long boardId);
+
+    /** 댓글의 현재 상태. 이 게시판 글의 댓글이 아니면 null */
+    String findCommentStateInBoard(@Param("commentId") Long commentId, @Param("boardId") Long boardId);
+
     // 알림 문구용 — 그 글이 어느 게시판의 무슨 글인지. { boardName, postTitle }
     java.util.Map<String, Object> findPostNotificationContext(@Param("postId") Long postId);
 

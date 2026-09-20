@@ -179,6 +179,24 @@ public class BoardController {
         return ResponseEntity.ok(response);
     }
 
+    @Operation(summary = "댓글 상태 조회",
+            description = """
+                    알림·신고 링크(#comment-{id})로 들어왔는데 그 댓글이 목록에 없을 때, 왜 없는지 알려 주기 위한 조회.
+                    회원 댓글 목록은 공개(normal) 댓글만 주므로, 지워졌거나 가려진 댓글은 이 API 로만 상태를 알 수 있다.
+
+                    ### 응답 예시
+                    ```json
+                    {"state": "deleted"}     // normal | blind | deleted
+                    ```
+                    실패: 404 {"message":"존재하지 않는 댓글입니다."}
+                    """)
+    @GetMapping("/comments/{commentId}/state")
+    public ResponseEntity<java.util.Map<String, String>> getCommentState(
+            @Parameter(description = BOARD_ID_DESC, example = "2") @PathVariable Long boardId,
+            @Parameter(description = "댓글 ID", example = "327") @PathVariable Long commentId) {
+        return ResponseEntity.ok(java.util.Map.of("state", boardService.getCommentState(boardId, commentId)));
+    }
+
     @Operation(summary = "게시글 좋아요 토글",
             description = """
                     상세 페이지의 좋아요 버튼을 누를 때 호출합니다. 이미 눌렀으면 취소, 안 눌렀으면 추가됩니다.

@@ -13,4 +13,6 @@ public class BoardTopPostResponse {
     private Long postId;
     private String title;
     private Boolean isPinned;
+    // 메인 화면도 목록과 같은 배지를 띄운다 (카테고리를 쓰지 않는 게시판이면 null)
+    private String categoryName;
 }

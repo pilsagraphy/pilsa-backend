@@ -341,6 +341,17 @@
         SELECT user_id FROM posts WHERE post_id = #{postId}
     </select>
 
+    <select id="findPostStateInBoard" resultType="string">
+        SELECT state FROM posts WHERE post_id = #{postId} AND board_id = #{boardId}
+    </select>
+
+    <select id="findCommentStateInBoard" resultType="string">
+        SELECT c.state
+        FROM comments c
+        JOIN posts p ON p.post_id = c.post_id
+        WHERE c.comment_id = #{commentId} AND p.board_id = #{boardId}
+    </select>
+
     <!-- 알림 문구용 — 그 글이 어느 게시판의 무슨 글인지 (제목: "[자유게시판] 종강하고싶어요") -->
     <select id="findPostNotificationContext" resultType="map">
         SELECT b.name AS boardName, p.title AS postTitle

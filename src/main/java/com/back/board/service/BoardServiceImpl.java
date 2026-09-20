@@ -117,6 +117,15 @@ public class BoardServiceImpl implements BoardService {
 
         BoardDetailResponse detail = boardMapper.findPostDetailById(postId, boardId);
         if (detail == null) {
+            // 알림·링크를 타고 온 사람에게 '없는 글'과 '지워진 글'은 다른 말이다 (2026-09-20 PM).
+            // 지워졌거나 가려진 글은 410 으로, 왜 안 보이는지 문장에 담아 준다
+            String state = boardMapper.findPostStateInBoard(postId, boardId);
+            if ("deleted".equals(state)) {
+                throw new BoardException("삭제된 게시글입니다.", HttpStatus.GONE);
+            }
+            if ("blind".equals(state)) {
+                throw new BoardException("운영진이 블라인드 처리한 게시글입니다.", HttpStatus.GONE);
+            }
             throw new BoardException("존재하지 않는 게시글입니다.", HttpStatus.NOT_FOUND);
         }
 
@@ -164,6 +173,16 @@ public class BoardServiceImpl implements BoardService {
      * 작성자가 지운 댓글은 학생 화면에 내려가지 않는다.
      * 비밀댓글 열람 판정에 원글 작성자가 필요해 여기서 원글 작성자 id를 함께 조회한다.
      */
+    @Override
+    public String getCommentState(Long boardId, Long commentId) {
+        boardPolicyService.requireReadable(boardId);
+        String state = boardMapper.findCommentStateInBoard(commentId, boardId);
+        if (state == null) {
+            throw new BoardException("존재하지 않는 댓글입니다.", HttpStatus.NOT_FOUND);
+        }
+        return state;
+    }
+
     @Override
     public List<CommentDetailResponse> getComments(Long boardId, Long postId) {
         boardPolicyService.requireReadable(boardId);

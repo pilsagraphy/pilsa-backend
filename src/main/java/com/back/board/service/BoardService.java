@@ -25,6 +25,9 @@ public interface BoardService {
     // 게시글의 댓글 목록 (블라인드·삭제 댓글 제외, 익명/비밀댓글 마스킹 적용)
     List<CommentDetailResponse> getComments(Long boardId, Long postId);
 
+    /** 댓글의 현재 상태 (normal/blind/deleted) — 알림 링크의 댓글이 목록에 없을 때 '왜 없는지' 알려 주기 위해 */
+    String getCommentState(Long boardId, Long commentId);
+
     // 좋아요 토글
     BoardResponse togglePostLike(Long boardId, Long postId);
 
