@@ -2,6 +2,7 @@ package com.back.admin.board.service;
 
 import com.back.admin.board.dto.AdminCategoryResponse;
 import com.back.admin.board.dto.CategorySaveRequest;
+import com.back.admin.board.mapper.AdminBoardMapper;
 import com.back.admin.board.mapper.AdminCategoryMapper;
 import com.back.board.dto.BoardPolicy;
 import com.back.board.exception.BoardException;
@@ -39,11 +40,16 @@ public class AdminCategoryService {
     private static final int MAX_NAME_LENGTH = 50; // categories.name varchar(50)
 
     private final AdminCategoryMapper adminCategoryMapper;
+    private final AdminBoardMapper adminBoardMapper;
     private final BoardMapper boardMapper;
 
+    @Transactional
     public List<AdminCategoryResponse> getCategories(Long boardId) {
         AuthUtils.requireAdmin();
         requireBoard(boardId);
+        // '중요'는 모든 게시판에 있어야 한다(상단 고정 통로). 게시판 생성 시에만 만들다 보니 그 전에 만든
+        // 게시판(공지·자유·정보)에는 없었다 — 목록을 열 때마다 없으면 채운다 (INSERT IGNORE 라 있으면 무시)
+        adminBoardMapper.insertPinnedCategory(boardId);
         return adminCategoryMapper.findCategories(boardId);
     }
 
