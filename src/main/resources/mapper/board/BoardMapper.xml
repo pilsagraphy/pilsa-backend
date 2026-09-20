@@ -108,13 +108,15 @@
     <!-- 메인 화면용 상단 N개 조회 (is_pinned 우선, 그 외는 최신순). 개수는 프론트가 요청한 값
          블라인드/삭제(state != normal) 글은 학생 화면에서 숨김 (PR #57 포팅) -->
     <select id="findTopPosts" resultType="com.back.board.dto.BoardTopPostResponse">
-        SELECT post_id   AS postId,
-               title,
-               is_pinned AS isPinned
-        FROM posts
-        WHERE board_id = #{boardId}
-          AND state = 'normal'
-        ORDER BY is_pinned DESC, created_at DESC, post_id DESC
+        SELECT p.post_id   AS postId,
+               p.title,
+               p.is_pinned AS isPinned,
+               c.name      AS categoryName
+        FROM posts p
+        LEFT JOIN categories c ON c.category_id = p.category_id AND c.is_active = 1
+        WHERE p.board_id = #{boardId}
+          AND p.state = 'normal'
+        ORDER BY p.is_pinned DESC, p.created_at DESC, p.post_id DESC
         LIMIT #{limit}
     </select>
 
@@ -190,6 +192,13 @@
             AND (title LIKE CONCAT('%', #{keyword}, '%') OR content LIKE CONCAT('%', #{keyword}, '%'))
         </if>
     </select>
+
+    <!-- 조회 기록. 접속 통계(stats_access_hourly)와 같은 방식 — PK 충돌이면 오늘 이미 본 것이라 IGNORE.
+         날짜는 앱 시각이 아니라 DB 시각(CURDATE)으로 잘라 기록과 판정이 같은 시계를 쓴다 -->
+    <insert id="insertPostView">
+        INSERT IGNORE INTO post_views (post_id, user_id, viewed_on)
+        VALUES (#{postId}, #{userId}, CURDATE())
+    </insert>
 
     <!-- 조회수 증가 -->
     <update id="updateViewCount">

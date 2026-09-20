@@ -74,6 +74,9 @@ public interface BoardMapper {
     // 게시글 조회수 증가
     void updateViewCount(@Param("postId") Long postId);
 
+    /** 조회 기록 (사람·글·날짜당 1행). 1 이면 오늘 처음 본 것 → 그때만 조회수를 올린다 */
+    int insertPostView(@Param("postId") Long postId, @Param("userId") Long userId);
+
     // 게시글에 포함된 첨부파일 리스트 조회
     List<AttachmentFileResponse> findAttachmentsByPostId(@Param("postId") Long postId);
 

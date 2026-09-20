@@ -128,8 +128,12 @@ public class BoardServiceImpl implements BoardService {
             detail.setNextPost(boardMapper.findAdjacentPost(detail.getNextPostId()));
         }
 
-        boardMapper.updateViewCount(postId);
-        detail.setViewCount(detail.getViewCount() + 1); // 방금 올린 값을 응답에 반영
+        // 조회수는 사람·글·날짜당 한 번만 — 새로고침으로 무작정 오르지 않게 (접속 통계와 같은 방식, 2026-09-20 PM)
+        Long viewerId = AuthUtils.currentUserIdOrNull();
+        if (viewerId != null && boardMapper.insertPostView(postId, viewerId) > 0) {
+            boardMapper.updateViewCount(postId);
+            detail.setViewCount(detail.getViewCount() + 1); // 방금 올린 값을 응답에 반영
+        }
 
         List<AttachmentFileResponse> attachments = boardMapper.findAttachmentsByPostId(postId);
         detail.setAttachments(attachments);
