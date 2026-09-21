@@ -26,6 +26,7 @@ import java.util.Map;
 public class GoogleCalendarClient {
 
     private static final String BASE_URL = "https://www.googleapis.com/calendar/v3/calendars";
+    private static final String TIME_ZONE = "Asia/Seoul";
 
     private final RestClient restClient = RestClient.create();
 
@@ -87,8 +88,19 @@ public class GoogleCalendarClient {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("summary", event.getTitle());
         body.put("description", buildDescription(event));
-        body.put("start", Map.of("date", toDashedDate(event.getStartDate())));
-        body.put("end", Map.of("date", toDashedDate(event.getEndDateExclusive())));
+        if (Boolean.FALSE.equals(event.getAllDay())) {
+            // 시각이 있는 일정. 구글은 dateTime 에 timeZone 을 함께 주면 그 지역 시각으로 읽는다.
+            // 종일과 달리 종료가 배타적이지 않으므로 end_at 을 그대로 쓴다
+            body.put("start", Map.of(
+                    "dateTime", toRfc3339(event.getStartDateTime()),
+                    "timeZone", TIME_ZONE));
+            body.put("end", Map.of(
+                    "dateTime", toRfc3339(event.getEndDateTime()),
+                    "timeZone", TIME_ZONE));
+        } else {
+            body.put("start", Map.of("date", toDashedDate(event.getStartDate())));
+            body.put("end", Map.of("date", toDashedDate(event.getEndDateExclusive())));
+        }
 
         // 사용자 캘린더에서 우리 일정을 회색으로 고정한다 — 개인 일정 색과 겹치지 않는 무채색.
         // 구글 이벤트 색상 팔레트에서 8 = Graphite. update 도 같은 body 를 쓰므로 기존 일정도 갱신 시 회색이 된다.
@@ -108,10 +120,16 @@ public class GoogleCalendarClient {
         if (event.getCategory() != null && !event.getCategory().isBlank()) {
             sb.append("[").append(event.getCategory()).append("]\n");
         }
-        if (event.getDescription() != null) {
-            sb.append(event.getDescription());
-        }
+        // 설명 뒤에 사진 주소 — 구글 캘린더 설명은 링크를 자동으로 눌러 열 수 있게 그린다
+        sb.append(com.back.event.service.EventServiceImpl.withImageLinks(event.getDescription(), event.getImageUrls()));
         return sb.toString();
+    }
+
+    /** yyyyMMdd'T'HHmmss → yyyy-MM-dd'T'HH:mm:ss (구글 dateTime 형식. 지역은 timeZone 으로 따로 준다) */
+    private String toRfc3339(String compact) {
+        if (compact == null || compact.length() != 15) return compact;
+        return compact.substring(0, 4) + "-" + compact.substring(4, 6) + "-" + compact.substring(6, 8)
+                + "T" + compact.substring(9, 11) + ":" + compact.substring(11, 13) + ":" + compact.substring(13, 15);
     }
 
     /** EventCalendarRow 는 ICS 규격에 맞춰 yyyyMMdd 로 오는데, 구글 API 는 yyyy-MM-dd 를 받는다. */
