@@ -70,6 +70,13 @@ public class NotificationPushService {
         sendToUser(receiverId, toastId, null, title, body, targetType, targetId, boardId);
     }
 
+    /** OS 알림은 아이콘을 유형별로 못 바꾸니 제목 앞에 이모지로 갈라 준다 (알림함은 아이콘·색으로 구분) */
+    private static String pushTitle(String type, String title) {
+        if ("PINNED_POST".equals(type)) return "📢 " + title;
+        if ("EVENT".equals(type)) return "📅 " + title;
+        return title;
+    }
+
     /** type(NotificationType 이름)까지 실어 보낸다 — 프론트가 중요 글·일정 알림을 댓글과 다르게 그린다 */
     @Async("notificationExecutor")
     public void sendToUser(Long receiverId, Long toastId, String type, String title, String body,
@@ -85,7 +92,7 @@ public class NotificationPushService {
             Map<String, Object> json = new LinkedHashMap<>();
             json.put("toastId", toastId);
             json.put("type", type);
-            json.put("title", title);
+            json.put("title", pushTitle(type, title));
             json.put("body", body != null ? body : title);
             json.put("toastId", toastId);
             json.put("targetType", targetType);

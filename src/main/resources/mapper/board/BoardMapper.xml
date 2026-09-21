@@ -358,7 +358,7 @@
     </select>
 
     <select id="findPostNotificationContext" resultType="map">
-        SELECT b.name AS boardName, p.title AS postTitle
+        SELECT b.name AS boardName, p.title AS postTitle, p.content AS postContent
         FROM posts p
                  JOIN boards b ON b.board_id = p.board_id
         WHERE p.post_id = #{postId}

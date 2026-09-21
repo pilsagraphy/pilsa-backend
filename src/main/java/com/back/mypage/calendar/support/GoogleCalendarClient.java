@@ -117,7 +117,8 @@ public class GoogleCalendarClient {
 
     // 설명은 세부 사항 그대로 — 예전엔 앞에 "[기타]" 처럼 카테고리를 붙였는데 사용자 캘린더에서는 군더더기다 (PM, 2026-09-21)
     private String buildDescription(EventCalendarRow event) {
-        return event.getDescription() == null ? "" : event.getDescription();
+        // 세부 사항은 편집기(툴바)가 마크다운으로 저장한다 → 캘린더에는 기호를 걷어낸 평문으로
+        return com.back.global.util.MarkdownText.toPlain(event.getDescription());
     }
 
     /** yyyyMMdd'T'HHmmss → yyyy-MM-dd'T'HH:mm:ss (구글 dateTime 형식. 지역은 timeZone 으로 따로 준다) */

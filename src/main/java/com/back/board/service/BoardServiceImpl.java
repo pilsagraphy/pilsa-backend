@@ -279,11 +279,15 @@ public class BoardServiceImpl implements BoardService {
     private void notifyPinnedPost(BoardPolicy policy, Long postId, Long boardId, Long authorId) {
         try {
             Map<String, Object> context = boardMapper.findPostNotificationContext(postId);
+            // 제목 "[게시판] 글 제목", 본문은 글 앞부분 미리보기(마크다운 걷어냄). 이모지는 푸시에서만 붙인다 (알림함은 아이콘)
             String title = context == null
                     ? NotificationType.PINNED_POST.defaultTitle()
-                    : "📌 [" + context.get("boardName") + "] " + context.get("postTitle");
+                    : "[" + context.get("boardName") + "] " + context.get("postTitle");
             String finalTitle = truncate(title, NOTIFICATION_TITLE_MAX);
-            String message = "중요 글이 올라왔어요. 꼭 확인해 주세요.";
+            String message = context == null
+                    ? "중요 글이 올라왔어요."
+                    : com.back.global.util.MarkdownText.preview(String.valueOf(context.get("postContent")), 120);
+            if (message.isBlank()) message = "중요 글이 올라왔어요.";
 
             List<Long> receivers = notificationMapper.findReadableUserIds(policy.getReadScope());
             for (Long receiverId : receivers) {

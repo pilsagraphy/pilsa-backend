@@ -51,15 +51,36 @@ public class AdminEventService {
     private final NotificationPublisher notificationPublisher;
     private final NotificationMapper notificationMapper;
 
+    private static final String[] WEEKDAYS_KO = {"월", "화", "수", "목", "금", "토", "일"};
+
+    /** "9월 30일 (목) ~ 11월 20일 (금)" · 하루면 "9월 30일 (목)" · 시각이 있으면 " 14:00 ~ 16:00" 을 덧붙인다 */
+    static String formatPeriod(String startDate, String endDate, String startTime, String endTime) {
+        String start = formatKoreanDate(startDate);
+        String end = formatKoreanDate(endDate);
+        String period = start.equals(end) ? start : start + " ~ " + end;
+        if (startTime != null && !startTime.isBlank() && endTime != null && !endTime.isBlank()) {
+            period += " " + startTime + " ~ " + endTime;
+        }
+        return period;
+    }
+
+    private static String formatKoreanDate(String yyyyMmDd) {
+        try {
+            java.time.LocalDate d = java.time.LocalDate.parse(yyyyMmDd);
+            return d.getMonthValue() + "월 " + d.getDayOfMonth() + "일 (" + WEEKDAYS_KO[d.getDayOfWeek().getValue() - 1] + ")";
+        } catch (Exception e) {
+            return yyyyMmDd;
+        }
+    }
+
     /** 새 일정 알림 — 회원 전원. 실패해도 등록은 되돌리지 않는다 (알림은 부가 기능) */
     private void notifyNewEvent(Long eventId, EventRequest request) {
         try {
-            String title = "📅 새 일정: " + request.getTitle();
-            String period = request.getStartDate().equals(request.getEndDate())
-                    ? request.getStartDate()
-                    : request.getStartDate() + " ~ " + request.getEndDate();
+            // 제목 "[구분] 일정 제목", 본문은 기간. 이모지는 푸시에서만 붙인다 (알림함은 아이콘)
             String category = request.getCategory() == null ? "" : "[" + request.getCategory() + "] ";
-            String message = category + period;
+            String title = category + request.getTitle();
+            String message = formatPeriod(request.getStartDate(), request.getEndDate(),
+                    request.getStartTime(), request.getEndTime());
             String finalTitle = title.length() > 100 ? title.substring(0, 97) + "…" : title;
             for (Long receiverId : notificationMapper.findAllActiveUserIds()) {
                 notificationPublisher.publish(receiverId, NotificationType.EVENT, "event", eventId, null,

@@ -139,7 +139,8 @@ public class EventServiceImpl implements EventService {
                 line(sb, "CATEGORIES:" + escapeIcs(row.getCategory()));
             }
             if (row.getDescription() != null && !row.getDescription().isBlank()) {
-                line(sb, "DESCRIPTION:" + escapeIcs(row.getDescription()));
+                // 마크다운 기호를 걷어낸 평문으로 (세부 사항은 편집기가 마크다운으로 저장한다)
+                line(sb, "DESCRIPTION:" + escapeIcs(com.back.global.util.MarkdownText.toPlain(row.getDescription())));
             }
             line(sb, "END:VEVENT");
         }
