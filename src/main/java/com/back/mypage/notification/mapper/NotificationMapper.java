@@ -23,6 +23,15 @@ public interface NotificationMapper {
      */
     void insertNotification(NotificationCreate command);
 
+    /**
+     * 게시판 열람 대상 회원 전원 (중요 글 알림 수신자). 탈퇴자는 제외.
+     * readScope 판정은 BoardPolicy.canRead 와 같다 — 관리자는 항상, MEMBER 는 전원, 그 외는 member_type 일치
+     */
+    List<Long> findReadableUserIds(@Param("readScope") String readScope);
+
+    /** 살아 있는 회원 전원 (일정 알림 수신자) */
+    List<Long> findAllActiveUserIds();
+
     /** 목록 — 최근 N개월(months), state=normal, 최신순. boardId 는 posts 조인으로 유도 */
     List<NotificationResponse> findByUser(@Param("userId") Long userId, @Param("months") int months);
 

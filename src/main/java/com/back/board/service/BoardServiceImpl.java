@@ -45,6 +45,7 @@ public class BoardServiceImpl implements BoardService {
     private final FileStorageUtil fileStorageUtil;
     private final AttachmentService attachmentService;
     private final NotificationPublisher notificationPublisher;
+    private final com.back.mypage.notification.mapper.NotificationMapper notificationMapper;
     // 발행 연동(초안 확인·삭제)용 — 첨부 소유 이전은 AttachmentService 가 담당한다
     private final DraftMapper draftMapper;
 
@@ -262,8 +263,37 @@ public class BoardServiceImpl implements BoardService {
             attachmentService.syncInlineAttachments(request.getPostId(), request.getContent());
         }
 
+        // '중요' 로 올라온 글은 열람 가능한 회원 전원에게 알린다 (PM, 2026-09-21)
+        if (pinned) {
+            notifyPinnedPost(policy, request.getPostId(), boardId, userId);
+        }
+
         // 생성 PK 반환 — 프론트가 등록 직후 상세 페이지로 이동하는 데 필요
         return new BoardResponse("게시글이 성공적으로 등록되었습니다.", request.getPostId());
+    }
+
+    /**
+     * 중요 글 알림 — 그 게시판을 열람할 수 있는 회원 전원(작성자 제외).
+     * 댓글 알림과 같은 규칙으로 실패는 삼킨다(알림이 글 등록을 되돌리면 안 된다). 푸시는 @Async 라 여기서 기다리지 않는다
+     */
+    private void notifyPinnedPost(BoardPolicy policy, Long postId, Long boardId, Long authorId) {
+        try {
+            Map<String, Object> context = boardMapper.findPostNotificationContext(postId);
+            String title = context == null
+                    ? NotificationType.PINNED_POST.defaultTitle()
+                    : "📌 [" + context.get("boardName") + "] " + context.get("postTitle");
+            String finalTitle = truncate(title, NOTIFICATION_TITLE_MAX);
+            String message = "중요 글이 올라왔어요. 꼭 확인해 주세요.";
+
+            List<Long> receivers = notificationMapper.findReadableUserIds(policy.getReadScope());
+            for (Long receiverId : receivers) {
+                if (receiverId.equals(authorId)) continue;
+                notificationPublisher.publish(receiverId, NotificationType.PINNED_POST, "post", postId, boardId,
+                        finalTitle, message);
+            }
+        } catch (Exception e) {
+            log.warn("중요 글 알림 발행 실패 - postId: {}, {}", postId, e.getMessage());
+        }
     }
 
     /**
@@ -327,6 +357,8 @@ public class BoardServiceImpl implements BoardService {
             request.setIsAnonymous(false);
         }
         boolean pinned = resolvePinned(policy, request.getCategoryId());
+        // 수정으로 '중요'가 새로 붙는 경우에만 알린다 — 이미 중요였던 글을 고칠 때마다 알리면 시끄럽다
+        boolean newlyPinned = pinned && !boardMapper.isPostPinned(postId);
 
         // 고치기 전 문장을 남긴다 (신고·조치 검토용). 실패해도 수정은 진행된다
         contentRevisionService.snapshot("post", postId, ContentRevisionService.TRIGGER_EDIT, currentUserId);
@@ -335,6 +367,9 @@ public class BoardServiceImpl implements BoardService {
         if (updated == 0) {
             // state != normal (블라인드/삭제) 이거나 존재하지 않는 글
             throw new BoardException("수정할 수 없는 게시글입니다.", HttpStatus.NOT_FOUND);
+        }
+        if (newlyPinned) {
+            notifyPinnedPost(policy, postId, boardId, authorId);
         }
 
         // 첨부는 증분 처리: 지운 것만 소프트삭제하고, 새로 올린 것만 추가한다

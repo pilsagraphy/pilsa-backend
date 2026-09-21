@@ -14,6 +14,10 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.ArrayList;
 import java.util.List;
 import com.back.mypage.calendar.service.GoogleCalendarSyncService;
+import com.back.mypage.notification.dto.NotificationType;
+import com.back.mypage.notification.mapper.NotificationMapper;
+import com.back.mypage.notification.service.NotificationPublisher;
+import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -35,6 +39,7 @@ import java.util.Map;
  * 반영은 비동기이며 커밋 이후에 시작한다 — 관리자 화면이 구글 응답을 기다리지 않게 하고,
  * 구글이 느리거나 실패해도 일정 등록 자체는 성공으로 끝나게 하기 위해서다.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -43,6 +48,27 @@ public class AdminEventService {
     private final AdminEventMapper adminEventMapper;
     private final GoogleCalendarSyncService calendarSyncService;
     private final FileStorageUtil fileStorageUtil;
+    private final NotificationPublisher notificationPublisher;
+    private final NotificationMapper notificationMapper;
+
+    /** 새 일정 알림 — 회원 전원. 실패해도 등록은 되돌리지 않는다 (알림은 부가 기능) */
+    private void notifyNewEvent(Long eventId, EventRequest request) {
+        try {
+            String title = "📅 새 일정: " + request.getTitle();
+            String period = request.getStartDate().equals(request.getEndDate())
+                    ? request.getStartDate()
+                    : request.getStartDate() + " ~ " + request.getEndDate();
+            String category = request.getCategory() == null ? "" : "[" + request.getCategory() + "] ";
+            String message = category + period;
+            String finalTitle = title.length() > 100 ? title.substring(0, 97) + "…" : title;
+            for (Long receiverId : notificationMapper.findAllActiveUserIds()) {
+                notificationPublisher.publish(receiverId, NotificationType.EVENT, "event", eventId, null,
+                        finalTitle, message);
+            }
+        } catch (Exception e) {
+            log.warn("일정 알림 발행 실패 - eventId: {}, {}", eventId, e.getMessage());
+        }
+    }
 
     /** 일정 하나에 붙일 수 있는 이미지 수 — 포스터·안내 사진 몇 장이면 충분하고, 더 많으면 게시판이 맞다 */
     private static final int MAX_IMAGES_PER_EVENT = 10;
@@ -167,6 +193,8 @@ public class AdminEventService {
 
         Long eventId = request.getEventId();
         afterCommit(() -> calendarSyncService.onEventCreated(eventId));
+        // 회원 전원에게 알림 (PM, 2026-09-21)
+        notifyNewEvent(eventId, request);
 
         Map<String, Object> data = new HashMap<>();
         data.put("eventId", eventId);

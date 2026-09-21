@@ -35,6 +35,9 @@ public interface BoardMapper {
     // 선택한 카테고리가 이 게시판의 '중요'(code=PINNED) 카테고리인가 → is_pinned 판정용
     boolean isPinnedCategory(@Param("categoryId") Long categoryId, @Param("boardId") Long boardId);
 
+    // 지금 상단 고정인가 — 수정으로 '중요'가 새로 붙었을 때만 알리기 위해 수정 전 상태를 본다
+    boolean isPostPinned(@Param("postId") Long postId);
+
     // 이전글/다음글 상세 (카테고리 뱃지·제목·작성일 표시용)
     AdjacentPostResponse findAdjacentPost(@Param("postId") Long postId);
 

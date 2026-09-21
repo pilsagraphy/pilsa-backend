@@ -10,6 +10,19 @@
         VALUES (#{userId}, #{type}, #{title}, #{message}, #{targetType}, #{targetId}, 0, 'normal', NOW())
     </insert>
 
+    <!-- 중요 글 알림 수신자: 그 게시판을 열람할 수 있는 회원 전원 (BoardPolicy.canRead 와 같은 판정) -->
+    <select id="findReadableUserIds" resultType="long">
+        SELECT user_id
+        FROM users
+        WHERE is_deleted = 0
+          AND (admin_level >= 1 OR #{readScope} = 'MEMBER' OR member_type = #{readScope})
+    </select>
+
+    <!-- 일정 알림 수신자: 살아 있는 회원 전원 -->
+    <select id="findAllActiveUserIds" resultType="long">
+        SELECT user_id FROM users WHERE is_deleted = 0
+    </select>
+
     <!-- 목록: 최근 N개월, 본인 normal, 최신순. boardId 는 target(post) → posts 조인으로 유도 -->
     <select id="findByUser" resultType="com.back.mypage.notification.dto.NotificationResponse">
         SELECT n.notification_id AS toastId,

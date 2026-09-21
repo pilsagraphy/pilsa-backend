@@ -67,6 +67,13 @@ public class NotificationPushService {
     @Async("notificationExecutor")
     public void sendToUser(Long receiverId, Long toastId, String title, String body,
                            String targetType, Long targetId, Long boardId) {
+        sendToUser(receiverId, toastId, null, title, body, targetType, targetId, boardId);
+    }
+
+    /** type(NotificationType 이름)까지 실어 보낸다 — 프론트가 중요 글·일정 알림을 댓글과 다르게 그린다 */
+    @Async("notificationExecutor")
+    public void sendToUser(Long receiverId, Long toastId, String type, String title, String body,
+                           String targetType, Long targetId, Long boardId) {
         List<NotificationDevice> devices = deviceMapper.findByUserId(receiverId);
         if (devices.isEmpty()) {
             return;
@@ -77,6 +84,7 @@ public class NotificationPushService {
             // 프론트 Service Worker 의 push 핸들러가 그대로 showNotification / 화면 경로 조립에 쓰는 형태
             Map<String, Object> json = new LinkedHashMap<>();
             json.put("toastId", toastId);
+            json.put("type", type);
             json.put("title", title);
             json.put("body", body != null ? body : title);
             json.put("toastId", toastId);

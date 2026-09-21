@@ -353,6 +353,10 @@
     </select>
 
     <!-- 알림 문구용 — 그 글이 어느 게시판의 무슨 글인지 (제목: "[자유게시판] 종강하고싶어요") -->
+    <select id="isPostPinned" resultType="boolean">
+        SELECT EXISTS (SELECT 1 FROM posts WHERE post_id = #{postId} AND is_pinned = 1)
+    </select>
+
     <select id="findPostNotificationContext" resultType="map">
         SELECT b.name AS boardName, p.title AS postTitle
         FROM posts p

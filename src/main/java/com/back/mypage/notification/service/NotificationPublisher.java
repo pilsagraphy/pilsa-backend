@@ -60,7 +60,7 @@ public class NotificationPublisher {
         notificationMapper.insertNotification(command);
 
         // 저장된 알림을 등록 기기로 발송(앱이 꺼져 있어도 OS 푸시). @Async — 실패해도 로그만 남는다.
-        pushService.sendToUser(receiverId, command.getNotificationId(),
+        pushService.sendToUser(receiverId, command.getNotificationId(), type.name(),
                 title, message, targetType, targetId, boardId);
     }
 }
