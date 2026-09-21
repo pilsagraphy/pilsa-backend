@@ -1,7 +1,6 @@
 package com.back.mypage.calendar.service;
 
 import com.back.event.dto.EventCalendarRow;
-import com.back.event.service.EventImageLinks;
 import com.back.global.oauth.GoogleOAuthClient;
 import com.back.global.oauth.TokenCipher;
 import com.back.mypage.calendar.dto.GoogleCalendarLink;
@@ -41,7 +40,6 @@ public class GoogleCalendarSyncService {
 
     private final GoogleCalendarMapper calendarMapper;
     private final CalendarSyncMapper syncMapper;
-    private final EventImageLinks imageLinks;
     private final GoogleOAuthClient oauthClient;
     private final GoogleCalendarClient calendarClient;
     private final TokenCipher tokenCipher;
@@ -51,7 +49,7 @@ public class GoogleCalendarSyncService {
     /** 일정 신규 등록 → 연동 사용자 전원 캘린더에 추가. */
     @Async
     public void onEventCreated(Long eventId) {
-        EventCalendarRow event = imageLinks.fill(syncMapper.findEventForSync(eventId));
+        EventCalendarRow event = syncMapper.findEventForSync(eventId);
         if (event == null) {
             log.warn("동기화할 일정을 찾지 못했습니다 - eventId={}", eventId);
             return;
@@ -71,7 +69,7 @@ public class GoogleCalendarSyncService {
      */
     @Async
     public void onEventUpdated(Long eventId) {
-        EventCalendarRow event = imageLinks.fill(syncMapper.findEventForSync(eventId));
+        EventCalendarRow event = syncMapper.findEventForSync(eventId);
         if (event == null) {
             log.warn("동기화할 일정을 찾지 못했습니다 - eventId={}", eventId);
             return;
@@ -125,7 +123,6 @@ public class GoogleCalendarSyncService {
         }
 
         List<EventCalendarRow> events = syncMapper.findUpcomingEventsForSync();
-        imageLinks.fill(events);
         log.info("초기 동기화 시작 - userId={}, 일정={}건", userId, events.size());
 
         for (EventCalendarRow event : events) {
@@ -161,7 +158,7 @@ public class GoogleCalendarSyncService {
                 continue;
             }
 
-            EventCalendarRow event = imageLinks.fill(syncMapper.findEventForSync(mapping.getEventId()));
+            EventCalendarRow event = syncMapper.findEventForSync(mapping.getEventId());
             if (event == null) {
                 // 일정이 삭제됐다(state != normal). 넣어둔 게 있으면 캘린더에서도 지운다
                 removeFromCalendar(link, mapping);

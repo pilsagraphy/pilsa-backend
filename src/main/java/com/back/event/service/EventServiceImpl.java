@@ -21,7 +21,6 @@ import java.util.stream.Collectors;
 public class EventServiceImpl implements EventService {
 
     private final EventMapper eventMapper;
-    private final EventImageLinks imageLinks;
 
     @Override
     public EventPageResponse getEventsByPeriod(String from, String to) {
@@ -111,7 +110,6 @@ public class EventServiceImpl implements EventService {
     // VCALENDAR 헤더 + VEVENT 들 + 푸터.
     // 전체 피드와 단일 일정이 같은 규칙(UID·종일 처리·이스케이프)을 쓰도록 한곳에 모아 둔다.
     private String buildIcs(List<EventCalendarRow> rows) {
-        imageLinks.fill(rows);
         StringBuilder sb = new StringBuilder();
         line(sb, "BEGIN:VCALENDAR");
         line(sb, "VERSION:2.0");
@@ -140,35 +138,12 @@ public class EventServiceImpl implements EventService {
             if (row.getCategory() != null && !row.getCategory().isBlank()) {
                 line(sb, "CATEGORIES:" + escapeIcs(row.getCategory()));
             }
-            // 설명 끝에 사진 주소를 덧붙인다 — 구글 캘린더는 ATTACH 를 무시하고 설명의 링크만 보여 준다.
-            // ATTACH 는 아이폰·맥 캘린더가 첨부로 그린다
-            String description = withImageLinks(row.getDescription(), row.getImageUrls());
-            if (!description.isBlank()) {
-                line(sb, "DESCRIPTION:" + escapeIcs(description));
-            }
-            for (String url : row.getImageUrls()) {
-                line(sb, "ATTACH:" + url);
+            if (row.getDescription() != null && !row.getDescription().isBlank()) {
+                line(sb, "DESCRIPTION:" + escapeIcs(row.getDescription()));
             }
             line(sb, "END:VEVENT");
         }
         line(sb, "END:VCALENDAR");
-        return sb.toString();
-    }
-
-    /** 설명 뒤에 '사진' 목록을 붙인다. 이미지가 없으면 설명 그대로(없으면 빈 문자열) */
-    public static String withImageLinks(String description, List<String> imageUrls) {
-        String base = description == null ? "" : description;
-        if (imageUrls == null || imageUrls.isEmpty()) {
-            return base;
-        }
-        StringBuilder sb = new StringBuilder(base.strip());
-        if (!sb.isEmpty()) {
-            sb.append("\n\n");
-        }
-        sb.append("사진");
-        for (String url : imageUrls) {
-            sb.append("\n").append(url);
-        }
         return sb.toString();
     }
 

@@ -28,7 +28,4 @@ public class EventCalendarRow {
     private String startUtc;
     private String endUtc;
     private String dtstamp;
-
-    // 일정 이미지의 절대 주소들 (EventImageLinks 가 채운다). ICS 의 ATTACH·설명, 구글 설명에 싣는다
-    private java.util.List<String> imageUrls = new java.util.ArrayList<>();
 }

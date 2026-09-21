@@ -120,8 +120,9 @@ public class GoogleCalendarClient {
         if (event.getCategory() != null && !event.getCategory().isBlank()) {
             sb.append("[").append(event.getCategory()).append("]\n");
         }
-        // 설명 뒤에 사진 주소 — 구글 캘린더 설명은 링크를 자동으로 눌러 열 수 있게 그린다
-        sb.append(com.back.event.service.EventServiceImpl.withImageLinks(event.getDescription(), event.getImageUrls()));
+        if (event.getDescription() != null) {
+            sb.append(event.getDescription());
+        }
         return sb.toString();
     }
 
