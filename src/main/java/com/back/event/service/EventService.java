@@ -21,4 +21,7 @@ public interface EventService {
 
     // 5. 일정 카테고리 목록 (Public)
     List<EventCategoryResponse> getEventCategories();
+
+    // 6. 일정 이미지 한 장 내려주기 (Public) — 없거나 지워졌으면 404
+    EventImageRow getImageForDownload(Long imageId);
 }

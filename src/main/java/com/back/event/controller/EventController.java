@@ -7,6 +7,10 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -21,6 +25,7 @@ import java.util.List;
 public class EventController {
 
     private final EventService eventService;
+    private final com.back.global.util.FileStorageUtil fileStorageUtil;
 
     @Operation(summary = "기간별 일정 목록 (비로그인 공개)",
             description = """
@@ -60,6 +65,33 @@ public class EventController {
             @Parameter(description = "일정 ID") @PathVariable Long eventId) {
         log.info("일정 상세 조회 요청 - ID: {}", eventId);
         return ResponseEntity.ok(eventService.getEventById(eventId));
+    }
+
+    @Operation(summary = "일정 이미지 조회 (비로그인 공개)",
+            description = """
+                    일정 목록·상세의 `images[].url` 이 가리키는 경로. 일정이 공개라 이미지도 인증 없이 열린다 —
+                    `<img src>` 에 그대로 넣으면 된다. 파일은 서버 uploads/events/{eventId}/ 아래에 있다.
+
+                    실패: 404 (없는 이미지 · 지운 이미지 · 지운 일정의 이미지 — 전부 같은 메시지)""")
+    @GetMapping("/api/event/images/{imageId}")
+    public ResponseEntity<Resource> getEventImage(
+            @Parameter(description = "이미지 ID") @PathVariable Long imageId) {
+        EventImageRow row = eventService.getImageForDownload(imageId);
+        java.io.File file = fileStorageUtil.load(row.getFileUrl());
+        if (file == null) {
+            throw new com.back.event.exception.EventException("존재하지 않는 이미지입니다.", org.springframework.http.HttpStatus.NOT_FOUND);
+        }
+        ContentDisposition disposition = ContentDisposition.inline()
+                .filename(row.getFileName(), StandardCharsets.UTF_8)
+                .build();
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(row.getFileType()))
+                .contentLength(row.getFileSize())
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .header("X-Content-Type-Options", "nosniff")
+                // 공개 이미지 — 한 시간 캐시 (교체는 새 image_id 로 이뤄지므로 낡은 캐시가 남을 일이 없다)
+                .header(HttpHeaders.CACHE_CONTROL, "public, max-age=3600")
+                .body(new FileSystemResource(file));
     }
 
     @Operation(summary = "일정 카테고리 목록 (비로그인 공개)",

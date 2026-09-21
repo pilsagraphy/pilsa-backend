@@ -16,8 +16,9 @@
                      #{request.title},
                      #{request.category},
                      #{request.description},
-                     #{request.startDate},
-                     #{request.endDate},
+                     <!-- 시각이 오면 붙이고, 없으면 00:00:00 (종일). 서비스가 'HH:mm' 을 검증해 넘긴다 -->
+                     CONCAT(#{request.startDate}, ' ', COALESCE(#{request.startTime}, '00:00'), ':00'),
+                     CONCAT(#{request.endDate},   ' ', COALESCE(#{request.endTime},   '00:00'), ':00'),
                      #{userId},
                      NOW(),
                      NOW()
@@ -30,8 +31,12 @@
             <if test="request.title != null">title = #{request.title},</if>
             <if test="request.category != null">category = #{request.category},</if>
             <if test="request.description != null">description = #{request.description},</if>
-            <if test="request.startDate != null">start_at = #{request.startDate},</if>
-            <if test="request.endDate != null">end_at = #{request.endDate},</if>
+            <if test="request.startDate != null">
+                start_at = CONCAT(#{request.startDate}, ' ', COALESCE(#{request.startTime}, '00:00'), ':00'),
+            </if>
+            <if test="request.endDate != null">
+                end_at = CONCAT(#{request.endDate}, ' ', COALESCE(#{request.endTime}, '00:00'), ':00'),
+            </if>
             updated_at = NOW()
         </set>
         WHERE event_id = #{eventId} AND state = 'normal'
@@ -59,5 +64,29 @@
             WHERE event_id = #{eventId} AND state = 'normal'
         )
     </select>
+
+    <!-- ───── 일정 이미지(첨부) ───── -->
+    <insert id="insertImage" useGeneratedKeys="true" keyProperty="row.imageId">
+        INSERT INTO event_images (event_id, file_url, file_name, file_type, file_size, sort_order)
+        VALUES (#{row.eventId}, #{row.fileUrl}, #{row.fileName}, #{row.fileType}, #{row.fileSize}, #{sortOrder})
+    </insert>
+
+    <select id="countImages" resultType="int">
+        SELECT COUNT(*) FROM event_images
+        WHERE event_id = #{eventId} AND state = 'normal'
+    </select>
+
+    <select id="findImage" resultType="com.back.event.dto.EventImageRow">
+        SELECT image_id AS imageId, event_id AS eventId, file_url AS fileUrl, file_name AS fileName,
+               file_type AS fileType, file_size AS fileSize, state
+        FROM event_images
+        WHERE image_id = #{imageId} AND event_id = #{eventId} AND state = 'normal'
+    </select>
+
+    <!-- 물리 삭제 대신 소프트 삭제 — 파일은 서비스가 커밋 뒤에 지운다 -->
+    <update id="softDeleteImage">
+        UPDATE event_images SET state = 'deleted'
+        WHERE image_id = #{imageId} AND state = 'normal'
+    </update>
 
 </mapper>

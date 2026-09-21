@@ -12,6 +12,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.http.MediaType;
+import com.back.event.dto.EventImageResponse;
+import java.util.List;
 
 @Slf4j
 @RestController
@@ -66,6 +70,30 @@ public class AdminEventController {
             @RequestBody EventUpdateRequest request) {
         log.info("일정 수정 요청 - ID: {}, 데이터: {}", eventId, request);
         return ResponseEntity.ok(adminEventService.updateEvent(eventId, request));
+    }
+
+    @Operation(summary = "일정 이미지 업로드 (관리자)",
+            description = """
+                    일정에 이미지(포스터·안내 사진)를 붙입니다. multipart `files` 로 여러 장을 한 번에.
+                    이미지 파일만, 일정 하나에 10장까지. 응답은 이번에 올린 이미지 목록 `[{ imageId, url, fileName }]`.
+                    회원 달력의 일정 목록·상세에 `images` 로 내려가고, url 은 비로그인 공개입니다.
+
+                    실패: 400(이미지 아님 · 장수 초과 · 빈 요청), 404(없는 일정), 403""")
+    @PostMapping(value = "/api/admin/event/{eventId}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<List<EventImageResponse>> uploadImages(
+            @Parameter(description = "일정 ID") @PathVariable Long eventId,
+            @RequestPart("files") List<MultipartFile> files) {
+        return ResponseEntity.ok(adminEventService.uploadImages(eventId, files));
+    }
+
+    @Operation(summary = "일정 이미지 삭제 (관리자)",
+            description = "행은 소프트 삭제, 파일은 커밋 뒤 삭제. 실패: 404(없는 이미지 · 다른 일정의 이미지), 403")
+    @DeleteMapping("/api/admin/event/{eventId}/images/{imageId}")
+    public ResponseEntity<java.util.Map<String, String>> deleteImage(
+            @Parameter(description = "일정 ID") @PathVariable Long eventId,
+            @Parameter(description = "이미지 ID") @PathVariable Long imageId) {
+        adminEventService.deleteImage(eventId, imageId);
+        return ResponseEntity.ok(java.util.Map.of("message", "이미지가 삭제되었습니다."));
     }
 
     @Operation(summary = "일정 삭제 (관리자)",

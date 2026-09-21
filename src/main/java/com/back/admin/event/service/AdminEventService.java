@@ -1,11 +1,18 @@
 package com.back.admin.event.service;
 
+import com.back.event.dto.EventImageResponse;
+import com.back.event.dto.EventImageRow;
 import com.back.event.dto.EventRequest;
 import com.back.event.dto.EventResponse;
 import com.back.event.dto.EventUpdateRequest;
 import com.back.event.exception.EventException;
 import com.back.admin.event.mapper.AdminEventMapper;
 import com.back.global.security.AuthUtils;
+import com.back.global.util.FileStorageUtil;
+import com.back.event.service.EventServiceImpl;
+import org.springframework.web.multipart.MultipartFile;
+import java.util.ArrayList;
+import java.util.List;
 import com.back.mypage.calendar.service.GoogleCalendarSyncService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -35,6 +42,62 @@ public class AdminEventService {
 
     private final AdminEventMapper adminEventMapper;
     private final GoogleCalendarSyncService calendarSyncService;
+    private final FileStorageUtil fileStorageUtil;
+
+    /** 일정 하나에 붙일 수 있는 이미지 수 — 포스터·안내 사진 몇 장이면 충분하고, 더 많으면 게시판이 맞다 */
+    private static final int MAX_IMAGES_PER_EVENT = 10;
+
+    /**
+     * 일정 이미지 업로드. 이미지 파일만 받고, 저장 경로는 uploads/events/{eventId}/ 다.
+     * 올린 순서대로 sort_order 를 매긴다. 일정이 없거나 지워졌으면 404.
+     */
+    @Transactional
+    public List<EventImageResponse> uploadImages(Long eventId, List<MultipartFile> files) {
+        checkAdminRole();
+        if (!adminEventMapper.existsEvent(eventId)) {
+            throw new EventException("해당 일정을 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
+        }
+        if (files == null || files.isEmpty()) {
+            throw new EventException("올릴 이미지를 골라 주세요.", HttpStatus.BAD_REQUEST);
+        }
+        int existing = adminEventMapper.countImages(eventId);
+        if (existing + files.size() > MAX_IMAGES_PER_EVENT) {
+            throw new EventException("이미지는 일정 하나에 " + MAX_IMAGES_PER_EVENT + "장까지 붙일 수 있습니다.", HttpStatus.BAD_REQUEST);
+        }
+        for (MultipartFile file : files) {
+            String type = file.getContentType();
+            if (file.isEmpty() || type == null || !type.startsWith("image/") || type.contains("svg")) {
+                throw new EventException("이미지 파일(jpg · png · gif · webp)만 올릴 수 있습니다.", HttpStatus.BAD_REQUEST);
+            }
+        }
+
+        List<EventImageResponse> saved = new ArrayList<>();
+        int order = existing;
+        for (MultipartFile file : files) {
+            String url = fileStorageUtil.save(file, "uploads/events/" + eventId);
+            EventImageRow row = new EventImageRow();
+            row.setEventId(eventId);
+            row.setFileUrl(url);
+            row.setFileName(file.getOriginalFilename() == null ? "image" : file.getOriginalFilename());
+            row.setFileType(file.getContentType());
+            row.setFileSize(file.getSize());
+            adminEventMapper.insertImage(row, order++);
+            saved.add(EventServiceImpl.toImageResponse(row));
+        }
+        return saved;
+    }
+
+    /** 일정 이미지 삭제 — 행은 소프트 삭제, 파일은 커밋 뒤에 지운다 (롤백되면 파일이 살아 있어야 한다) */
+    @Transactional
+    public void deleteImage(Long eventId, Long imageId) {
+        checkAdminRole();
+        EventImageRow row = adminEventMapper.findImage(eventId, imageId);
+        if (row == null) {
+            throw new EventException("해당 이미지를 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
+        }
+        adminEventMapper.softDeleteImage(imageId);
+        fileStorageUtil.deleteAfterCommit(List.of(row.getFileUrl()));
+    }
 
     // 관리자 권한 확인 (공통 유틸 사용)
     private void checkAdminRole() {
@@ -62,12 +125,39 @@ public class AdminEventService {
         return name;
     }
 
+    /**
+     * 'HH:mm' 형식과 같은 날의 앞뒤 관계를 확인한다.
+     *
+     * 시각은 선택 사항이다 — 둘 다 비면 종일 일정이다. 한쪽만 오면 나머지를 00:00 으로 채우는 대신
+     * 거절한다. 14:00 ~ 00:00 처럼 의도를 알 수 없는 값이 저장되는 것보다 낫다.
+     */
+    private void validateTimes(String startDate, String endDate, String startTime, String endTime) {
+        boolean hasStart = startTime != null && !startTime.isBlank();
+        boolean hasEnd = endTime != null && !endTime.isBlank();
+
+        if (hasStart != hasEnd) {
+            throw new EventException("시작 시각과 종료 시각은 함께 입력해야 합니다.", HttpStatus.BAD_REQUEST);
+        }
+        if (!hasStart) {
+            return; // 종일 일정
+        }
+        if (!startTime.matches("\\d{2}:\\d{2}") || !endTime.matches("\\d{2}:\\d{2}")) {
+            throw new EventException("시각 형식이 올바르지 않습니다. (HH:mm)", HttpStatus.BAD_REQUEST);
+        }
+        // 날짜가 다르면 19:00 ~ 09:00 도 정상이다. 같은 날일 때만 앞뒤를 따진다
+        if (startDate != null && startDate.equals(endDate) && endTime.compareTo(startTime) < 0) {
+            throw new EventException("종료 시각은 시작 시각보다 빠를 수 없습니다.", HttpStatus.BAD_REQUEST);
+        }
+    }
+
     @Transactional
     public EventResponse createEvent(EventRequest request) {
         checkAdminRole();
 
         // 날짜 선후 관계 검증
         validateExecutionDates(request.getStartDate(), request.getEndDate());
+        validateTimes(request.getStartDate(), request.getEndDate(),
+                request.getStartTime(), request.getEndTime());
         request.setCategory(normalizeCategory(request.getCategory()));
 
         // 등록 시에는 ERD 구조상 누가 등록했는지(user_id)가 필요하므로 가져옴

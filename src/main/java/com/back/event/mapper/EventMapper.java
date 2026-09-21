@@ -23,4 +23,10 @@ public interface EventMapper {
 
     // 5. 일정 카테고리 목록 (is_active=1 만)
     List<EventCategoryResponse> findActiveEventCategories();
+
+    // 6. 여러 일정의 이미지 한 번에 (목록 조회에서 N+1 을 피한다)
+    List<EventImageRow> findImagesByEventIds(@Param("eventIds") List<Long> eventIds);
+
+    // 7. 이미지 한 장 (공개 다운로드용 — 소속 일정 state 도 함께)
+    EventImageRow findImageRow(@Param("imageId") Long imageId);
 }

@@ -11,6 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.YearMonth; // 날짜 계산을 위해 필요
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -30,6 +32,7 @@ public class EventServiceImpl implements EventService {
         log.info("조회 기간 변환: {} ~ {} -> {} ~ {}", from, to, formattedFrom, formattedTo);
 
         List<EventDataResponse> events = eventMapper.findEventsByPeriod(formattedFrom, formattedTo);
+        attachImages(events);
         return new EventPageResponse("일정 목록을 성공적으로 불러왔습니다.", events);
     }
 
@@ -39,7 +42,34 @@ public class EventServiceImpl implements EventService {
         if (event == null) {
             throw new EventException("해당 일정을 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
         }
+        attachImages(List.of(event));
         return new EventResponse("일정 상세 정보를 성공적으로 불러왔습니다.", event);
+    }
+
+    /** 일정들의 이미지를 한 번의 쿼리로 받아 각 일정에 붙인다 (없으면 빈 목록 그대로) */
+    private void attachImages(List<EventDataResponse> events) {
+        if (events == null || events.isEmpty()) {
+            return;
+        }
+        List<Long> ids = events.stream().map(EventDataResponse::getEventId).toList();
+        Map<Long, List<EventImageResponse>> byEvent = eventMapper.findImagesByEventIds(ids).stream()
+                .collect(Collectors.groupingBy(EventImageRow::getEventId,
+                        Collectors.mapping(EventServiceImpl::toImageResponse, Collectors.toList())));
+        events.forEach(e -> e.setImages(byEvent.getOrDefault(e.getEventId(), List.of())));
+    }
+
+    public static EventImageResponse toImageResponse(EventImageRow row) {
+        return new EventImageResponse(row.getImageId(), "/api/event/images/" + row.getImageId(), row.getFileName());
+    }
+
+    @Override
+    public EventImageRow getImageForDownload(Long imageId) {
+        EventImageRow row = eventMapper.findImageRow(imageId);
+        // 없는 이미지 · 지운 이미지 · 지운 일정의 이미지는 전부 404 로 통일 (존재 여부를 알리지 않는다)
+        if (row == null || !"normal".equals(row.getState()) || !"normal".equals(row.getEventState())) {
+            throw new EventException("존재하지 않는 이미지입니다.", HttpStatus.NOT_FOUND);
+        }
+        return row;
     }
 
     @Override
@@ -94,9 +124,16 @@ public class EventServiceImpl implements EventService {
             // UID 는 일정마다 고정 — 같은 UID 로 다시 내려가면 구글이 "수정"으로 인식한다
             line(sb, "UID:pilsa-event-" + row.getEventId() + "@pilsagraphy");
             line(sb, "DTSTAMP:" + row.getDtstamp());
-            // 시각 없는 종일 일정. DTEND 는 배타적이라 SQL 에서 종료일 + 1일로 만들어 온다
-            line(sb, "DTSTART;VALUE=DATE:" + row.getStartDate());
-            line(sb, "DTEND;VALUE=DATE:" + row.getEndDateExclusive());
+            if (Boolean.FALSE.equals(row.getAllDay())) {
+                // 시각이 있는 일정. UTC(Z)로 적는다 — TZID 를 쓰려면 VTIMEZONE 정의가 따라야 하는데
+                // 그것 없이 TZID 만 보내면 일부 캘린더 앱이 시각을 어긋나게 읽는다
+                line(sb, "DTSTART:" + row.getStartUtc());
+                line(sb, "DTEND:" + row.getEndUtc());
+            } else {
+                // 시각 없는 종일 일정. DTEND 는 배타적이라 SQL 에서 종료일 + 1일로 만들어 온다
+                line(sb, "DTSTART;VALUE=DATE:" + row.getStartDate());
+                line(sb, "DTEND;VALUE=DATE:" + row.getEndDateExclusive());
+            }
             line(sb, "SUMMARY:" + escapeIcs(row.getTitle()));
             if (row.getCategory() != null && !row.getCategory().isBlank()) {
                 line(sb, "CATEGORIES:" + escapeIcs(row.getCategory()));

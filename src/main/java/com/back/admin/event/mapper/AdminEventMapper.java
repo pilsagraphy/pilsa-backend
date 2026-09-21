@@ -1,5 +1,6 @@
 package com.back.admin.event.mapper;
 
+import com.back.event.dto.EventImageRow;
 import com.back.event.dto.EventRequest;
 import com.back.event.dto.EventUpdateRequest;
 import org.apache.ibatis.annotations.Mapper;
@@ -27,4 +28,16 @@ public interface AdminEventMapper {
 
     // 5. 일정 존재 확인 (수정 시 404 를 카테고리 400 보다 먼저 판정하기 위함)
     boolean existsEvent(@Param("eventId") Long eventId);
+
+    // 6. 일정 이미지 등록 — image_id 를 row 에 채워 돌려준다
+    void insertImage(@Param("row") EventImageRow row, @Param("sortOrder") int sortOrder);
+
+    // 7. 일정의 살아 있는 이미지 수 (장수 제한용)
+    int countImages(@Param("eventId") Long eventId);
+
+    // 8. 이미지 한 장 — 삭제 전 확인 (이 일정 소속인지 함께)
+    EventImageRow findImage(@Param("eventId") Long eventId, @Param("imageId") Long imageId);
+
+    // 9. 이미지 소프트 삭제
+    int softDeleteImage(@Param("imageId") Long imageId);
 }
