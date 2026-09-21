@@ -115,15 +115,9 @@ public class GoogleCalendarClient {
         return body;
     }
 
+    // 설명은 세부 사항 그대로 — 예전엔 앞에 "[기타]" 처럼 카테고리를 붙였는데 사용자 캘린더에서는 군더더기다 (PM, 2026-09-21)
     private String buildDescription(EventCalendarRow event) {
-        StringBuilder sb = new StringBuilder();
-        if (event.getCategory() != null && !event.getCategory().isBlank()) {
-            sb.append("[").append(event.getCategory()).append("]\n");
-        }
-        if (event.getDescription() != null) {
-            sb.append(event.getDescription());
-        }
-        return sb.toString();
+        return event.getDescription() == null ? "" : event.getDescription();
     }
 
     /** yyyyMMdd'T'HHmmss → yyyy-MM-dd'T'HH:mm:ss (구글 dateTime 형식. 지역은 timeZone 으로 따로 준다) */
