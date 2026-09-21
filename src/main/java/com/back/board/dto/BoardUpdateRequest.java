@@ -37,6 +37,9 @@ public class BoardUpdateRequest {
     @Schema(description = "카테고리 ID. '중요' 카테고리를 고르면 상단 고정됩니다(관리자만)")
     private Long categoryId;
 
+    // 알림 보내기 여부 — '중요' 글일 때 관리자가 정한다. null 이면 기본 규칙(등록: 보냄 / 수정: 새로 중요가 됐을 때만)
+    private Boolean notify;
+
     @Schema(description = "새로 추가할 첨부파일 (선택). 기존 첨부는 유지됩니다",
             requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
     private List<MultipartFile> files;

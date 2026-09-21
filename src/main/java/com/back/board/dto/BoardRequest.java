@@ -42,6 +42,9 @@ public class BoardRequest {
             requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
     private Long categoryId;
 
+    // 알림 보내기 여부 — '중요' 글일 때 관리자가 정한다. null 이면 기본 규칙(등록: 보냄 / 수정: 새로 중요가 됐을 때만)
+    private Boolean notify;
+
     @Schema(description = "첨부파일 목록 (선택). 발행 시점에 함께 올리는 방식 — 선업로드(attachmentIds)와 병행 가능",
             requiredMode = Schema.RequiredMode.NOT_REQUIRED, nullable = true)
     private List<MultipartFile> files;

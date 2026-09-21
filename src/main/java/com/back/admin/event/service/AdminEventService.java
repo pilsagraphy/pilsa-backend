@@ -50,6 +50,7 @@ public class AdminEventService {
     private final FileStorageUtil fileStorageUtil;
     private final NotificationPublisher notificationPublisher;
     private final NotificationMapper notificationMapper;
+    private final com.back.event.mapper.EventMapper eventMapper;
 
     private static final String[] WEEKDAYS_KO = {"월", "화", "수", "목", "금", "토", "일"};
 
@@ -73,14 +74,16 @@ public class AdminEventService {
         }
     }
 
-    /** 새 일정 알림 — 회원 전원. 실패해도 등록은 되돌리지 않는다 (알림은 부가 기능) */
-    private void notifyNewEvent(Long eventId, EventRequest request) {
+    /** 일정 알림 — 회원 전원. 실패해도 등록·수정은 되돌리지 않는다 (알림은 부가 기능). edited 면 "(수정)" 을 붙인다 */
+    private void notifyEvent(Long eventId, boolean edited) {
         try {
+            com.back.event.dto.EventDataResponse event = eventMapper.findEventById(eventId);
+            if (event == null) return;
             // 제목 "[구분] 일정 제목", 본문은 기간. 이모지는 푸시에서만 붙인다 (알림함은 아이콘)
-            String category = request.getCategory() == null ? "" : "[" + request.getCategory() + "] ";
-            String title = category + request.getTitle();
-            String message = formatPeriod(request.getStartDate(), request.getEndDate(),
-                    request.getStartTime(), request.getEndTime());
+            String category = event.getCategory() == null ? "" : "[" + event.getCategory() + "] ";
+            String title = (edited ? "(수정) " : "") + category + event.getTitle();
+            String message = formatPeriod(event.getStartDate(), event.getEndDate(),
+                    event.getStartTime(), event.getEndTime());
             String finalTitle = title.length() > 100 ? title.substring(0, 97) + "…" : title;
             for (Long receiverId : notificationMapper.findAllActiveUserIds()) {
                 notificationPublisher.publish(receiverId, NotificationType.EVENT, "event", eventId, null,
@@ -214,8 +217,10 @@ public class AdminEventService {
 
         Long eventId = request.getEventId();
         afterCommit(() -> calendarSyncService.onEventCreated(eventId));
-        // 회원 전원에게 알림 (PM, 2026-09-21)
-        notifyNewEvent(eventId, request);
+        // 회원 전원에게 알림 — 관리자가 '알림 보내기'를 끄면 안 보낸다 (PM, 2026-09-21)
+        if (!Boolean.FALSE.equals(request.getNotify())) {
+            notifyEvent(eventId, false);
+        }
 
         Map<String, Object> data = new HashMap<>();
         data.put("eventId", eventId);
@@ -273,6 +278,11 @@ public class AdminEventService {
         }
 
         afterCommit(() -> calendarSyncService.onEventUpdated(eventId));
+
+        // 수정 알림은 관리자가 켰을 때만 — "(수정)" 을 붙여 보낸다
+        if (Boolean.TRUE.equals(request.getNotify())) {
+            notifyEvent(eventId, true);
+        }
 
         Map<String, Object> data = new HashMap<>();
         data.put("eventId", eventId);

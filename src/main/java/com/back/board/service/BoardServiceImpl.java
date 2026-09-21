@@ -263,9 +263,9 @@ public class BoardServiceImpl implements BoardService {
             attachmentService.syncInlineAttachments(request.getPostId(), request.getContent());
         }
 
-        // '중요' 로 올라온 글은 열람 가능한 회원 전원에게 알린다 (PM, 2026-09-21)
-        if (pinned) {
-            notifyPinnedPost(policy, request.getPostId(), boardId, userId);
+        // '중요' 로 올라온 글은 열람 가능한 회원 전원에게 알린다 — 관리자가 '알림 보내기'를 끄면 안 보낸다 (PM, 2026-09-21)
+        if (pinned && !Boolean.FALSE.equals(request.getNotify())) {
+            notifyPinnedPost(policy, request.getPostId(), boardId, userId, false);
         }
 
         // 생성 PK 반환 — 프론트가 등록 직후 상세 페이지로 이동하는 데 필요
@@ -276,13 +276,15 @@ public class BoardServiceImpl implements BoardService {
      * 중요 글 알림 — 그 게시판을 열람할 수 있는 회원 전원(작성자 제외).
      * 댓글 알림과 같은 규칙으로 실패는 삼킨다(알림이 글 등록을 되돌리면 안 된다). 푸시는 @Async 라 여기서 기다리지 않는다
      */
-    private void notifyPinnedPost(BoardPolicy policy, Long postId, Long boardId, Long authorId) {
+    private void notifyPinnedPost(BoardPolicy policy, Long postId, Long boardId, Long authorId, boolean edited) {
         try {
             Map<String, Object> context = boardMapper.findPostNotificationContext(postId);
             // 제목 "[게시판] 글 제목", 본문은 글 앞부분 미리보기(마크다운 걷어냄). 이모지는 푸시에서만 붙인다 (알림함은 아이콘)
+            // 수정으로 다시 보내는 알림은 "(수정)" 을 앞에 붙여 새 글과 구분한다
+            String prefix = edited ? "(수정) " : "";
             String title = context == null
-                    ? NotificationType.PINNED_POST.defaultTitle()
-                    : "[" + context.get("boardName") + "] " + context.get("postTitle");
+                    ? prefix + NotificationType.PINNED_POST.defaultTitle()
+                    : prefix + "[" + context.get("boardName") + "] " + context.get("postTitle");
             String finalTitle = truncate(title, NOTIFICATION_TITLE_MAX);
             String message = context == null
                     ? "중요 글이 올라왔어요."
@@ -361,8 +363,9 @@ public class BoardServiceImpl implements BoardService {
             request.setIsAnonymous(false);
         }
         boolean pinned = resolvePinned(policy, request.getCategoryId());
-        // 수정으로 '중요'가 새로 붙는 경우에만 알린다 — 이미 중요였던 글을 고칠 때마다 알리면 시끄럽다
+        // 알림은 관리자가 정한다(notify). 안 보내오면(구버전) 새로 중요가 붙을 때만 — 이미 중요였던 글을 고칠 때마다 알리면 시끄럽다
         boolean newlyPinned = pinned && !boardMapper.isPostPinned(postId);
+        boolean sendPinnedNotice = pinned && (request.getNotify() != null ? request.getNotify() : newlyPinned);
 
         // 고치기 전 문장을 남긴다 (신고·조치 검토용). 실패해도 수정은 진행된다
         contentRevisionService.snapshot("post", postId, ContentRevisionService.TRIGGER_EDIT, currentUserId);
@@ -372,8 +375,8 @@ public class BoardServiceImpl implements BoardService {
             // state != normal (블라인드/삭제) 이거나 존재하지 않는 글
             throw new BoardException("수정할 수 없는 게시글입니다.", HttpStatus.NOT_FOUND);
         }
-        if (newlyPinned) {
-            notifyPinnedPost(policy, postId, boardId, authorId);
+        if (sendPinnedNotice) {
+            notifyPinnedPost(policy, postId, boardId, authorId, !newlyPinned);
         }
 
         // 첨부는 증분 처리: 지운 것만 소프트삭제하고, 새로 올린 것만 추가한다
