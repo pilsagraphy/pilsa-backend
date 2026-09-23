@@ -12,6 +12,12 @@
         description,
         DATE_FORMAT(start_at, '%Y%m%d')                          AS startDate,
         DATE_FORMAT(DATE_ADD(end_at, INTERVAL 1 DAY), '%Y%m%d')  AS endDateExclusive,
+        <!-- 종일 여부. 별도 컬럼 없이 시각으로 판단한다 (시각을 지정한 일정은 종료가 00:00 일 수 없다) -->
+        (TIME(start_at) = '00:00:00' AND TIME(end_at) = '00:00:00') AS allDay,
+        DATE_FORMAT(start_at, '%Y%m%dT%H%i%s')                   AS startDateTime,
+        DATE_FORMAT(end_at,   '%Y%m%dT%H%i%s')                   AS endDateTime,
+        DATE_FORMAT(CONVERT_TZ(start_at, '+09:00', '+00:00'), '%Y%m%dT%H%i%sZ') AS startUtc,
+        DATE_FORMAT(CONVERT_TZ(end_at,   '+09:00', '+00:00'), '%Y%m%dT%H%i%sZ') AS endUtc,
         DATE_FORMAT(CONVERT_TZ(updated_at, '+09:00', '+00:00'), '%Y%m%dT%H%i%sZ') AS dtstamp
     </sql>
 
@@ -23,12 +29,13 @@
     </select>
 
     <!-- 연동 직후 초기 동기화.
-         지난 일정까지 넣으면 사용자 캘린더가 과거 기록으로 지저분해지므로 아직 안 끝난 것만 넣는다 -->
+         아직 안 끝난 일정 + 최근 30일 안에 끝난 일정까지 넣는다 — 재연동한 사람이 방금 지난 OT 같은 기록도 보고 싶어 한다 (PM, 2026-09-24).
+         그보다 오래된 것은 캘린더를 과거 기록으로 지저분하게 만들어 제외 -->
     <select id="findUpcomingEventsForSync" resultType="com.back.event.dto.EventCalendarRow">
         SELECT <include refid="calendarRowColumns"/>
         FROM events
         WHERE state = 'normal'
-          AND end_at >= CURDATE()
+          AND end_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
         ORDER BY start_at ASC, event_id ASC
     </select>
 
