@@ -13,6 +13,14 @@
             auth_secret = new.auth_secret
     </insert>
 
+    <!-- 구독 교체: 옛 endpoint 행의 주소·키를 새 것으로. 새 endpoint 가 이미 다른 행으로 있으면(UNIQUE) 옛 행을 지워 충돌을 피한다 -->
+    <update id="rotateEndpoint">
+        UPDATE notification_devices
+        SET endpoint = #{endpoint}, p256dh = #{p256dh}, auth_secret = #{authSecret}
+        WHERE endpoint = #{oldEndpoint}
+          AND NOT EXISTS (SELECT 1 FROM (SELECT 1 FROM notification_devices WHERE endpoint = #{endpoint}) AS dup)
+    </update>
+
     <delete id="deleteByEndpoint">
         DELETE FROM notification_devices
         WHERE user_id = #{userId}

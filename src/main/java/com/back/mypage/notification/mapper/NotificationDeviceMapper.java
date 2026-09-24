@@ -32,6 +32,10 @@ public interface NotificationDeviceMapper {
     /** 화면 응답용 — 암호화 키 없이 endpoint·등록일시만 */
     List<NotificationDeviceSummary> findSummaryByUserId(@Param("userId") Long userId);
 
+    /** 브라우저가 구독을 갈아 끼웠을 때(pushsubscriptionchange) 옛 endpoint 행을 새 구독으로 교체. 옛 행이 없으면 0 */
+    int rotateEndpoint(@Param("oldEndpoint") String oldEndpoint, @Param("endpoint") String endpoint,
+                       @Param("p256dh") String p256dh, @Param("authSecret") String authSecret);
+
     /** 발송 응답이 404/410(수신 거부·앱 삭제)이면 즉시 정리 */
     void deleteById(@Param("deviceId") Long deviceId);
 
