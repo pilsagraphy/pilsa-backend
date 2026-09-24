@@ -20,6 +20,11 @@ configurations {
     }
 }
 
+// 소스에 한글 주석·문자열이 많다. javac 기본 인코딩은 OS 마다 달라(윈도우 MS949) 빌드하는 곳에 따라 깨지므로 고정한다
+tasks.withType(JavaCompile).configureEach {
+	options.encoding = 'UTF-8'
+}
+
 repositories {
     mavenCentral()
 }
@@ -46,6 +51,10 @@ dependencies {
 
     // 스웨거 UI페이지
     implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.5"
+
+    // 웹 푸시 (알림 기기로 발송 — VAPID 서명·페이로드 암호화 RFC 8291)
+    implementation 'nl.martijndwars:web-push:5.1.1'
+    implementation 'org.bouncycastle:bcprov-jdk18on:1.78.1'
 }
 
 tasks.named('test') {

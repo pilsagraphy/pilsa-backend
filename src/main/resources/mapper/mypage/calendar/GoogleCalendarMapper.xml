@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.mypage.calendar.mapper.GoogleCalendarMapper">
+
+    <sql id="linkColumns">
+        user_id        AS userId,
+        google_email   AS googleEmail,
+        refresh_token  AS refreshToken,
+        scopes,
+        calendar_id    AS calendarId,
+        linked_at      AS linkedAt,
+        last_synced_at AS lastSyncedAt
+    </sql>
+
+    <select id="findByUserId" resultType="com.back.mypage.calendar.dto.GoogleCalendarLink">
+        SELECT <include refid="linkColumns"/>
+        FROM user_google_calendar
+        WHERE user_id = #{userId}
+    </select>
+
+    <!-- 팬아웃 대상.
+         탈퇴 회원 캘린더에까지 일정을 밀어 넣지 않도록 users 와 조인해 거른다 -->
+    <select id="findAllLinked" resultType="com.back.mypage.calendar.dto.GoogleCalendarLink">
+        SELECT
+            c.user_id        AS userId,
+            c.google_email   AS googleEmail,
+            c.refresh_token  AS refreshToken,
+            c.scopes,
+            c.calendar_id    AS calendarId,
+            c.linked_at      AS linkedAt,
+            c.last_synced_at AS lastSyncedAt
+        FROM user_google_calendar c
+        JOIN users u ON u.user_id = c.user_id
+        WHERE u.is_deleted = 0
+    </select>
+
+    <!-- 재연동 시 토큰을 갈아끼운다.
+         구글이 refresh token 을 안 줄 때가 있어(이미 동의한 계정) NULL 이면 기존 값을 유지한다 -->
+    <insert id="upsertLink">
+        INSERT INTO user_google_calendar (user_id, google_email, refresh_token, scopes, calendar_id, linked_at)
+        VALUES (#{userId}, #{googleEmail}, #{refreshToken}, #{scopes}, COALESCE(#{calendarId}, 'primary'), NOW())
+        ON DUPLICATE KEY UPDATE
+            google_email  = VALUES(google_email),
+            refresh_token = COALESCE(VALUES(refresh_token), refresh_token),
+            scopes        = VALUES(scopes),
+            calendar_id   = VALUES(calendar_id),
+            linked_at     = NOW()
+    </insert>
+
+    <update id="updateLastSyncedAt">
+        UPDATE user_google_calendar
+           SET last_synced_at = NOW()
+         WHERE user_id = #{userId}
+    </update>
+
+    <delete id="deleteByUserId">
+        DELETE FROM user_google_calendar WHERE user_id = #{userId}
+    </delete>
+
+</mapper>

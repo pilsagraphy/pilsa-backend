@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.stats.signup.mapper.StatsSignupMapper">
+
+    <!-- 주 시작일은 WEEKDAY() 로 월요일에 맞춘다 (WEEKDAY: 월=0 … 일=6).
+         탈퇴 회원(is_deleted=1)도 세는 것이 의도다 — "그 주에 몇 명이 가입했나"는 나중 탈퇴로 바뀌지 않는다. -->
+    <select id="aggregateSignupsSince" resultType="com.back.stats.signup.dto.SignupWeekRow">
+        SELECT DATE_SUB(DATE(u.created_at), INTERVAL WEEKDAY(u.created_at) DAY) AS statWeek,
+               COUNT(*)                                       AS signupCount,
+               SUM(u.member_type = 'STUDENT')                  AS studentCount,
+               SUM(u.member_type = 'ALUMNI')                   AS alumniCount
+        FROM users u
+        WHERE u.created_at &gt;= #{fromWeekStart}
+        GROUP BY statWeek
+    </select>
+
+    <insert id="upsertWeeklySignups">
+        INSERT INTO stats_signup_weekly (stat_week, signup_count, student_count, alumni_count, captured_at)
+        VALUES
+        <foreach collection="rows" item="r" separator=",">
+            (#{r.statWeek}, #{r.signupCount}, #{r.studentCount}, #{r.alumniCount}, NOW())
+        </foreach>
+        AS new
+        ON DUPLICATE KEY UPDATE
+            signup_count  = new.signup_count,
+            student_count = new.student_count,
+            alumni_count  = new.alumni_count,
+            captured_at   = new.captured_at
+    </insert>
+
+</mapper>

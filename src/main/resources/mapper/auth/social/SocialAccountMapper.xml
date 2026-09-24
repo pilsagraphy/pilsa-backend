@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.auth.social.mapper.SocialAccountMapper">
+
+    <sql id="accountColumns">
+        id,
+        user_id          AS userId,
+        provider,
+        provider_user_id AS providerUserId,
+        provider_email   AS providerEmail,
+        linked_at        AS linkedAt
+    </sql>
+
+    <!-- 소셜 로그인 진입점. 이메일이 아니라 provider + providerUserId 로 찾는다 -->
+    <select id="findByProviderUser" resultType="com.back.auth.social.dto.UserSocialAccount">
+        SELECT <include refid="accountColumns"/>
+        FROM user_social_accounts
+        WHERE provider = #{provider}
+          AND provider_user_id = #{providerUserId}
+    </select>
+
+    <select id="findByUserAndProvider" resultType="com.back.auth.social.dto.UserSocialAccount">
+        SELECT <include refid="accountColumns"/>
+        FROM user_social_accounts
+        WHERE user_id = #{userId}
+          AND provider = #{provider}
+    </select>
+
+    <select id="findByUserId" resultType="com.back.auth.social.dto.UserSocialAccount">
+        SELECT <include refid="accountColumns"/>
+        FROM user_social_accounts
+        WHERE user_id = #{userId}
+        ORDER BY linked_at ASC
+    </select>
+
+    <!-- uq_user_provider 에 걸리면 계정만 갈아끼운다 (구글 계정을 바꿔 연결하는 경우) -->
+    <insert id="upsertLink">
+        INSERT INTO user_social_accounts (user_id, provider, provider_user_id, provider_email, linked_at)
+        VALUES (#{userId}, #{provider}, #{providerUserId}, #{providerEmail}, NOW())
+        ON DUPLICATE KEY UPDATE
+            provider_user_id = VALUES(provider_user_id),
+            provider_email   = VALUES(provider_email),
+            linked_at        = NOW()
+    </insert>
+
+    <delete id="deleteByUserAndProvider">
+        DELETE FROM user_social_accounts
+        WHERE user_id = #{userId} AND provider = #{provider}
+    </delete>
+
+    <delete id="deleteByUserId">
+        DELETE FROM user_social_accounts WHERE user_id = #{userId}
+    </delete>
+
+</mapper>

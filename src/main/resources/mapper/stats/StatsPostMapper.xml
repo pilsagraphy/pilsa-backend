@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.stats.trending.mapper.StatsPostMapper">
+
+    <!-- 후보 선정. 좋아요/댓글은 상관 서브쿼리로 센다 —
+         댓글은 공개 댓글(state='normal' AND is_private=0)만 센다: 블라인드·삭제·비밀댓글이 급상승을 밀어올리면
+         조치가 오히려 노출을 키우는 역효과가 난다. -->
+    <select id="findCandidates" resultType="com.back.stats.trending.dto.TrendingCandidate">
+        SELECT p.post_id      AS postId,
+               p.board_id     AS boardId,
+               b.read_scope   AS readScope,
+               p.created_at   AS createdAt,
+               p.view_count   AS viewCount,
+               (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.post_id) AS likeCount,
+               (SELECT COUNT(*) FROM comments c
+                 WHERE c.post_id = p.post_id
+                   AND c.state = 'normal'
+                   AND c.is_private = 0) AS commentCount
+        FROM posts p
+        JOIN boards b ON b.board_id = p.board_id
+        WHERE p.state = 'normal'
+          AND b.state = 'normal'
+          AND b.trending_enabled = 1
+          AND p.created_at &gt;= DATE_SUB(#{until}, INTERVAL #{maxAgeHours} HOUR)
+          AND p.created_at &lt; #{until}
+    </select>
+
+    <!-- 직전 이력: 구간 시작 이전 행만 최신순으로 N개 잘라서(rn &lt;= windows)
+         · rn=1 행의 누적값 → 증가분 기준선
+         · N개 raw_score 합 → baseline_score = 합/N (행 평균 AVG 금지: 조용했던 구간은 행이 없으므로
+           AVG 는 "활동한 구간들의 평균"이 되어 평소 수준을 과대평가하고 급상승을 놓친다)
+         행이 하나도 없으면 결과에서 빠진다 → 호출부가 첫 등장(COALESCE 0)으로 처리한다. -->
+    <select id="findHistories" resultType="com.back.stats.trending.dto.PostStatHistory">
+        SELECT t.post_id                                        AS postId,
+               MAX(CASE WHEN t.rn = 1 THEN t.view_count    END) AS lastViewCount,
+               MAX(CASE WHEN t.rn = 1 THEN t.like_count    END) AS lastLikeCount,
+               MAX(CASE WHEN t.rn = 1 THEN t.comment_count END) AS lastCommentCount,
+               COUNT(*)                                         AS windowRowCount,
+               COALESCE(SUM(t.raw_score), 0)                     AS windowScoreSum
+        FROM (
+            SELECT s.post_id,
+                   s.view_count,
+                   s.like_count,
+                   s.comment_count,
+                   s.raw_score,
+                   ROW_NUMBER() OVER (PARTITION BY s.post_id ORDER BY s.stat_hour DESC) AS rn
+            FROM stats_post_hourly s
+            WHERE s.stat_hour &lt; #{before}
+              AND s.post_id IN
+              <foreach collection="postIds" item="postId" open="(" separator="," close=")">
+                  #{postId}
+              </foreach>
+        ) t
+        WHERE t.rn &lt;= #{windows}
+        GROUP BY t.post_id
+    </select>
+
+    <!-- 같은 구간 재실행 시 행이 늘지 않고 값만 덮인다(PK = stat_hour + post_id) -->
+    <insert id="upsertPostStats">
+        INSERT INTO stats_post_hourly
+            (stat_hour, post_id, board_id, read_scope,
+             view_count, like_count, comment_count,
+             view_delta, like_delta, comment_delta,
+             raw_score, baseline_score, spike_ratio, freshness, final_score,
+             rank_no, is_trending)
+        VALUES
+        <foreach collection="rows" item="r" separator=",">
+            (#{r.statHour}, #{r.postId}, #{r.boardId}, #{r.readScope},
+             #{r.viewCount}, #{r.likeCount}, #{r.commentCount},
+             #{r.viewDelta}, #{r.likeDelta}, #{r.commentDelta},
+             #{r.rawScore}, #{r.baselineScore}, #{r.spikeRatio}, #{r.freshness}, #{r.finalScore},
+             #{r.rankNo}, #{r.isTrending})
+        </foreach>
+        AS new
+        ON DUPLICATE KEY UPDATE
+            board_id       = new.board_id,
+            read_scope     = new.read_scope,
+            view_count     = new.view_count,
+            like_count     = new.like_count,
+            comment_count  = new.comment_count,
+            view_delta     = new.view_delta,
+            like_delta     = new.like_delta,
+            comment_delta  = new.comment_delta,
+            raw_score      = new.raw_score,
+            baseline_score = new.baseline_score,
+            spike_ratio    = new.spike_ratio,
+            freshness      = new.freshness,
+            final_score    = new.final_score,
+            rank_no        = new.rank_no,
+            is_trending    = new.is_trending
+    </insert>
+
+    <delete id="deleteOlderThan">
+        DELETE FROM stats_post_hourly
+        WHERE stat_hour &lt; DATE_SUB(NOW(), INTERVAL #{retentionDays} DAY)
+    </delete>
+
+</mapper>

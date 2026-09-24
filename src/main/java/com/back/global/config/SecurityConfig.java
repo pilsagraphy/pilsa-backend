@@ -37,24 +37,65 @@ public class SecurityConfig {
                 // 누구나 접근
                 .requestMatchers(
                     "/api/auth/**",
-                    "/api/public/**",
+                    // 비로그인 공개 리소스 (기존 /api/public/** 접두사 폐지 → 리소스 경로로 명시)
+                    "/api/donations",        // 명예의전당
+                    "/api/quotes/current",   // 이 주의 문장
+                    "/api/event",              // 일정(캘린더) 조회
+                    // /api/event 하위는 전부 비로그인 공개다 — 일정 상세, 카테고리 목록,
+                    // 구글 캘린더 구독 피드(구글 서버가 인증 없이 가져감), 일정 1건 ICS.
+                    // 관리 기능은 /api/admin/event 에 따로 있으므로 여기서 열어도 노출되지 않는다.
+                    // ("/api/event" 는 정확히 그 경로만 매칭하고 하위를 포함하지 않는다)
+                    "/api/event/**",
+                    // 게시판 "목록"만 비로그인 공개 — 어떤 게시판이 있는지는 보여주고,
+                    // 실제 글 목록·상세(/api/user/boards/{id}/**)는 여전히 로그인이 필요하다.
+                    // ("/api/user/boards" 는 정확히 그 경로만 매칭하고 하위를 포함하지 않는다)
+                    "/api/user/boards",
+                    // 구글 캘린더 연동 콜백 — 구글이 브라우저 리다이렉트로 부르므로 Authorization 헤더가 없다.
+                    // 사용자 식별과 CSRF 방어는 state 파라미터로 한다 (OAuthStateService).
+                    // /api/user/mypage/** 아래에 있지만 이 한 경로만 예외로 연다.
+                    "/api/user/mypage/calendar/google/callback",
                     "/api/mail/**", // 인증번호 관련
                     "/swagger-ui/**", // 스웨거 관련
                     "/v3/api-docs/**", // 스웨거 관련
-                    "/uploads/**" // 파일 경로
+                    // 첨부 정적 서빙(/uploads/**) 공개는 폐지(2026-08-23 PM 결정) — 예측 가능한
+                    // 원본 파일명 경로로 비로그인 열람이 가능해 read_scope 판정이 통째로 우회됐다.
+                    // 첨부 접근은 인증형 GET /api/user/files/{fileId} 만. 명예의전당 사진만 공개 유지
+                    "/uploads/Honor/**" // 명예의전당 사진 (공개 화면 전용 시드 이미지)
                 ).permitAll()
                 
-                // 역할별 접근
+                // 관리자 화면 전용 경로만 URL 레벨에서 막는다 (admin_level>=1 → ROLE_ADMIN)
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                .requestMatchers("/api/stu/**").hasAnyRole("STUDENTS", "ADMIN", "ALUMNI") // ALUMNI는 임시!
-                .requestMatchers("/api/alu/**").hasAnyRole("ALUMNI", "ADMIN")
-                
+
+                // 그 외 회원 기능(게시판 쓰기, /api/user/reports, /api/user/mypage/** ...)은
+                // "로그인 여부"만 URL에서 확인하고, 실제 접근 가능 여부는 데이터로 판정한다.
+                //  - 게시판: boards.read_scope(열람 대상) / boards.write_level(작성 최소 관리레벨)
+                //  - 그 외 : 각 서비스가 AuthUtils 로 신분·관리레벨을 확인
+                // 신분(재학생/졸업생)을 URL 접두사로 가르지 않는 이유: 관리자가 런타임에 만든 게시판의
+                // 열람 대상을 정적 URL 패턴으로는 표현할 수 없기 때문이다.
+
                 // 그 외는 로그인 필요
                 .anyRequest().authenticated()
             )
+            // 미인증(토큰 누락/무효)과 권한 부족을 구분해서 응답
+            //  - 기본 EntryPoint는 미인증도 403으로 떨어져서 "로그인했는데 왜 403?" 혼선을 유발
+            //    (특히 multipart 게시글 등록에서 Authorization 헤더가 빠질 때) → 401로 명확히 구분
+            // 에러 응답은 항상 {"message": ...} JSON — sendError는 기본 설정에서 메시지가 본문에 실리지 않아 계약 위반
+            .exceptionHandling(ex -> ex
+                .authenticationEntryPoint((request, response, authException) -> {
+                    response.setHeader("WWW-Authenticate", "Bearer");
+                    response.setStatus(jakarta.servlet.http.HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setContentType("application/json;charset=UTF-8");
+                    response.getWriter().write("{\"message\":\"인증이 필요합니다. (Authorization 헤더 누락 또는 유효하지 않은 토큰)\"}");
+                })
+                .accessDeniedHandler((request, response, accessDeniedException) -> {
+                    response.setStatus(jakarta.servlet.http.HttpServletResponse.SC_FORBIDDEN);
+                    response.setContentType("application/json;charset=UTF-8");
+                    response.getWriter().write("{\"message\":\"접근 권한이 없습니다.\"}");
+                })
+            )
             // 필터 입히기
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
-        
+
         return http.build();
     }
     
@@ -64,80 +105,3 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 }
-
-//package com.blue.global.config;
-//
-//import org.springframework.context.annotation.Bean;
-//import org.springframework.context.annotation.Configuration;
-//import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-//import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-//import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-//import org.springframework.security.config.http.SessionCreationPolicy;
-//import org.springframework.security.crypto.password.PasswordEncoder;
-//import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-//import org.springframework.security.web.SecurityFilterChain;
-//import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-//import com.blue.global.security.JwtAuthenticationFilter;
-//import static org.springframework.security.config.Customizer.withDefaults;
-//
-//@Configuration
-//@EnableWebSecurity
-/// / 스프링 시큐리티 설정
-//public class SecurityConfig {
-//
-//  private final JwtAuthenticationFilter jwtFilter;
-//
-//  public SecurityConfig(JwtAuthenticationFilter jwtFilter) {
-//    this.jwtFilter = jwtFilter;
-//  }
-//
-//  @Bean
-//  // 시큐리티 필터
-//  public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-//    http
-//        .cors(withDefaults())
-//        .csrf(AbstractHttpConfigurer::disable) // JWT 사용할 예정: CSRF 비활성(운영도 JWT면 보통 disable)
-//        .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-//        .authorizeHttpRequests(auth -> auth
-//            // 모든 권한
-//            .requestMatchers(
-//                "/actuator/health",
-//                "/api/auth/**",
-//                "/api/mail/**").permitAll()
-//
-//            // 로그인한 사람만
-//            .requestMatchers(
-//                "/api/ping",
-//                "/api/common/**",
-//                "/api/work/**",
-//                "/api/info/**",
-//                "/api/sheets/**").authenticated()
-//
-//            // 리드(슈퍼+매니저) 전용 DB API
-//            .requestMatchers(
-//                "/api/lead/**").hasAnyRole("SUPERADMIN","MANAGER")
-//
-//            // 본사 (최고 관리자)
-//            .requestMatchers(
-//                "/api/super/**").hasRole("SUPERADMIN")
-//
-//            // 관리자 (팀장)
-//            .requestMatchers(
-//                "/api/admin/**").hasRole("MANAGER")
-//
-//            // 직원 (일반 사용자)
-//            .requestMatchers(
-//                "/api/staff/**").hasRole("STAFF")
-//            .anyRequest().authenticated()
-//        )
-//        // 필터 입히기
-//        .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
-//    return http.build();
-//  }
-//
-//  @Bean
-//  // 비밀번호 암호화
-//  public PasswordEncoder passwordEncoder() {
-//    return new BCryptPasswordEncoder();
-//  }
-//}

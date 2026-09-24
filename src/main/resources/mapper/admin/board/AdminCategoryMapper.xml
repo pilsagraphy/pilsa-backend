@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!-- 게시판별 카테고리 관리 쿼리.
+     categories 는 (board_id, code) 와 (board_id, name) 두 유니크를 갖고, 둘 다 is_active 를 보지 않는다.
+     끈 카테고리가 이름을 쥐고 있으므로 같은 이름 재등록은 INSERT 가 아니라 되살리기로 처리한다. -->
+<mapper namespace="com.back.admin.board.mapper.AdminCategoryMapper">
+
+    <sql id="categoryColumns">
+        c.category_id  AS categoryId,
+        c.name         AS name,
+        c.code         AS code,
+        c.display_order AS displayOrder,
+        (c.code = 'PINNED') AS isPinned
+    </sql>
+
+    <!-- 관리 목록. 글 수는 지우기 전에 알아야 하는 값이라 같이 센다(살아있는 글만).
+         정렬은 회원 화면과 같아야 한다 — '중요'는 display_order=99 로 늘 맨 뒤다. -->
+    <select id="findCategories" resultType="com.back.admin.board.dto.AdminCategoryResponse">
+        SELECT <include refid="categoryColumns"/>,
+               (SELECT COUNT(*)
+                  FROM posts p
+                 WHERE p.category_id = c.category_id
+                   AND p.state = 'normal') AS postCount
+        FROM categories c
+        WHERE c.board_id = #{boardId}
+          AND c.is_active = 1
+        ORDER BY c.display_order ASC, c.category_id ASC
+    </select>
+
+    <select id="existsActiveName" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1 FROM categories
+            WHERE board_id = #{boardId}
+              AND name = #{name}
+              AND is_active = 1
+            <if test="excludeCategoryId != null">
+              AND category_id &lt;&gt; #{excludeCategoryId}
+            </if>
+        )
+    </select>
+
+    <select id="findActiveIdByName" resultType="java.lang.Long">
+        SELECT category_id
+        FROM categories
+        WHERE board_id = #{boardId}
+          AND name = #{name}
+          AND is_active = 1
+        LIMIT 1
+    </select>
+
+    <!-- 꺼진 줄이 이름을 쥐고 있으면 새로 넣을 수 없다(유니크가 is_active 를 안 본다) → 되살릴 대상 -->
+    <select id="findInactiveIdByName" resultType="java.lang.Long">
+        SELECT category_id
+        FROM categories
+        WHERE board_id = #{boardId}
+          AND name = #{name}
+          AND is_active = 0
+        LIMIT 1
+    </select>
+
+    <select id="findById" resultType="com.back.admin.board.dto.AdminCategoryResponse">
+        SELECT <include refid="categoryColumns"/>
+        FROM categories c
+        WHERE c.board_id = #{boardId}
+          AND c.category_id = #{categoryId}
+          AND c.is_active = 1
+    </select>
+
+    <insert id="insertCategory">
+        INSERT INTO categories (name, code, display_order, is_active, board_id)
+        VALUES (#{name}, #{code}, COALESCE(#{displayOrder}, 0), 1, #{boardId})
+    </insert>
+
+    <update id="reactivateCategory">
+        UPDATE categories
+           SET is_active = 1,
+               display_order = COALESCE(#{displayOrder}, display_order)
+         WHERE category_id = #{categoryId}
+    </update>
+
+    <update id="updateName">
+        UPDATE categories
+           SET name = #{name}
+         WHERE category_id = #{categoryId}
+           AND is_active = 1
+    </update>
+
+    <!-- 소프트삭제. 글의 category_id 는 그대로 두므로 되살리면 배지도 함께 돌아온다 -->
+    <update id="deactivateCategory">
+        UPDATE categories
+           SET is_active = 0
+         WHERE category_id = #{categoryId}
+           AND is_active = 1
+    </update>
+
+    <select id="countPostsByCategory" resultType="int">
+        SELECT COUNT(*)
+        FROM posts
+        WHERE category_id = #{categoryId}
+          AND state = 'normal'
+    </select>
+
+    <!-- 순번 재부여 기준. '중요'(PINNED)는 늘 맨 뒤(99)라 줄 세우기에서 뺀다 -->
+    <select id="findLiveCategoryIdsOrdered" resultType="long">
+        SELECT category_id
+        FROM categories
+        WHERE board_id = #{boardId}
+          AND is_active = 1
+          AND code &lt;&gt; 'PINNED'
+        ORDER BY display_order ASC, category_id ASC
+    </select>
+
+    <!-- 넘어온 순서 그대로 1..N 을 다시 부여한다 -->
+    <update id="applyDisplayOrder">
+        UPDATE categories
+        SET display_order = CASE category_id
+        <foreach collection="categoryIds" item="id" index="index">
+            WHEN #{id} THEN #{index} + 1
+        </foreach>
+        END
+        WHERE category_id IN
+        <foreach collection="categoryIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+</mapper>

@@ -30,8 +30,10 @@ public class OpenApiConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("Pilsa API")
-                        .version("v1.0")
-                        .description("공지사항 관리 API 명세서입니다."))
+                        .version("v2.0")
+                        .description("""
+                                필사그래피 홈페이지 백엔드 API 명세.
+                                - 도메인(태그)별로 묶여 있고, 상단 필터 입력창으로 도메인(태그)별 검색이 됩니다."""))
                 .addSecurityItem(securityRequirement) // 이 줄이 있어야 전역 자물쇠가 생깁니다.
                 .components(components);
     }

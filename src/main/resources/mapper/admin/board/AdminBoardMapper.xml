@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.admin.board.mapper.AdminBoardMapper">
+
+    <select id="countPostsByBoard" resultType="int">
+        SELECT COUNT(*) FROM posts WHERE board_id = #{boardId} AND state &lt;&gt; 'deleted'
+    </select>
+    <select id="existsBoardName" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1 FROM boards
+            WHERE name = #{name} AND state = 'normal'
+            <if test="excludeBoardId != null">AND board_id != #{excludeBoardId}</if>
+        )
+    </select>
+    <insert id="insertBoard" useGeneratedKeys="true" keyProperty="board.boardId">
+        INSERT INTO boards (name, read_scope, write_level, display_order,
+                            allow_comment, allow_attachment, category_mode,
+                            default_category_id, allow_anonymous, allow_private_comment, state)
+        VALUES (#{board.name}, #{board.readScope}, #{board.writeLevel},
+                COALESCE(#{board.displayOrder},
+                         (SELECT * FROM (SELECT COALESCE(MAX(display_order),0)+1 FROM boards WHERE state = 'normal') t)),
+                #{board.allowComment}, #{board.allowAttachment}, #{board.categoryMode},
+                #{board.defaultCategoryId}, #{board.allowAnonymous}, #{board.allowPrivateComment}, 'normal')
+    </insert>
+    <update id="updateBoard">
+        UPDATE boards
+        <set>
+            <if test="board.name != null">name = #{board.name},</if>
+            <if test="board.readScope != null">read_scope = #{board.readScope},</if>
+            <if test="board.writeLevel != null">write_level = #{board.writeLevel},</if>
+            <!-- display_order 는 여기서 쓰지 않는다 — 한 행만 바꾸면 나머지가 밀리지 않아
+                 번호에 구멍·중복이 생긴다. 순서 변경은 applyDisplayOrder 로 전체를 다시 채운다. -->
+            <if test="board.allowComment != null">allow_comment = #{board.allowComment},</if>
+            <if test="board.allowAttachment != null">allow_attachment = #{board.allowAttachment},</if>
+            <if test="board.categoryMode != null">category_mode = #{board.categoryMode},</if>
+            <if test="board.defaultCategoryId != null">default_category_id = #{board.defaultCategoryId},</if>
+            <if test="board.allowAnonymous != null">allow_anonymous = #{board.allowAnonymous},</if>
+            <if test="board.allowPrivateComment != null">allow_private_comment = #{board.allowPrivateComment},</if>
+            board_id = board_id
+        </set>
+        WHERE board_id = #{boardId} AND state = 'normal'
+    </update>
+
+    <!-- 게시판도 소프트삭제 (글/댓글이 남아 있으므로 물리삭제하지 않는다) -->
+    <update id="deleteBoard">
+        UPDATE boards SET state = 'deleted' WHERE board_id = #{boardId} AND state = 'normal'
+    </update>
+
+    <!-- 게시판 생성 시 '중요' 카테고리 자동 생성.
+         INSERT IGNORE + uq_categories_board_code 로 재실행해도 중복이 생기지 않는다(멱등). -->
+    <insert id="insertPinnedCategory">
+        INSERT IGNORE INTO categories (name, code, display_order, is_active, board_id)
+        VALUES ('중요', 'PINNED', 99, 1, #{boardId})
+    </insert>
+
+    <!-- ===================== 노출 순서 ===================== -->
+
+    <!-- 순번 재부여의 기준 목록. 회원 화면(findBoardPolicies)과 같은 정렬이어야
+         "몇 번째"라는 요청 값이 화면과 어긋나지 않는다. -->
+    <select id="findLiveBoardIdsOrdered" resultType="long">
+        SELECT board_id
+        FROM boards
+        WHERE state = 'normal'
+        ORDER BY display_order ASC, board_id ASC
+    </select>
+
+    <!-- 전달된 순서 그대로 1..N 을 다시 부여한다.
+         삭제로 생긴 구멍과 순서 변경으로 생긴 중복을 한 번에 없애, 살아있는 게시판의
+         display_order 가 항상 1..N 이 되도록 유지한다(프론트가 "몇 번째"만 보내면 되는 근거). -->
+    <update id="applyDisplayOrder">
+        UPDATE boards
+        SET display_order = CASE board_id
+            <foreach collection="boardIds" item="id" index="i">
+                WHEN #{id} THEN #{i} + 1
+            </foreach>
+            ELSE display_order END
+        WHERE board_id IN
+        <foreach collection="boardIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </update>
+
+</mapper>

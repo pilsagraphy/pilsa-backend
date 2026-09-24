@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.mypage.notification.mapper.NotificationDeviceMapper">
+
+    <!-- 같은 기기(endpoint)가 다시 등록되면 소유자·키만 갱신 (기기당 1행 유지).
+         로그아웃 후 다른 계정으로 로그인한 기기도 새 소유자로 넘어간다 -->
+    <insert id="upsertDevice">
+        INSERT INTO notification_devices (user_id, endpoint, p256dh, auth_secret)
+        VALUES (#{userId}, #{endpoint}, #{p256dh}, #{authSecret}) AS new
+        ON DUPLICATE KEY UPDATE
+            user_id = new.user_id,
+            p256dh = new.p256dh,
+            auth_secret = new.auth_secret
+    </insert>
+
+    <!-- 구독 교체: 옛 endpoint 행의 주소·키를 새 것으로. 새 endpoint 가 이미 다른 행으로 있으면(UNIQUE) 옛 행을 지워 충돌을 피한다 -->
+    <update id="rotateEndpoint">
+        UPDATE notification_devices
+        SET endpoint = #{endpoint}, p256dh = #{p256dh}, auth_secret = #{authSecret}
+        WHERE endpoint = #{oldEndpoint}
+          AND NOT EXISTS (SELECT 1 FROM (SELECT 1 FROM notification_devices WHERE endpoint = #{endpoint}) AS dup)
+    </update>
+
+    <delete id="deleteByEndpoint">
+        DELETE FROM notification_devices
+        WHERE user_id = #{userId}
+          AND endpoint = #{endpoint}
+    </delete>
+
+    <!-- 설치형 앱(TWA)이 등록할 때 같은 회원의 다른 안드로이드 기기 행 정리.
+         Apple 푸시(web.push.apple.com)는 iPhone 홈 화면 앱이라 다른 기기 — 남긴다 -->
+    <delete id="deleteOthersExceptApple">
+        DELETE FROM notification_devices
+        WHERE user_id = #{userId}
+          AND endpoint != #{endpoint}
+          AND endpoint NOT LIKE 'https://web.push.apple.com/%'
+    </delete>
+
+    <select id="findByUserId" resultType="com.back.mypage.notification.dto.NotificationDevice">
+        SELECT device_id   AS deviceId,
+               endpoint,
+               p256dh,
+               auth_secret AS authSecret
+        FROM notification_devices
+        WHERE user_id = #{userId}
+    </select>
+
+    <!-- 화면 응답용. p256dh/auth_secret 은 유출되면 그 기기로 임의 푸시를 보낼 수 있어 내려주지 않는다 -->
+    <select id="findSummaryByUserId" resultType="com.back.mypage.notification.dto.NotificationDeviceSummary">
+        SELECT endpoint,
+               DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS registeredAt
+        FROM notification_devices
+        WHERE user_id = #{userId}
+        ORDER BY created_at DESC
+    </select>
+
+    <delete id="deleteById">
+        DELETE FROM notification_devices WHERE device_id = #{deviceId}
+    </delete>
+
+    <!-- 탈퇴 시 회원의 모든 기기 해제. endpoint 는 개인 식별 주소라 남기면 안 된다 -->
+    <delete id="deleteByUserId">
+        DELETE FROM notification_devices WHERE user_id = #{userId}
+    </delete>
+
+</mapper>
