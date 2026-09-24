@@ -13,5 +13,6 @@ public class MyCommentRow {
     private Long boardId;        // 원글 이동용 (프론트 라우팅)
     private String postTitle;    // 원글 제목
     private String content;      // 댓글 내용
+    private String categoryName; // 원글의 카테고리 (없으면 null)
     private LocalDateTime created;
 }
