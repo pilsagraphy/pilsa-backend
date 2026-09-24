@@ -1,6 +1,15 @@
 name: Deploy Production
 
-# release 브랜치 push 시 운영(포트 8080, pilsa.service)에 자동 배포
+# release 브랜치 push → GitHub 호스티드 러너가 빌드해 jar 를 산출물로 올리고,
+# 서버의 셀프호스티드 러너는 그 jar 만 받아 배치·재시작한다 (2026-09-24).
+# 서버(t3.medium)에서 gradle 을 돌리면 운영 프로세스 옆에서 메모리를 크게 먹어 인스턴스를 줄일 수 없었다.
+#
+# 서버 쪽 약속:
+#   /home/ec2-user/backend-app/releases/<run_number>/app.jar  ← 배치된 jar (최근 3개 보관)
+#   /home/ec2-user/backend-app/current.jar                     ← 심볼릭 링크. pilsa.service 의 ExecStart 가 이것을 띄운다
+#   /home/ec2-user/backend/config/application.properties       ← 서버에만 있는 설정. WorkingDirectory(~/backend) 기준
+#                                                                 file:./config/ 를 Spring Boot 가 자동으로 읽는다 (jar 안에는 없다)
+#   /home/ec2-user/backend                                     ← 참고용 체크아웃. uploads/Honor 시드처럼 레포에 있는 정적 파일 때문에 맞춰 둔다
 on:
   push:
     branches: [release]
@@ -14,37 +23,90 @@ env:
   DEPLOY_BRANCH: release
 
 jobs:
-  deploy:
-    runs-on: self-hosted
-    timeout-minutes: 25
+  build:
+    name: Build (GitHub-hosted)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - name: Deploy backend to Production
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Gradle 빌드
+        run: |
+          chmod +x ./gradlew
+          ./gradlew build -x test --no-daemon
+          ls -l build/libs
+
+      - name: 산출물 정리 (plain jar 제외)
+        run: |
+          mkdir -p dist
+          cp build/libs/pilsa-backend-0.0.1-SNAPSHOT.jar dist/app.jar
+          ls -l dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-jar
+          path: dist/app.jar
+          retention-days: 7
+          if-no-files-found: error
+
+  deploy:
+    name: Deploy (self-hosted)
+    needs: build
+    runs-on: self-hosted
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-jar
+          path: ${{ runner.temp }}/backend-jar
+
+      - name: 배치 · 재시작 · 헬스체크
         run: |
           set -euo pipefail
+          APP=/home/ec2-user/backend-app
+          REL="$APP/releases/${GITHUB_RUN_NUMBER}"
+          PREV=$(readlink -f "$APP/current.jar" || true)
 
-          echo "===== [1/4] 소스 최신화 (origin/${DEPLOY_BRANCH}) ====="
-          cd ~/backend
+          echo "===== [1/4] 참고용 체크아웃 최신화 (origin/${DEPLOY_BRANCH}) ====="
+          cd /home/ec2-user/backend
           git fetch origin "${DEPLOY_BRANCH}"
           git reset --hard "origin/${DEPLOY_BRANCH}"
           git log --oneline -1
 
-          echo "===== [2/4] Gradle 빌드 ====="
-          chmod +x ./gradlew
-          ./gradlew build -x test
+          echo "===== [2/4] jar 배치 → ${REL} ====="
+          mkdir -p "$REL"
+          cp "${RUNNER_TEMP}/backend-jar/app.jar" "$REL/app.jar"
+          ln -sfn "$REL/app.jar" "$APP/current.jar"
+          ls -l "$APP/current.jar"
 
           echo "===== [3/4] pilsa 서비스 재시작 ====="
           sudo systemctl restart pilsa
 
-          echo "===== [4/4] 헬스체크 (포트 8080) ====="
+          echo "===== [4/4] 헬스체크 — DB 를 실제로 읽는 공개 API 로 확인 (외부 설정이 제대로 실렸는지까지) ====="
           for i in $(seq 1 30); do
             sleep 2
-            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/actuator/health || true)
-            if [ "$code" != "000" ]; then
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/donations || true)
+            if [ "$code" = "200" ]; then
               echo "운영 백엔드 응답 확인 (HTTP $code, 약 $((i*2))초 소요)"
               sudo systemctl is-active pilsa
+              # 최근 3개만 남긴다 (현재 것이 가장 새 것)
+              ls -dt "$APP"/releases/* | tail -n +4 | xargs -r rm -rf
               exit 0
             fi
           done
-          echo "운영 백엔드가 기동하지 않았습니다. 최근 로그:"
-          sudo journalctl -u pilsa -n 50 --no-pager
+
+          echo "운영 백엔드가 정상 응답하지 않습니다. 최근 로그:"
+          sudo journalctl -u pilsa -n 60 --no-pager || true
+          if [ -n "$PREV" ] && [ -f "$PREV" ] && [ "$PREV" != "$REL/app.jar" ]; then
+            echo "===== 롤백 → $PREV ====="
+            ln -sfn "$PREV" "$APP/current.jar"
+            sudo systemctl restart pilsa
+          fi
           exit 1
