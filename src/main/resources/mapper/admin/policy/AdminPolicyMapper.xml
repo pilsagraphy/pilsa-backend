@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.admin.policy.mapper.AdminPolicyMapper">
+
+    <select id="findAllSettings" resultType="com.back.admin.policy.dto.PolicySettingItem">
+        SELECT setting_id AS settingId, code, setting_value AS settingValue, description
+        FROM policy_settings
+        ORDER BY code
+    </select>
+
+    <select id="findSettingByCode" resultType="com.back.admin.policy.dto.PolicySettingItem">
+        SELECT setting_id AS settingId, code, setting_value AS settingValue, description
+        FROM policy_settings
+        WHERE code = #{code}
+    </select>
+
+    <update id="updateSetting">
+        UPDATE policy_settings
+        SET setting_value = #{settingValue}
+        <if test="description != null">
+          , description = #{description}
+        </if>
+        WHERE code = #{code}
+    </update>
+
+    <select id="findBanPolicies" resultType="com.back.admin.policy.dto.BanPolicyItem">
+        SELECT ban_policy_id AS banPolicyId, code, warning_no AS warningNo, ban_type AS banType,
+               ban_days AS banDays, description
+        FROM ban_policy
+        ORDER BY warning_no
+    </select>
+
+    <update id="updateBanPolicy">
+        UPDATE ban_policy
+        SET ban_type = #{banType},
+            ban_days = #{banDays}
+        <if test="description != null">
+          , description = #{description}
+        </if>
+        WHERE warning_no = #{warningNo}
+    </update>
+
+</mapper>

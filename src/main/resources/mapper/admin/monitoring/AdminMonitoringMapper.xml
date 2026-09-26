@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.admin.monitoring.mapper.AdminMonitoringMapper">
+
+    <!-- 점검 대상은 관리자 홈의 '전체 회원 수'와 같은 기준(탈퇴·영구차단 제외).
+         웹 접속(webAccessedAt)은 stats_access_hourly 의 그날 첫 시간 버킷 — 브라우저·앱 구분이 없으니
+         "앱은 안 열었지만 웹으로는 들어왔다"를 가르는 참고값이다. -->
+    <select id="findMembersWithLaunch" resultType="com.back.admin.monitoring.dto.AppLaunchMemberRow">
+        SELECT u.user_id            AS userId,
+               u.name               AS name,
+               u.member_type        AS memberType,
+               u.admin_level        AS adminLevel,
+               DATE(u.created_at)   AS joinedDate,
+               l.first_launched_at  AS launchedAt,
+               l.launch_count       AS launchCount,
+               (SELECT MIN(a.access_hour)
+                  FROM stats_access_hourly a
+                 WHERE a.user_id = u.user_id
+                   AND a.access_hour &gt;= #{date}
+                   AND a.access_hour &lt; DATE_ADD(#{date}, INTERVAL 1 DAY)) AS webAccessedAt
+        FROM users u
+        LEFT JOIN app_launch_daily l
+               ON l.user_id = u.user_id AND l.launch_date = #{date}
+        WHERE u.is_deleted = 0
+          AND u.ban_status &lt;&gt; 'permanent'
+        ORDER BY u.member_type, u.name, u.user_id
+    </select>
+
+    <select id="findLaunchDatesBetween" resultType="com.back.admin.monitoring.dto.AppLaunchDateRow">
+        SELECT user_id AS userId, launch_date AS launchDate
+        FROM app_launch_daily
+        WHERE launch_date BETWEEN #{from} AND #{to}
+    </select>
+
+    <select id="findLastLaunchDates" resultType="com.back.admin.monitoring.dto.AppLaunchDateRow">
+        SELECT user_id AS userId, MAX(launch_date) AS launchDate
+        FROM app_launch_daily
+        WHERE launch_date &lt;= #{date}
+        GROUP BY user_id
+    </select>
+
+    <select id="findTrackingSince" resultType="java.time.LocalDate">
+        SELECT MIN(launch_date) FROM app_launch_daily
+    </select>
+
+    <!-- 일·주·월 통계는 전부 stats_access_hourly GROUP BY 로 만든다 (CLAUDE.md '통계는 원본 하나에서 파생시킨다') -->
+    <select id="countDailyActiveUsers" resultType="com.back.admin.monitoring.dto.DateCountRow">
+        SELECT DATE(access_hour)       AS statDate,
+               COUNT(DISTINCT user_id) AS count
+        FROM stats_access_hourly
+        WHERE access_hour &gt;= #{from}
+          AND access_hour &lt; #{toExclusive}
+        GROUP BY DATE(access_hour)
+        ORDER BY statDate
+    </select>
+
+    <select id="countDailyAppLaunches" resultType="com.back.admin.monitoring.dto.DateCountRow">
+        SELECT launch_date AS statDate,
+               COUNT(*)    AS count
+        FROM app_launch_daily
+        WHERE launch_date &gt;= #{from}
+          AND launch_date &lt; #{toExclusive}
+        GROUP BY launch_date
+        ORDER BY statDate
+    </select>
+
+    <select id="countHourlyActiveUsers" resultType="com.back.admin.monitoring.dto.HourCountRow">
+        SELECT HOUR(access_hour)       AS hour,
+               COUNT(DISTINCT user_id) AS count
+        FROM stats_access_hourly
+        WHERE access_hour &gt;= #{date}
+          AND access_hour &lt; DATE_ADD(#{date}, INTERVAL 1 DAY)
+        GROUP BY HOUR(access_hour)
+        ORDER BY hour
+    </select>
+
+    <select id="findWeeklySignups" resultType="com.back.admin.monitoring.dto.SignupWeekResponse">
+        SELECT stat_week     AS statWeek,
+               signup_count  AS signupCount,
+               student_count AS studentCount,
+               alumni_count  AS alumniCount,
+               captured_at   AS capturedAt
+        FROM stats_signup_weekly
+        ORDER BY stat_week DESC
+        LIMIT #{weeks}
+    </select>
+
+    <!-- 관리자 화면이라 read_scope 필터 없이 전부 본다 (통계 조회 API 권한 규칙: admin_level >= 1 은 전체 열람) -->
+    <select id="findTrending" resultType="com.back.admin.monitoring.dto.TrendingPostResponse">
+        SELECT s.stat_hour      AS statHour,
+               s.post_id        AS postId,
+               s.board_id       AS boardId,
+               b.name           AS boardName,
+               p.title          AS title,
+               s.read_scope     AS readScope,
+               s.rank_no        AS rankNo,
+               s.is_trending    AS isTrending,
+               s.raw_score      AS rawScore,
+               s.baseline_score AS baselineScore,
+               s.spike_ratio    AS spikeRatio,
+               s.final_score    AS finalScore,
+               s.view_delta     AS viewDelta,
+               s.like_delta     AS likeDelta,
+               s.comment_delta  AS commentDelta,
+               s.view_count     AS viewCount,
+               s.like_count     AS likeCount,
+               s.comment_count  AS commentCount
+        FROM stats_post_hourly s
+        JOIN boards b ON b.board_id = s.board_id
+        LEFT JOIN posts p ON p.post_id = s.post_id
+        WHERE s.stat_hour &gt;= DATE_SUB(NOW(), INTERVAL #{hours} HOUR)
+        <if test="onlyTrending">
+          AND s.is_trending = 1
+        </if>
+        ORDER BY s.stat_hour DESC, s.rank_no IS NULL, s.rank_no, s.final_score DESC
+        LIMIT #{limit}
+    </select>
+
+</mapper>
