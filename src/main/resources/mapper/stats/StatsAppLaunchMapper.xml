@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.stats.applaunch.mapper.StatsAppLaunchMapper">
+
+    <!-- 날짜는 앱 시각이 아니라 DB 시각(CURDATE())으로 — 접속 통계(stats_access_hourly)와 같은 시계를 쓴다.
+         PK(user_id, launch_date) 충돌 = "오늘 이미 열었음" 이므로 시각·횟수만 갱신한다. -->
+    <insert id="recordLaunch">
+        INSERT INTO app_launch_daily (user_id, launch_date, first_launched_at, last_launched_at, launch_count)
+        VALUES (#{userId}, CURDATE(), NOW(), NOW(), 1)
+        ON DUPLICATE KEY UPDATE
+            last_launched_at = NOW(),
+            launch_count     = launch_count + 1
+    </insert>
+
+</mapper>
