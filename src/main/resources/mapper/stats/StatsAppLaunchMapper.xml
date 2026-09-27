@@ -12,4 +12,10 @@
             launch_count     = launch_count + 1
     </insert>
 
+    <!-- 접속 기록(stats_access_hourly)과 같은 보존 기간을 따른다 — 05:00 StatsRetentionBatch -->
+    <delete id="deleteOlderThan">
+        DELETE FROM app_launch_daily
+        WHERE launch_date &lt; DATE_SUB(CURDATE(), INTERVAL #{retentionDays} DAY)
+    </delete>
+
 </mapper>
