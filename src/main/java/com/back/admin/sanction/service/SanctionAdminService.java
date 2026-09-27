@@ -1,7 +1,6 @@
 package com.back.admin.sanction.service;
 
-import com.back.admin.sanction.dto.ReportedCommentResponse;
-import com.back.admin.sanction.dto.ReportedPostResponse;
+import com.back.admin.sanction.dto.MemberHistoryEntryResponse;
 import com.back.admin.sanction.dto.SanctionedUserDetailResponse;
 import com.back.admin.sanction.dto.SanctionedUserResponse;
 import com.back.admin.sanction.exception.SanctionException;
@@ -23,7 +22,7 @@ public class SanctionAdminService {
 
     private static final String DEFAULT_CAUTION_PER_WARNING = "10";
 
-    // 현재 제재(정지/영구차단/주의) 중인 회원 목록
+    // 제재 중이거나 신고·조치 이력이 있는 회원 목록 (복원돼 제재가 사라진 사람도 로그를 볼 수 있게)
     public List<SanctionedUserResponse> getSanctionedUsers() {
         AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
         return sanctionMapper.findSanctionedUsers();
@@ -53,16 +52,16 @@ public class SanctionAdminService {
         return detail;
     }
 
-    // 특정 회원이 작성한 '게시글'이 받은 신고 내역 (제재회원 관리 화면)
-    public List<ReportedPostResponse> getReportedPosts(Long userId) {
+    // 특정 회원의 '게시글'에 일어난 신고·조치 로그 (제재회원 관리 화면, 사건 단위)
+    public List<MemberHistoryEntryResponse> getPostHistory(Long userId) {
         AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
-        return sanctionMapper.findReportedPostsByAuthor(userId);
+        return sanctionMapper.findPostHistoryByAuthor(userId);
     }
 
-    // 특정 회원이 작성한 '댓글'이 받은 신고 내역 (제재회원 관리 화면)
-    public List<ReportedCommentResponse> getReportedComments(Long userId) {
+    // 특정 회원의 '댓글'에 일어난 신고·조치 로그 (제재회원 관리 화면, 사건 단위)
+    public List<MemberHistoryEntryResponse> getCommentHistory(Long userId) {
         AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
-        return sanctionMapper.findReportedCommentsByAuthor(userId);
+        return sanctionMapper.findCommentHistoryByAuthor(userId);
     }
 
     // 관리자 수동 해제
