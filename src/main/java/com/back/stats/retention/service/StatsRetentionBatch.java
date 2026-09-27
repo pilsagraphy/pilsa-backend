@@ -1,6 +1,7 @@
 package com.back.stats.retention.service;
 
 import com.back.stats.access.mapper.StatsAccessMapper;
+import com.back.stats.applaunch.mapper.StatsAppLaunchMapper;
 import com.back.stats.policy.StatsPolicy;
 import com.back.stats.trending.mapper.StatsPostMapper;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ public class StatsRetentionBatch {
 
     private final StatsAccessMapper statsAccessMapper;
     private final StatsPostMapper statsPostMapper;
+    private final StatsAppLaunchMapper statsAppLaunchMapper;
     private final StatsPolicy statsPolicy;
 
     @Scheduled(cron = "0 0 5 * * *")
@@ -35,10 +37,12 @@ public class StatsRetentionBatch {
 
         int accessRows = statsAccessMapper.deleteOlderThan(retentionDays);
         int postRows = statsPostMapper.deleteOlderThan(retentionDays);
+        // 앱 실행 기록(app_launch_daily)도 접속 기록과 같은 보존 기간 — 개인정보처리방침 6항 "이용 기록 최대 5년" (PM 결정, 2026-09-27)
+        int launchRows = statsAppLaunchMapper.deleteOlderThan(retentionDays);
 
-        if (accessRows > 0 || postRows > 0) {
-            log.info("통계 정리 배치 - 보존 {}일 경과: 접속 {}행, 게시글 집계 {}행 삭제",
-                    retentionDays, accessRows, postRows);
+        if (accessRows > 0 || postRows > 0 || launchRows > 0) {
+            log.info("통계 정리 배치 - 보존 {}일 경과: 접속 {}행, 게시글 집계 {}행, 앱 실행 {}행 삭제",
+                    retentionDays, accessRows, postRows, launchRows);
         }
     }
 }

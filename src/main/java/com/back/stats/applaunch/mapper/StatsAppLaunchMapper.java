@@ -14,4 +14,7 @@ public interface StatsAppLaunchMapper {
 
     /** 오늘(DB 날짜) 행이 없으면 만들고, 있으면 마지막 실행 시각과 횟수만 올린다. */
     void recordLaunch(@Param("userId") Long userId);
+
+    /** 보존 기간(stats_retention_days, 접속 기록과 동일)이 지난 행 물리 삭제 — StatsRetentionBatch 05:00 (PM 결정, 2026-09-27) */
+    int deleteOlderThan(@Param("retentionDays") int retentionDays);
 }
