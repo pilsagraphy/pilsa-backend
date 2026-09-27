@@ -24,11 +24,11 @@ public class ModerationServiceImpl implements ModerationService {
     private final ContentRevisionService contentRevisionService;
 
     @Override
-    public void blind(String targetType, Long targetId, Long actorId, Long reasonId, String detail) {
+    public Long blind(String targetType, Long targetId, Long actorId, Long reasonId, String detail) {
         // 조치 근거로 그 순간의 본문을 남긴다 (자동 블라인드는 actorId 가 null)
         contentRevisionService.snapshot(targetType, targetId, ContentRevisionService.TRIGGER_MODERATION, actorId);
-        if (!changeState(targetType, targetId, ModerationState.BLIND)) return; // 이미 blind면 no-op
-        writeLog(targetType, targetId, ModerationState.BLIND, reasonId, detail, actorId);
+        if (!changeState(targetType, targetId, ModerationState.BLIND)) return null; // 이미 blind면 no-op
+        return writeLog(targetType, targetId, ModerationState.BLIND, reasonId, detail, actorId).getActionId();
     }
 
     @Override

@@ -6,7 +6,8 @@ package com.back.admin.moderation.service;
 public interface ModerationService {
 
     // 블라인드: state=blind + 조치이력 기록 (주의 포인트 없음)
-    void blind(String targetType, Long targetId, Long actorId, Long reasonId, String detail);
+    // 반환: 생성된 moderation_log action_id (이미 blind라 no-op이면 null) — 신고 관리가 관리자 직접 블라인드를 신고 행으로 남길 때 쓴다
+    Long blind(String targetType, Long targetId, Long actorId, Long reasonId, String detail);
 
     // 복원(공개/반려): state=normal + 조치이력 기록 + 관련 주의 포인트 회수(void)
     // 반환: 생성된 moderation_log action_id (이미 normal이라 no-op이면 null)

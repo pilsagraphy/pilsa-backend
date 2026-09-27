@@ -148,7 +148,7 @@
             ma.applied_state   AS actionState,
             ars.label          AS actionReasonLabel,
             ma.detail          AS actionDetail,
-            ru.name            AS reporterName,
+            CASE WHEN r.source = 'admin' THEN '관리자' ELSE ru.name END AS reporterName,
             au.name            AS actorName,
             (ma.action_id IS NOT NULL AND ma.acted_by IS NULL) AS isAuto
         FROM reports_log r
@@ -190,7 +190,10 @@
         LEFT JOIN reasons rs ON m.reason_id = rs.reason_id
         WHERE p.user_id = #{userId}
           AND m.applied_state IN ('blind', 'deleted')
-          AND NOT EXISTS (SELECT 1 FROM reports_log x WHERE x.resolution_action_id = m.action_id)
+          <!-- 신고를 처리하며 남긴 조치(resolution_action_id)와, 관리자 직접 조치를 신고 행으로 올린 것(origin_action_id)은
+               앞쪽 신고 행에 이미 있으니 여기서 뺀다 (2026-09-27) -->
+          AND NOT EXISTS (SELECT 1 FROM reports_log x
+                           WHERE x.resolution_action_id = m.action_id OR x.origin_action_id = m.action_id)
         ORDER BY createdAt DESC
     </select>
 
@@ -215,7 +218,7 @@
             ma.applied_state   AS actionState,
             ars.label          AS actionReasonLabel,
             ma.detail          AS actionDetail,
-            ru.name            AS reporterName,
+            CASE WHEN r.source = 'admin' THEN '관리자' ELSE ru.name END AS reporterName,
             au.name            AS actorName,
             (ma.action_id IS NOT NULL AND ma.acted_by IS NULL) AS isAuto
         FROM reports_log r
@@ -260,7 +263,8 @@
         LEFT JOIN reasons rs ON m.reason_id = rs.reason_id
         WHERE c.user_id = #{userId}
           AND m.applied_state IN ('blind', 'deleted')
-          AND NOT EXISTS (SELECT 1 FROM reports_log x WHERE x.resolution_action_id = m.action_id)
+          AND NOT EXISTS (SELECT 1 FROM reports_log x
+                           WHERE x.resolution_action_id = m.action_id OR x.origin_action_id = m.action_id)
         ORDER BY createdAt DESC
     </select>
 

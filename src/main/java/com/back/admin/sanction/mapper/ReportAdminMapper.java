@@ -67,4 +67,37 @@ public interface ReportAdminMapper {
 
     /** 사유 코드 (없거나 비활성이면 null) — '기타'일 때 상세 사유를 요구하기 위해 */
     String findActiveReasonCode(@Param("reasonId") Long reasonId);
+
+    // ===== 관리자 직접 조치를 신고 관리에 올리기 (2026-09-27) =====
+
+    /** 대상에 걸린 처리 대기(pending) 신고 수 — 0이면 신고 없이 조치한 것 */
+    int countPendingReports(@Param("targetType") String targetType, @Param("targetId") Long targetId);
+
+    /** 대상에 신고 행(반려 제외)이 하나라도 있는가 */
+    boolean existsAnyReport(@Param("targetType") String targetType, @Param("targetId") Long targetId);
+
+    /**
+     * 관리자 직접 조치를 reports_log 에 source='admin' 행으로 기록.
+     * status=pending(블라인드) 이면 resolution_action_id 는 비우고, resolved(삭제) 이면 actionId 를 채운다.
+     */
+    void insertAdminActionReport(
+            @Param("reporterId") Long reporterId,
+            @Param("targetType") String targetType,
+            @Param("targetId") Long targetId,
+            @Param("reasonId") Long reasonId,
+            @Param("detail") String detail,
+            @Param("status") String status,
+            @Param("actionId") Long actionId
+    );
+
+    // ===== 댓글 복원 전 원 게시글 점검 =====
+
+    Long findCommentPostId(@Param("commentId") Long commentId);
+
+    Long findPostAuthorId(@Param("postId") Long postId);
+
+    String findUserName(@Param("userId") Long userId);
+
+    /** 게시글의 마지막 블라인드·삭제 조치에 조치자가 있는가 (true=관리자 조치, false=자동, null=조치 이력 없음=작성자 자진 삭제) */
+    Boolean isLatestPostActionByAdmin(@Param("postId") Long postId);
 }

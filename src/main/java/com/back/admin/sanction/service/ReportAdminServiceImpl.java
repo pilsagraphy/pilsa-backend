@@ -3,6 +3,7 @@ package com.back.admin.sanction.service;
 import com.back.admin.moderation.dto.ModerationState;
 import com.back.admin.common.AdminServiceSupport;
 import com.back.admin.sanction.dto.BulkResultResponse;
+import com.back.admin.sanction.exception.CommentRestoreBlockedException;
 import com.back.admin.sanction.dto.ReportEntryResponse;
 import com.back.admin.sanction.dto.ReportPageResponse;
 import com.back.admin.sanction.dto.ReportedItemResponse;
@@ -146,6 +147,10 @@ public class ReportAdminServiceImpl implements ReportAdminService {
             try {
                 action.run(adminId, targetId);
                 successCount++;
+            } catch (CommentRestoreBlockedException e) {
+                // 댓글 복원 전 원 게시글부터 — 프론트가 안내 팝업과 이동 링크를 그릴 수 있게 원글·작성자 정보를 함께 준다
+                failures.add(new BulkResultResponse.FailureItem(targetId, e.getMessage(), CommentRestoreBlockedException.CODE,
+                        e.getPostId(), e.getPostState(), e.getDeletedBy(), e.getAuthorId(), e.getAuthorName()));
             } catch (Exception e) {
                 failures.add(new BulkResultResponse.FailureItem(targetId, AdminServiceSupport.resolveFailureMessage(e)));
             }
