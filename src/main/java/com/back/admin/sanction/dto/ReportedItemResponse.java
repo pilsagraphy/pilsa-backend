@@ -21,4 +21,7 @@ public class ReportedItemResponse {
     private int reportCount;           // 누적 신고 건수 (반려분 제외 — 개별 조회 .../{targetId} 의 행 수와 일치)
     private String reportStatus;       // 대표 신고 상태 pending/resolved (반려된 신고는 목록에서 제외된다)
     private String state;              // 대상의 현재 표시 상태 normal/blind/deleted
+    // 행의 유형 (2026-09-27): report=회원 신고 / admin_blind=관리자 직접 블라인드(판단 대기) /
+    // admin_delete=관리자 직접 삭제(처리 완료, 복원 가능) / auto_blind=신고 누적 자동 블라인드
+    private String kind;
 }

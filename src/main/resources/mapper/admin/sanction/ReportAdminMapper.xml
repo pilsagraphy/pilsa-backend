@@ -11,6 +11,31 @@
         </choose>
     </sql>
 
+    <!-- 행의 유형(kind). 신고 관리가 관리자 직접 조치와 신고 누적 자동 블라인드를 회원 신고와 구분해 보여 준다 (2026-09-27).
+           admin_blind  : 관리자가 신고 없이 직접 블라인드 (source='admin' 인 pending 행이 있다)
+           admin_delete : 관리자가 신고 없이 직접 삭제 (반려 제외 행이 전부 source='admin' 이고 처리 완료)
+           auto_blind   : 대상이 블라인드 상태이고 마지막 블라인드 조치에 조치자가 없다 (신고 누적 자동)
+           report       : 그 밖의 회원 신고
+         ${tt} = 대상 유형 리터럴, ${stateCol} = 대상 상태 컬럼 -->
+    <sql id="reportKind">
+        CASE
+            WHEN EXISTS (SELECT 1 FROM reports_log a
+                          WHERE a.target_type = ${tt} AND a.target_id = t.target_id
+                            AND a.source = 'admin' AND a.status = 'pending') THEN 'admin_blind'
+            WHEN NOT EXISTS (SELECT 1 FROM reports_log a
+                              WHERE a.target_type = ${tt} AND a.target_id = t.target_id
+                                AND a.source &lt;&gt; 'admin' AND a.status &lt;&gt; 'rejected') THEN 'admin_delete'
+            WHEN ${stateCol} = 'blind' AND EXISTS (
+                     SELECT 1 FROM moderation_log m
+                      WHERE m.target_type = ${tt} AND m.target_id = t.target_id
+                        AND m.applied_state = 'blind' AND m.acted_by IS NULL
+                        AND m.action_id = (SELECT MAX(m2.action_id) FROM moderation_log m2
+                                            WHERE m2.target_type = ${tt} AND m2.target_id = t.target_id
+                                              AND m2.applied_state IN ('blind', 'deleted', 'normal'))) THEN 'auto_blind'
+            ELSE 'report'
+        END AS kind
+    </sql>
+
     <!-- ===================== 게시글 신고 ===================== -->
     <!-- 대상별로 그룹핑: 최초 신고일시/누적건수/대표(최신)신고.
          반려(rejected)는 집계에서 뺀다 — 근거 없다고 판정된 신고라 건수·최초신고일·대표사유 어디에도 들어가면 안 되고,
@@ -54,14 +79,16 @@
             b.name                       AS boardName,
             u.name                       AS authorName,
             rs.label                     AS reasonLabel,
-            (SELECT GROUP_CONCAT(DISTINCT ru.name ORDER BY r2.created_at SEPARATOR ', ')
+            (SELECT GROUP_CONCAT(DISTINCT CASE WHEN r2.source = 'admin' THEN '관리자' ELSE ru.name END
+                                 ORDER BY r2.created_at SEPARATOR ', ')
                FROM reports_log r2 JOIN users ru ON ru.user_id = r2.reporter_id
               WHERE r2.target_type = 'post' AND r2.target_id = t.target_id
                 AND r2.status &lt;&gt; 'rejected') AS reporterNames,
             t.first_reported_at          AS firstReportedAt,
             t.report_count               AS reportCount,
             r.status                     AS reportStatus,
-            p.state                      AS state
+            p.state                      AS state,
+            <include refid="reportKind"><property name="tt" value="'post'"/><property name="stateCol" value="p.state"/></include>
         <include refid="reportedPostsFrom"/>
         <include refid="orderBy"/>
         LIMIT #{size} OFFSET #{offset}
@@ -113,14 +140,16 @@
             b.name                       AS boardName,
             u.name                       AS authorName,
             rs.label                     AS reasonLabel,
-            (SELECT GROUP_CONCAT(DISTINCT ru.name ORDER BY r2.created_at SEPARATOR ', ')
+            (SELECT GROUP_CONCAT(DISTINCT CASE WHEN r2.source = 'admin' THEN '관리자' ELSE ru.name END
+                                 ORDER BY r2.created_at SEPARATOR ', ')
                FROM reports_log r2 JOIN users ru ON ru.user_id = r2.reporter_id
               WHERE r2.target_type = 'comment' AND r2.target_id = t.target_id
                 AND r2.status &lt;&gt; 'rejected') AS reporterNames,
             t.first_reported_at          AS firstReportedAt,
             t.report_count               AS reportCount,
             r.status                     AS reportStatus,
-            c.state                      AS state
+            c.state                      AS state,
+            <include refid="reportKind"><property name="tt" value="'comment'"/><property name="stateCol" value="c.state"/></include>
         <include refid="reportedCommentsFrom"/>
         <include refid="orderBy"/>
         LIMIT #{size} OFFSET #{offset}
@@ -177,5 +206,58 @@
 
     <select id="findActiveReasonCode" resultType="string">
         SELECT code FROM reasons WHERE reason_id = #{reasonId} AND is_active = 1
+    </select>
+
+    <!-- ===================== 관리자 직접 조치 → 신고 관리 (2026-09-27) ===================== -->
+    <select id="countPendingReports" resultType="int">
+        SELECT COUNT(*)
+        FROM reports_log
+        WHERE target_type = #{targetType}
+          AND target_id = #{targetId}
+          AND status = 'pending'
+    </select>
+
+    <select id="existsAnyReport" resultType="boolean">
+        SELECT COUNT(*) &gt; 0
+        FROM reports_log
+        WHERE target_type = #{targetType}
+          AND target_id = #{targetId}
+          AND status &lt;&gt; 'rejected'
+    </select>
+
+    <!-- 신고자 = 조치한 관리자. uq_reports_active(reporter_id, target_type, target_id, active_flag) 와 부딪히지 않는다 —
+         블라인드는 상태가 바뀔 때만(no-op 아닐 때만) 한 행, 삭제는 status=resolved 라 active_flag 가 0 이다. -->
+    <insert id="insertAdminActionReport">
+        INSERT INTO reports_log (reporter_id, source, target_type, target_id, reason_id, detail, status,
+                                 created_at, resolved_at, resolution_action_id, origin_action_id)
+        VALUES (#{reporterId}, 'admin', #{targetType}, #{targetId}, #{reasonId}, #{detail}, #{status},
+                NOW(),
+                CASE WHEN #{status} = 'pending' THEN NULL ELSE NOW() END,
+                CASE WHEN #{status} = 'pending' THEN NULL ELSE #{actionId} END,
+                #{actionId})
+    </insert>
+
+    <!-- ===================== 댓글 복원 전 원 게시글 점검 ===================== -->
+    <select id="findCommentPostId" resultType="long">
+        SELECT post_id FROM comments WHERE comment_id = #{commentId}
+    </select>
+
+    <select id="findPostAuthorId" resultType="long">
+        SELECT user_id FROM posts WHERE post_id = #{postId}
+    </select>
+
+    <select id="findUserName" resultType="string">
+        SELECT name FROM users WHERE user_id = #{userId}
+    </select>
+
+    <!-- 마지막 블라인드·삭제 조치의 조치자 유무. 행이 없으면 null (관리자 조치 이력 없음 = 작성자가 직접 지움) -->
+    <select id="isLatestPostActionByAdmin" resultType="java.lang.Boolean">
+        SELECT acted_by IS NOT NULL
+        FROM moderation_log
+        WHERE target_type = 'post'
+          AND target_id = #{postId}
+          AND applied_state IN ('blind', 'deleted')
+        ORDER BY action_id DESC
+        LIMIT 1
     </select>
 </mapper>
