@@ -51,7 +51,26 @@
         WHERE code = #{code}
     </select>
 
-    <!-- 회원 태그: 차단 > 정지 > 주의(주의 포인트만 있고 정지/차단이 아님) 우선순위로 판정 -->
+    <!-- 회원의 글·댓글에 신고나 조치(블라인드·삭제·복원)가 한 번이라도 있었는가.
+         제재 회원 화면은 "지금 제재 중인 사람"이 아니라 "이력이 있는 사람 전부"를 보여준다 (PM, 2026-09-27) —
+         복원돼서 주의 점수가 사라진 사람도 지난 신고·조치 로그를 찾아볼 수 있어야 한다. -->
+    <sql id="hasHistory">
+        EXISTS (SELECT 1 FROM reports_log r JOIN posts hp ON r.target_type = 'post' AND r.target_id = hp.post_id
+                 WHERE hp.user_id = u.user_id)
+        OR EXISTS (SELECT 1 FROM reports_log r JOIN comments hc ON r.target_type = 'comment' AND r.target_id = hc.comment_id
+                    WHERE hc.user_id = u.user_id)
+        OR EXISTS (SELECT 1 FROM moderation_log m JOIN posts hp ON m.target_type = 'post' AND m.target_id = hp.post_id
+                    WHERE hp.user_id = u.user_id)
+        OR EXISTS (SELECT 1 FROM moderation_log m JOIN comments hc ON m.target_type = 'comment' AND m.target_id = hc.comment_id
+                    WHERE hc.user_id = u.user_id)
+    </sql>
+
+    <sql id="hasValidCaution">
+        EXISTS (SELECT 1 FROM penalty_log pl
+                 WHERE pl.user_id = u.user_id AND pl.voided_at IS NULL AND pl.expires_at > NOW())
+    </sql>
+
+    <!-- 회원 태그: 차단 > 정지 > 주의(유효한 주의 포인트) > 이력(제재는 없지만 신고·조치 로그가 있음) -->
     <select id="findSanctionedUsers" resultType="com.back.admin.sanction.dto.SanctionedUserResponse">
         SELECT u.user_id      AS userId,
                u.login_id     AS loginId,
@@ -65,18 +84,15 @@
                CASE
                    WHEN u.ban_status = 'permanent' THEN 'permanent'
                    WHEN u.ban_status = 'temporary' THEN 'temporary'
-                   ELSE 'caution'
+                   WHEN <include refid="hasValidCaution"/> THEN 'caution'
+                   ELSE 'history'
                END AS tag
         FROM users u
         WHERE u.is_deleted = 0
           AND (
                u.ban_status != 'none'
-               OR EXISTS (
-                    SELECT 1 FROM penalty_log pl
-                    WHERE pl.user_id = u.user_id
-                      AND pl.voided_at IS NULL
-                      AND pl.expires_at > NOW()
-                  )
+               OR <include refid="hasValidCaution"/>
+               OR <include refid="hasHistory"/>
               )
         ORDER BY u.user_id DESC
     </select>
@@ -94,10 +110,8 @@
                CASE
                    WHEN u.ban_status = 'permanent' THEN 'permanent'
                    WHEN u.ban_status = 'temporary' THEN 'temporary'
-                   WHEN EXISTS (
-                        SELECT 1 FROM penalty_log pl
-                        WHERE pl.user_id = u.user_id AND pl.voided_at IS NULL AND pl.expires_at > NOW()
-                   ) THEN 'caution'
+                   WHEN <include refid="hasValidCaution"/> THEN 'caution'
+                   WHEN <include refid="hasHistory"/> THEN 'history'
                    ELSE 'none'
                END AS tag
         FROM users u
@@ -122,150 +136,136 @@
           AND banned_until &lt;= NOW()
     </select>
 
-    <!-- ===== 제재회원 관리 화면: 회원별 신고 내역 (report 패키지에서 이동, PM 피드백 4·5) ===== -->
+    <!-- ===== 제재회원 관리 화면: 회원별 신고·조치 로그 (사건 단위, 2026-09-27) =====
+         신고 접수(reports_log, 회원 신고만)와 조치(moderation_log: 블라인드/삭제/복원)를 각각 한 행으로 합친다.
+         관리자 직접 조치를 신고 관리에 올린 reports_log 행(source=admin)은 같은 사건의 사본이라 뺀다.
+         isDirect: 삭제 직전(마지막 복원 이후)에 블라인드가 없었으면 '즉시 삭제'.
+         ${tt}=대상 유형 리터럴, ${tbl}=대상 테이블 별칭 t 의 PK 컬럼 -->
+    <sql id="deleteIsDirect">
+        (m.applied_state = 'deleted' AND NOT EXISTS (
+            SELECT 1 FROM moderation_log b
+             WHERE b.target_type = ${tt} AND b.target_id = m.target_id
+               AND b.applied_state = 'blind'
+               AND b.action_id &lt; m.action_id
+               AND b.action_id &gt; COALESCE((SELECT MAX(n.action_id) FROM moderation_log n
+                                             WHERE n.target_type = ${tt} AND n.target_id = m.target_id
+                                               AND n.applied_state = 'normal' AND n.action_id &lt; m.action_id), 0)))
+    </sql>
 
-    <!-- 회원이 작성한 '게시글'이 받은 신고 내역 -->
-    <!-- 회원이 작성한 '게시글'의 신고·처리 내역.
-         신고를 거친 건(reports_log)과, 신고 없이 관리자가 바로 조치한 건(moderation_log)을 합친다.
-         후자가 빠지면 주의 점수는 올라가 있는데 화면에는 아무 내역도 없는 상태가 된다 (2026-09-20 실제 발생).
-         신고를 처리하며 남긴 조치(resolution_action_id 로 이어진 것)는 앞쪽에 이미 있으니 뒤쪽에서 뺀다. -->
-    <select id="findReportedPostsByAuthor" resultType="com.back.admin.sanction.dto.ReportedPostResponse">
+    <select id="findPostHistoryByAuthor" resultType="com.back.admin.sanction.dto.MemberHistoryEntryResponse">
         SELECT
-            r.report_id        AS reportId,
-            p.post_id          AS postId,
-            bd.board_id        AS boardId,
-            bd.name            AS boardName,
-            p.title,
+            'report'            AS eventType,
+            r.created_at        AS eventAt,
+            r.report_id         AS reportId,
+            r.status            AS reportStatus,
+            NULL                AS actionId,
+            ru.name             AS reporterName,
+            NULL                AS actorName,
+            0                   AS isAuto,
+            0                   AS isDirect,
+            rs.label            AS reasonLabel,
+            r.detail            AS detail,
+            p.post_id           AS postId,
+            NULL                AS commentId,
+            bd.board_id         AS boardId,
+            bd.name             AS boardName,
+            p.title             AS title,
             LEFT(p.content, 30) AS preview,
-            p.state,
-            r.reason_id        AS reasonId,
-            rs.label           AS reasonLabel,
-            r.detail,
-            r.status,
-            r.active_flag      AS activeFlag,
-            r.created_at       AS createdAt,
-            r.resolved_at      AS resolvedAt,
-            ma.applied_state   AS actionState,
-            ars.label          AS actionReasonLabel,
-            ma.detail          AS actionDetail,
-            CASE WHEN r.source = 'admin' THEN '관리자' ELSE ru.name END AS reporterName,
-            au.name            AS actorName,
-            (ma.action_id IS NOT NULL AND ma.acted_by IS NULL) AS isAuto
+            p.state             AS state
         FROM reports_log r
-        JOIN posts p ON r.target_id = p.post_id
+        JOIN posts p ON r.target_type = 'post' AND r.target_id = p.post_id
         LEFT JOIN boards bd ON bd.board_id = p.board_id
-        LEFT JOIN reasons rs ON r.reason_id = rs.reason_id
-        LEFT JOIN moderation_log ma ON ma.action_id = r.resolution_action_id
-        LEFT JOIN reasons ars ON ars.reason_id = ma.reason_id
+        LEFT JOIN reasons rs ON rs.reason_id = r.reason_id
         LEFT JOIN users ru ON ru.user_id = r.reporter_id
-        LEFT JOIN users au ON au.user_id = ma.acted_by
-        WHERE r.target_type = 'post'
-          AND p.user_id = #{userId}
+        WHERE p.user_id = #{userId}
+          AND r.source &lt;&gt; 'admin'
         UNION ALL
         SELECT
-            NULL               AS reportId,
-            p.post_id          AS postId,
-            bd.board_id        AS boardId,
-            bd.name            AS boardName,
-            p.title,
+            CASE m.applied_state WHEN 'blind' THEN 'blind' WHEN 'deleted' THEN 'delete' ELSE 'restore' END AS eventType,
+            m.created_at        AS eventAt,
+            NULL                AS reportId,
+            NULL                AS reportStatus,
+            m.action_id         AS actionId,
+            NULL                AS reporterName,
+            au.name             AS actorName,
+            (m.acted_by IS NULL) AS isAuto,
+            <include refid="deleteIsDirect"><property name="tt" value="'post'"/></include> AS isDirect,
+            rs.label            AS reasonLabel,
+            m.detail            AS detail,
+            p.post_id           AS postId,
+            NULL                AS commentId,
+            bd.board_id         AS boardId,
+            bd.name             AS boardName,
+            p.title             AS title,
             LEFT(p.content, 30) AS preview,
-            p.state,
-            NULL               AS reasonId,
-            NULL               AS reasonLabel,
-            NULL               AS detail,
-            'resolved'         AS status,
-            1                  AS activeFlag,
-            m.created_at       AS createdAt,
-            m.created_at       AS resolvedAt,
-            m.applied_state    AS actionState,
-            rs.label           AS actionReasonLabel,
-            m.detail           AS actionDetail,
-            NULL               AS reporterName,
-            au.name            AS actorName,
-            (m.acted_by IS NULL) AS isAuto
+            p.state             AS state
         FROM moderation_log m
-        LEFT JOIN users au ON au.user_id = m.acted_by
         JOIN posts p ON m.target_type = 'post' AND m.target_id = p.post_id
         LEFT JOIN boards bd ON bd.board_id = p.board_id
-        LEFT JOIN reasons rs ON m.reason_id = rs.reason_id
+        LEFT JOIN reasons rs ON rs.reason_id = m.reason_id
+        LEFT JOIN users au ON au.user_id = m.acted_by
         WHERE p.user_id = #{userId}
-          AND m.applied_state IN ('blind', 'deleted')
-          <!-- 신고를 처리하며 남긴 조치(resolution_action_id)와, 관리자 직접 조치를 신고 행으로 올린 것(origin_action_id)은
-               앞쪽 신고 행에 이미 있으니 여기서 뺀다 (2026-09-27) -->
-          AND NOT EXISTS (SELECT 1 FROM reports_log x
-                           WHERE x.resolution_action_id = m.action_id OR x.origin_action_id = m.action_id)
-        ORDER BY createdAt DESC
+          AND m.applied_state IN ('blind', 'deleted', 'normal')
+        ORDER BY eventAt DESC, actionId DESC, reportId DESC
     </select>
 
-    <!-- 회원이 작성한 '댓글'이 받은 신고 내역 (이동 경로는 댓글이 아니라 소속 게시글) -->
-    <select id="findReportedCommentsByAuthor" resultType="com.back.admin.sanction.dto.ReportedCommentResponse">
+    <select id="findCommentHistoryByAuthor" resultType="com.back.admin.sanction.dto.MemberHistoryEntryResponse">
         SELECT
-            r.report_id        AS reportId,
-            c.comment_id       AS commentId,
-            cp.post_id         AS postId,
-            bd.board_id        AS boardId,
-            bd.name            AS boardName,
-            cp.title           AS postTitle,
+            'report'            AS eventType,
+            r.created_at        AS eventAt,
+            r.report_id         AS reportId,
+            r.status            AS reportStatus,
+            NULL                AS actionId,
+            ru.name             AS reporterName,
+            NULL                AS actorName,
+            0                   AS isAuto,
+            0                   AS isDirect,
+            rs.label            AS reasonLabel,
+            r.detail            AS detail,
+            cp.post_id          AS postId,
+            c.comment_id        AS commentId,
+            bd.board_id         AS boardId,
+            bd.name             AS boardName,
+            cp.title            AS title,
             LEFT(c.content, 30) AS preview,
-            c.state,
-            r.reason_id        AS reasonId,
-            rs.label           AS reasonLabel,
-            r.detail,
-            r.status,
-            r.active_flag      AS activeFlag,
-            r.created_at       AS createdAt,
-            r.resolved_at      AS resolvedAt,
-            ma.applied_state   AS actionState,
-            ars.label          AS actionReasonLabel,
-            ma.detail          AS actionDetail,
-            CASE WHEN r.source = 'admin' THEN '관리자' ELSE ru.name END AS reporterName,
-            au.name            AS actorName,
-            (ma.action_id IS NOT NULL AND ma.acted_by IS NULL) AS isAuto
+            c.state             AS state
         FROM reports_log r
-        JOIN comments c ON r.target_id = c.comment_id
-        LEFT JOIN posts cp ON c.post_id = cp.post_id
+        JOIN comments c ON r.target_type = 'comment' AND r.target_id = c.comment_id
+        LEFT JOIN posts cp ON cp.post_id = c.post_id
         LEFT JOIN boards bd ON bd.board_id = cp.board_id
-        LEFT JOIN reasons rs ON r.reason_id = rs.reason_id
-        LEFT JOIN moderation_log ma ON ma.action_id = r.resolution_action_id
-        LEFT JOIN reasons ars ON ars.reason_id = ma.reason_id
+        LEFT JOIN reasons rs ON rs.reason_id = r.reason_id
         LEFT JOIN users ru ON ru.user_id = r.reporter_id
-        LEFT JOIN users au ON au.user_id = ma.acted_by
-        WHERE r.target_type = 'comment'
-          AND c.user_id = #{userId}
+        WHERE c.user_id = #{userId}
+          AND r.source &lt;&gt; 'admin'
         UNION ALL
         SELECT
-            NULL               AS reportId,
-            c.comment_id       AS commentId,
-            cp.post_id         AS postId,
-            bd.board_id        AS boardId,
-            bd.name            AS boardName,
-            cp.title           AS postTitle,
+            CASE m.applied_state WHEN 'blind' THEN 'blind' WHEN 'deleted' THEN 'delete' ELSE 'restore' END AS eventType,
+            m.created_at        AS eventAt,
+            NULL                AS reportId,
+            NULL                AS reportStatus,
+            m.action_id         AS actionId,
+            NULL                AS reporterName,
+            au.name             AS actorName,
+            (m.acted_by IS NULL) AS isAuto,
+            <include refid="deleteIsDirect"><property name="tt" value="'comment'"/></include> AS isDirect,
+            rs.label            AS reasonLabel,
+            m.detail            AS detail,
+            cp.post_id          AS postId,
+            c.comment_id        AS commentId,
+            bd.board_id         AS boardId,
+            bd.name             AS boardName,
+            cp.title            AS title,
             LEFT(c.content, 30) AS preview,
-            c.state,
-            NULL               AS reasonId,
-            NULL               AS reasonLabel,
-            NULL               AS detail,
-            'resolved'         AS status,
-            1                  AS activeFlag,
-            m.created_at       AS createdAt,
-            m.created_at       AS resolvedAt,
-            m.applied_state    AS actionState,
-            rs.label           AS actionReasonLabel,
-            m.detail           AS actionDetail,
-            NULL               AS reporterName,
-            au.name            AS actorName,
-            (m.acted_by IS NULL) AS isAuto
+            c.state             AS state
         FROM moderation_log m
-        LEFT JOIN users au ON au.user_id = m.acted_by
         JOIN comments c ON m.target_type = 'comment' AND m.target_id = c.comment_id
-        LEFT JOIN posts cp ON c.post_id = cp.post_id
+        LEFT JOIN posts cp ON cp.post_id = c.post_id
         LEFT JOIN boards bd ON bd.board_id = cp.board_id
-        LEFT JOIN reasons rs ON m.reason_id = rs.reason_id
+        LEFT JOIN reasons rs ON rs.reason_id = m.reason_id
+        LEFT JOIN users au ON au.user_id = m.acted_by
         WHERE c.user_id = #{userId}
-          AND m.applied_state IN ('blind', 'deleted')
-          AND NOT EXISTS (SELECT 1 FROM reports_log x
-                           WHERE x.resolution_action_id = m.action_id OR x.origin_action_id = m.action_id)
-        ORDER BY createdAt DESC
+          AND m.applied_state IN ('blind', 'deleted', 'normal')
+        ORDER BY eventAt DESC, actionId DESC, reportId DESC
     </select>
 
     <select id="countResolvedDeletionsByUser" resultType="int">

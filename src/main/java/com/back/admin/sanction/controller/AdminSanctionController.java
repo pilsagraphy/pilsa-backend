@@ -1,7 +1,6 @@
 package com.back.admin.sanction.controller;
 
-import com.back.admin.sanction.dto.ReportedCommentResponse;
-import com.back.admin.sanction.dto.ReportedPostResponse;
+import com.back.admin.sanction.dto.MemberHistoryEntryResponse;
 import com.back.admin.sanction.dto.SanctionResponse;
 import com.back.admin.sanction.dto.SanctionedUserDetailResponse;
 import com.back.admin.sanction.dto.SanctionedUserResponse;
@@ -27,12 +26,13 @@ public class AdminSanctionController {
 
     private final SanctionAdminService sanctionAdminService;
 
-    // 현재 제재(정지/영구차단) 중인 회원 목록
+    // 제재 중이거나 신고·조치 이력이 있는 회원 목록
     @Operation(
             summary = "제재 회원 목록 (관리자)",
             description = """
                     제재회원목록 페이지 진입 시 호출된다.
-                    현재 제재(정지/영구차단) 중이거나 주의 누적 상태인 회원을 태그와 함께 내려준다.
+                    현재 제재(정지/영구차단) 중이거나 주의 누적 상태인 회원, 그리고 제재는 없어도 글·댓글에 신고·조치 로그가
+                    한 번이라도 있었던 회원(복원된 경우 포함)을 태그와 함께 내려준다 (2026-09-27).
 
                     ### 요청 예시
                     ```
@@ -47,7 +47,7 @@ public class AdminSanctionController {
                       "banStartedAt": "2026-08-14T10:00:00", "tag": "temporary"
                     }]
                     ```
-                    tag: permanent(영구차단) | temporary(기간 정지) | caution(주의 누적)
+                    tag: permanent(영구차단) | temporary(기간 정지) | caution(주의 누적) | history(제재 없음, 로그만 있음)
 
                     실패: 401 {"message":"..."} (미인증)
                     실패: 403 {"message":"..."} (관리자 권한 없음)
@@ -92,12 +92,13 @@ public class AdminSanctionController {
         return ResponseEntity.ok(sanctionAdminService.getSanctionedUserDetail(userId));
     }
 
-    // 특정 회원이 받은 신고 내역 (제재회원 관리 화면3) - 게시글/댓글은 화면에 표시할 내용이 달라 경로를 나눈다
+    // 특정 회원의 글·댓글에 일어난 신고·조치 로그 (제재회원 관리 화면3) — 게시글/댓글은 경로를 나눈다
     @Operation(
-            summary = "회원별 신고된 게시글 내역 (관리자)",
+            summary = "회원별 게시글 신고·조치 로그 (관리자)",
             description = """
-                    제재회원 관리 화면(화면3)에서 해당 회원이 받은 게시글 신고 내역을 조회할 때 호출된다.
-                    댓글 신고와 화면에 표시할 내용이 달라 경로가 분리되어 있다.
+                    제재회원 관리 화면(화면3)에서 해당 회원의 게시글에 일어난 일을 사건 단위로 조회할 때 호출된다.
+                    신고 접수(report) · 블라인드(blind) · 삭제(delete) · 복원(restore)이 각각 한 행이며 최신순이다.
+                    관리자가 신고 없이 바로 조치한 건도 moderation_log 에서 blind/delete 행으로 내려간다.
 
                     ### 요청 예시
                     ```
@@ -107,32 +108,40 @@ public class AdminSanctionController {
                     ### 응답 예시
                     ```json
                     [{
-                      "reportId": 9, "postId": 171, "boardId": 2, "boardName": "자유게시판",
-                      "title": "신고된 게시글 제목", "preview": "본문 앞 30자", "state": "normal",
-                      "reasonId": 1, "reasonLabel": "욕설/비방", "detail": null,
-                      "status": "resolved", "activeFlag": null,
-                      "createdAt": "2026-08-14T10:00:00", "resolvedAt": "2026-08-14T11:00:00"
+                      "eventType": "delete", "eventAt": "2026-08-14T11:00:00",
+                      "reportId": null, "reportStatus": null, "actionId": 31,
+                      "reporterName": null, "actorName": "홍길동", "isAuto": false, "isDirect": true,
+                      "reasonLabel": "기타", "detail": "게시판 성격과 맞지 않음",
+                      "postId": 171, "commentId": null, "boardId": 2, "boardName": "자유게시판",
+                      "title": "게시글 제목", "preview": "본문 앞 30자", "state": "deleted"
+                    }, {
+                      "eventType": "report", "eventAt": "2026-08-14T10:00:00",
+                      "reportId": 9, "reportStatus": "resolved", "actionId": null,
+                      "reporterName": "김철수", "actorName": null, "isAuto": false, "isDirect": false,
+                      "reasonLabel": "욕설/비방", "detail": null,
+                      "postId": 171, "commentId": null, "boardId": 2, "boardName": "자유게시판",
+                      "title": "게시글 제목", "preview": "본문 앞 30자", "state": "deleted"
                     }]
                     ```
+                    isAuto: 신고 누적 자동 블라인드 / isDirect: 블라인드를 거치지 않은 즉시 삭제
                     state는 대상 게시글의 현재 표시 상태(normal/blind/deleted)
 
                     실패: 401 {"message":"..."} (미인증)
                     실패: 403 {"message":"..."} (관리자 권한 없음)
                     """)
     @GetMapping("/api/admin/sanctions/users/{userId}/reports/posts")
-    public ResponseEntity<List<ReportedPostResponse>> getReportedPosts(
-            @Parameter(description = "신고 내역을 조회할 회원 ID", example = "85")
+    public ResponseEntity<List<MemberHistoryEntryResponse>> getPostHistory(
+            @Parameter(description = "로그를 조회할 회원 ID", example = "85")
             @PathVariable Long userId) {
-        log.info("회원별 신고된 게시글 내역 조회 요청 - userId: {}", userId);
-        return ResponseEntity.ok(sanctionAdminService.getReportedPosts(userId));
+        log.info("회원별 게시글 신고·조치 로그 조회 요청 - userId: {}", userId);
+        return ResponseEntity.ok(sanctionAdminService.getPostHistory(userId));
     }
 
     @Operation(
-            summary = "회원별 신고된 댓글 내역 (관리자)",
+            summary = "회원별 댓글 신고·조치 로그 (관리자)",
             description = """
-                    제재회원 관리 화면(화면3)에서 해당 회원이 받은 댓글 신고 내역을 조회할 때 호출된다.
-                    댓글은 제목이 없고 이동 경로가 소속 게시글이라 게시글 신고와 응답 형태가 다르다
-                    (원글의 postId/postTitle 이 함께 내려간다).
+                    제재회원 관리 화면(화면3)에서 해당 회원의 댓글에 일어난 일을 사건 단위로 조회할 때 호출된다.
+                    행 모양은 게시글 로그와 같고, commentId 가 채워지며 title 은 원글 제목이다 (이동 경로는 postId + 댓글 앵커).
 
                     ### 요청 예시
                     ```
@@ -142,11 +151,12 @@ public class AdminSanctionController {
                     ### 응답 예시
                     ```json
                     [{
-                      "reportId": 11, "commentId": 200, "postId": 171, "boardId": 2, "boardName": "자유게시판",
-                      "postTitle": "원글 제목", "preview": "댓글 내용 앞 30자", "state": "blind",
-                      "reasonId": 1, "reasonLabel": "욕설/비방", "detail": null,
-                      "status": "resolved", "activeFlag": null,
-                      "createdAt": "2026-08-14T10:00:00", "resolvedAt": "2026-08-14T11:00:00"
+                      "eventType": "blind", "eventAt": "2026-08-14T11:00:00",
+                      "reportId": null, "reportStatus": null, "actionId": 30,
+                      "reporterName": null, "actorName": null, "isAuto": true, "isDirect": false,
+                      "reasonLabel": "욕설/비방", "detail": null,
+                      "postId": 171, "commentId": 200, "boardId": 2, "boardName": "자유게시판",
+                      "title": "원글 제목", "preview": "댓글 내용 앞 30자", "state": "blind"
                     }]
                     ```
                     state는 대상 댓글의 현재 표시 상태(normal/blind/deleted)
@@ -155,11 +165,11 @@ public class AdminSanctionController {
                     실패: 403 {"message":"..."} (관리자 권한 없음)
                     """)
     @GetMapping("/api/admin/sanctions/users/{userId}/reports/comments")
-    public ResponseEntity<List<ReportedCommentResponse>> getReportedComments(
-            @Parameter(description = "신고 내역을 조회할 회원 ID", example = "85")
+    public ResponseEntity<List<MemberHistoryEntryResponse>> getCommentHistory(
+            @Parameter(description = "로그를 조회할 회원 ID", example = "85")
             @PathVariable Long userId) {
-        log.info("회원별 신고된 댓글 내역 조회 요청 - userId: {}", userId);
-        return ResponseEntity.ok(sanctionAdminService.getReportedComments(userId));
+        log.info("회원별 댓글 신고·조치 로그 조회 요청 - userId: {}", userId);
+        return ResponseEntity.ok(sanctionAdminService.getCommentHistory(userId));
     }
 
     // 관리자 수동 제재 해제
