@@ -110,20 +110,20 @@ public class AdminSanctionController {
                     [{
                       "eventType": "delete", "eventAt": "2026-08-14T11:00:00",
                       "reportId": null, "reportStatus": null, "actionId": 31,
-                      "reporterName": null, "actorName": "홍길동", "isAuto": false, "isDirect": true,
+                      "reporterName": null, "actorName": "홍길동", "isAuto": false, "reported": false,
                       "reasonLabel": "기타", "detail": "게시판 성격과 맞지 않음",
                       "postId": 171, "commentId": null, "boardId": 2, "boardName": "자유게시판",
                       "title": "게시글 제목", "preview": "본문 앞 30자", "state": "deleted"
                     }, {
                       "eventType": "report", "eventAt": "2026-08-14T10:00:00",
                       "reportId": 9, "reportStatus": "resolved", "actionId": null,
-                      "reporterName": "김철수", "actorName": null, "isAuto": false, "isDirect": false,
+                      "reporterName": "김철수", "actorName": null, "isAuto": false, "reported": false,
                       "reasonLabel": "욕설/비방", "detail": null,
                       "postId": 171, "commentId": null, "boardId": 2, "boardName": "자유게시판",
                       "title": "게시글 제목", "preview": "본문 앞 30자", "state": "deleted"
                     }]
                     ```
-                    isAuto: 신고 누적 자동 블라인드 / isDirect: 블라인드를 거치지 않은 즉시 삭제
+                    isAuto: 신고 누적 자동 블라인드 / reported: 조치 이전에 회원 신고가 있었는가 (false = 관리자 직접 조치)
                     state는 대상 게시글의 현재 표시 상태(normal/blind/deleted)
 
                     실패: 401 {"message":"..."} (미인증)
@@ -153,7 +153,7 @@ public class AdminSanctionController {
                     [{
                       "eventType": "blind", "eventAt": "2026-08-14T11:00:00",
                       "reportId": null, "reportStatus": null, "actionId": 30,
-                      "reporterName": null, "actorName": null, "isAuto": true, "isDirect": false,
+                      "reporterName": null, "actorName": null, "isAuto": true, "reported": true,
                       "reasonLabel": "욕설/비방", "detail": null,
                       "postId": 171, "commentId": 200, "boardId": 2, "boardName": "자유게시판",
                       "title": "원글 제목", "preview": "댓글 내용 앞 30자", "state": "blind"
