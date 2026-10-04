@@ -139,17 +139,12 @@
     <!-- ===== 제재회원 관리 화면: 회원별 신고·조치 로그 (사건 단위, 2026-09-27) =====
          신고 접수(reports_log, 회원 신고만)와 조치(moderation_log: 블라인드/삭제/복원)를 각각 한 행으로 합친다.
          관리자 직접 조치를 신고 관리에 올린 reports_log 행(source=admin)은 같은 사건의 사본이라 뺀다.
-         isDirect: 삭제 직전(마지막 복원 이후)에 블라인드가 없었으면 '즉시 삭제'.
-         ${tt}=대상 유형 리터럴, ${tbl}=대상 테이블 별칭 t 의 PK 컬럼 -->
-    <sql id="deleteIsDirect">
-        (m.applied_state = 'deleted' AND NOT EXISTS (
-            SELECT 1 FROM moderation_log b
-             WHERE b.target_type = ${tt} AND b.target_id = m.target_id
-               AND b.applied_state = 'blind'
-               AND b.action_id &lt; m.action_id
-               AND b.action_id &gt; COALESCE((SELECT MAX(n.action_id) FROM moderation_log n
-                                             WHERE n.target_type = ${tt} AND n.target_id = m.target_id
-                                               AND n.applied_state = 'normal' AND n.action_id &lt; m.action_id), 0)))
+         reported: 그 조치 이전에 회원 신고가 있었는가 — 화면이 '관리자 직접 조치' 와 '신고에 따른 조치' 를 가른다.
+         ${tt}=대상 유형 리터럴 -->
+    <sql id="actionReported">
+        EXISTS (SELECT 1 FROM reports_log q
+                 WHERE q.target_type = ${tt} AND q.target_id = m.target_id
+                   AND q.source &lt;&gt; 'admin' AND q.created_at &lt;= m.created_at)
     </sql>
 
     <select id="findPostHistoryByAuthor" resultType="com.back.admin.sanction.dto.MemberHistoryEntryResponse">
@@ -162,7 +157,7 @@
             ru.name             AS reporterName,
             NULL                AS actorName,
             0                   AS isAuto,
-            0                   AS isDirect,
+            0                   AS reported,
             rs.label            AS reasonLabel,
             r.detail            AS detail,
             p.post_id           AS postId,
@@ -189,7 +184,7 @@
             NULL                AS reporterName,
             au.name             AS actorName,
             (m.acted_by IS NULL) AS isAuto,
-            <include refid="deleteIsDirect"><property name="tt" value="'post'"/></include> AS isDirect,
+            <include refid="actionReported"><property name="tt" value="'post'"/></include> AS reported,
             rs.label            AS reasonLabel,
             m.detail            AS detail,
             p.post_id           AS postId,
@@ -219,7 +214,7 @@
             ru.name             AS reporterName,
             NULL                AS actorName,
             0                   AS isAuto,
-            0                   AS isDirect,
+            0                   AS reported,
             rs.label            AS reasonLabel,
             r.detail            AS detail,
             cp.post_id          AS postId,
@@ -247,7 +242,7 @@
             NULL                AS reporterName,
             au.name             AS actorName,
             (m.acted_by IS NULL) AS isAuto,
-            <include refid="deleteIsDirect"><property name="tt" value="'comment'"/></include> AS isDirect,
+            <include refid="actionReported"><property name="tt" value="'comment'"/></include> AS reported,
             rs.label            AS reasonLabel,
             m.detail            AS detail,
             cp.post_id          AS postId,
