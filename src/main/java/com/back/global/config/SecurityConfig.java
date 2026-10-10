@@ -40,6 +40,7 @@ public class SecurityConfig {
                     // 비로그인 공개 리소스 (기존 /api/public/** 접두사 폐지 → 리소스 경로로 명시)
                     "/api/donations",        // 명예의전당
                     "/api/quotes/current",   // 이 주의 문장
+                    "/api/org/**",           // 조직도 · 역대 회장 (소개 페이지, 비로그인 공개) + 회장 사진
                     "/api/event",              // 일정(캘린더) 조회
                     // /api/event 하위는 전부 비로그인 공개다 — 일정 상세, 카테고리 목록,
                     // 구글 캘린더 구독 피드(구글 서버가 인증 없이 가져감), 일정 1건 ICS.
