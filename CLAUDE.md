@@ -121,7 +121,8 @@ com.back
   (NULL=이력 없음이면 면제) / `rank_no <= trending_top_n`. 댓글은 `state='normal' AND is_private=0` 만 센다.
 - 수치는 전부 `policy_settings`(`StatsPolicy`)에서 읽고, 코드에는 행이 없을 때의 기본값만 둔다. 집계 주기도
   정책이라 `@Scheduled` 상수가 아니라 `TrendingScheduleConfig` 의 트리거가 매 실행마다 다시 읽는다.
-- **급상승 알림은 발송하지 않는다**(1차 미구현, PM 확정) — 통계 코드는 notifications 를 건드리지 않는다.
+- 급상승 집계 자체는 알림을 보내지 않는다. **주간 인기 글 알림**(`TrendingNotifyBatch`, 매주 화요일 10시)만 지난 7일 급상승 글을
+  `trending_notify_inactive_days` 이상 미접속 회원에게 모아 보낸다 (PM 2026-10-10 결정, `notify_trending` 스위치).
 - 통계 조회 API 를 만들 때는 **권한 필터가 필수**다: `admin_level >= 1` 이거나 `read_scope='MEMBER'` 또는
   `read_scope = member_type`. 그래서 집계 행에 `read_scope` 스냅샷을 남겨 뒀다(boards 재조인 없이 필터 가능).
 - 배치 순번: 04:00 제재 캐시 → 04:30 탈퇴 행 → 04:40 알림 → **04:50 주간 가입** → **05:00 통계 정리**.
