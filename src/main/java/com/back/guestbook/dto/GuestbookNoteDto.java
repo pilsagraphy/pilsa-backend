@@ -17,6 +17,9 @@ public class GuestbookNoteDto {
     private String semesterLabel;
     private String displayName;
     private Long userId;
+    /** 관리자 목록에서만 — 로그인해서 남긴 글의 실제 회원 이름·아이디 (PM 10/10 밤 "회원 51 → 실제 이름") */
+    private String authorName;
+    private String authorLoginId;
     private Boolean isMine;
     /** 고치거나 지울 수 있는가 — 본인(로그인) 또는 관리자 */
     private Boolean canManage;
