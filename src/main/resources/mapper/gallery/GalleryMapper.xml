@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.gallery.mapper.GalleryMapper">
+
+    <select id="findPolicySetting" resultType="string">
+        SELECT setting_value
+        FROM policy_settings
+        WHERE code = #{code}
+    </select>
+
+    <select id="findSemesters" resultType="string">
+        SELECT DISTINCT semester_label
+        FROM gallery_photos
+        <choose>
+            <when test="includeHidden">WHERE state IN ('normal', 'hidden')</when>
+            <otherwise>WHERE state = 'normal'</otherwise>
+        </choose>
+        ORDER BY semester_label DESC
+    </select>
+
+    <sql id="columns">
+        g.photo_id       AS photoId,
+        g.semester_label AS semesterLabel,
+        g.user_id        AS userId,
+        u.name           AS uploaderName,
+        g.file_url       AS fileUrl,
+        g.file_type      AS fileType,
+        g.ratio,
+        g.title,
+        g.hashtags       AS hashtagsRaw,
+        g.sort_order     AS sortOrder,
+        g.state,
+        g.created_at     AS createdAt
+    </sql>
+
+    <!-- 시드 사진은 sort_order 로 정한 순서, 회원이 올린 사진은 sort_order 9999 라 뒤에 최신 먼저 -->
+    <select id="findPhotos" resultType="com.back.gallery.dto.GalleryPhotoDto">
+        SELECT <include refid="columns"/>
+        FROM gallery_photos g
+        LEFT JOIN users u ON u.user_id = g.user_id
+        WHERE g.semester_label = #{semester}
+        <choose>
+            <when test="includeHidden">AND g.state IN ('normal', 'hidden')</when>
+            <otherwise>AND g.state = 'normal'</otherwise>
+        </choose>
+        ORDER BY g.sort_order ASC, g.photo_id DESC
+    </select>
+
+    <select id="findById" resultType="com.back.gallery.dto.GalleryPhotoDto">
+        SELECT <include refid="columns"/>
+        FROM gallery_photos g
+        LEFT JOIN users u ON u.user_id = g.user_id
+        WHERE g.photo_id = #{photoId}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="p.photoId">
+        INSERT INTO gallery_photos (semester_label, user_id, file_url, file_type, ratio, title, hashtags, sort_order)
+        VALUES (#{p.semesterLabel}, #{p.userId}, #{p.fileUrl}, #{p.fileType}, #{p.ratio}, #{p.title}, #{p.hashtagsRaw}, #{p.sortOrder})
+    </insert>
+
+    <update id="deleteOwn">
+        UPDATE gallery_photos
+        SET state = 'deleted'
+        WHERE photo_id = #{photoId}
+          AND user_id = #{userId}
+          AND state = 'normal'
+    </update>
+
+    <update id="updateState">
+        UPDATE gallery_photos
+        SET state = #{to}
+        WHERE photo_id = #{photoId}
+          AND state = #{from}
+    </update>
+
+</mapper>

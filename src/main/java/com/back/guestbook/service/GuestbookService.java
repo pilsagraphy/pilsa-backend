@@ -184,7 +184,9 @@ public class GuestbookService {
         note.setDisplayName(name);
         note.setContent(content);
         note.setFont(FONTS.contains(req.getFont()) ? req.getFont() : "pen");
-        note.setInk(INKS.contains(req.getInk()) ? req.getInk() : "black");
+        // 잉크는 기본 6색 키 또는 사용자가 컬러피커로 고른 #rrggbb (PM 10/10 밤)
+        String inkIn = req.getInk() == null ? "" : req.getInk().trim().toLowerCase();
+        note.setInk(INKS.contains(inkIn) || inkIn.matches("#[0-9a-f]{6}") ? inkIn : "black");
         note.setPaper(PAPERS.contains(req.getPaper()) ? req.getPaper() : "plain");
         note.setAlign(ALIGNS.contains(req.getAlign()) ? req.getAlign() : "left");
     }
