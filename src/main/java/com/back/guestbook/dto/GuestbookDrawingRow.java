@@ -13,6 +13,7 @@ public class GuestbookDrawingRow {
     private Double posY;
     private Double widthPct;
     private Integer rotation;
+    private Double opacity;
     private Integer sortOrder;
     private String state;
 }

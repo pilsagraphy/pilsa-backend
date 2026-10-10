@@ -57,6 +57,7 @@
                d.pos_y      AS posY,
                d.width_pct  AS widthPct,
                d.rotation,
+               d.opacity,
                d.sort_order AS sortOrder
         FROM guestbook_drawings d
         WHERE d.state = 'normal'
@@ -75,6 +76,7 @@
                pos_y      AS posY,
                width_pct  AS widthPct,
                rotation,
+               opacity,
                sort_order AS sortOrder,
                state
         FROM guestbook_drawings
@@ -127,8 +129,8 @@
     </update>
 
     <insert id="insertDrawing" useGeneratedKeys="true" keyProperty="d.drawingId">
-        INSERT INTO guestbook_drawings (note_id, file_url, file_type, pos_x, pos_y, width_pct, rotation, sort_order)
-        VALUES (#{d.noteId}, #{d.fileUrl}, #{d.fileType}, #{d.posX}, #{d.posY}, #{d.widthPct}, #{d.rotation}, #{d.sortOrder})
+        INSERT INTO guestbook_drawings (note_id, file_url, file_type, pos_x, pos_y, width_pct, rotation, opacity, sort_order)
+        VALUES (#{d.noteId}, #{d.fileUrl}, #{d.fileType}, #{d.posX}, #{d.posY}, #{d.widthPct}, #{d.rotation}, #{d.opacity}, #{d.sortOrder})
     </insert>
 
     <update id="updateDrawingPlacement">
@@ -137,6 +139,7 @@
             pos_y      = #{d.posY},
             width_pct  = #{d.widthPct},
             rotation   = #{d.rotation},
+            opacity    = #{d.opacity},
             sort_order = #{d.sortOrder}
         WHERE drawing_id = #{d.drawingId}
           AND note_id = #{noteId}

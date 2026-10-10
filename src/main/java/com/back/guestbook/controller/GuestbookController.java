@@ -52,7 +52,7 @@ public class GuestbookController {
                   "drawings": [ { "drawingId": 3, "imageUrl": "/api/guestbook/drawings/3/image", "posX": 82.5, "posY": 18, "widthPct": 28, "rotation": 10 } ],
                   "createdAt": "2026-10-10T21:00:00", "updatedAt": "2026-10-10T21:00:00" } ] }
             ```
-            font: pen/brush/gaegu/himelody/gamja/poor · ink: black/blueblack/sepia/burgundy/forest/pencil · paper: plain/lined/grid/cream ·
+            font: pen/brush/gaegu/himelody/gamja/poor · ink: black/blueblack/sepia/burgundy/forest/pencil · paper: plain/lined/grid/cream/vintage ·
             align: left/center/right · tilt: 카드 기울기(도). drawings 의 posX/posY 는 카드 폭·높이 기준 %(그림 중심), widthPct 는 카드 폭 기준 %""")
     @GetMapping("/api/guestbook")
     public ResponseEntity<GuestbookResponse> get(@RequestParam(required = false) String semester) {

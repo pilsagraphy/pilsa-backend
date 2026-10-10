@@ -27,5 +27,6 @@ public class GuestbookNoteRequest {
         private Double posY;
         private Double widthPct;
         private Integer rotation;
+        private Double opacity;
     }
 }
