@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.admin.org.mapper.AdminOrgMapper">
+
+    <select id="findPresidentBySeqNo" resultType="com.back.org.dto.OrgPresidentRow">
+        SELECT president_id AS presidentId, seq_no AS seqNo, name, start_year AS startYear, end_year AS endYear,
+               photo_url AS photoUrl, photo_type AS photoType
+        FROM org_presidents
+        WHERE seq_no = #{seqNo}
+          AND state = 'normal'
+        LIMIT 1
+    </select>
+
+    <insert id="insertPresident" useGeneratedKeys="true" keyProperty="holder.presidentId">
+        INSERT INTO org_presidents (seq_no, name, start_year, end_year, created_by)
+        VALUES (#{p.seqNo}, #{p.name}, #{p.startYear}, #{p.endYear}, #{userId})
+    </insert>
+
+    <update id="updatePresident">
+        UPDATE org_presidents
+        SET seq_no     = #{p.seqNo},
+            name       = #{p.name},
+            start_year = #{p.startYear},
+            end_year   = #{p.endYear}
+        WHERE president_id = #{presidentId}
+          AND state = 'normal'
+    </update>
+
+    <update id="updatePhoto">
+        UPDATE org_presidents
+        SET photo_url  = #{photoUrl},
+            photo_type = #{photoType}
+        WHERE president_id = #{presidentId}
+          AND state = 'normal'
+    </update>
+
+    <update id="softDeletePresident">
+        UPDATE org_presidents
+        SET state = 'deleted'
+        WHERE president_id = #{presidentId}
+          AND state = 'normal'
+    </update>
+
+    <update id="softDeleteMembersOfPresident">
+        UPDATE org_members
+        SET state = 'deleted'
+        WHERE president_id = #{presidentId}
+          AND state = 'normal'
+    </update>
+
+    <select id="countMembersOfTerm" resultType="int">
+        SELECT COUNT(*)
+        FROM org_members
+        WHERE president_id = #{presidentId}
+          AND term_label = #{term}
+          AND state = 'normal'
+    </select>
+
+    <update id="softDeleteMembersOfTerm">
+        UPDATE org_members
+        SET state = 'deleted'
+        WHERE president_id = #{presidentId}
+          AND term_label = #{term}
+          AND state = 'normal'
+    </update>
+
+    <insert id="insertMembers">
+        INSERT INTO org_members (president_id, term_label, group_type, group_title, role, name, sort_order, created_by)
+        VALUES
+        <foreach collection="rows" item="r" separator=",">
+            (#{r.presidentId}, #{r.termLabel}, #{r.groupType}, #{r.groupTitle}, #{r.role}, #{r.name}, #{r.sortOrder}, #{userId})
+        </foreach>
+    </insert>
+
+    <update id="renameTerm">
+        UPDATE org_members
+        SET term_label = #{to}
+        WHERE president_id = #{presidentId}
+          AND term_label = #{from}
+          AND state = 'normal'
+    </update>
+
+</mapper>

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.org.mapper.OrgMapper">
+
+    <sql id="presidentColumns">
+        president_id AS presidentId,
+        seq_no       AS seqNo,
+        name,
+        start_year   AS startYear,
+        end_year     AS endYear,
+        photo_url    AS photoUrl,
+        photo_type   AS photoType
+    </sql>
+
+    <select id="findPresidents" resultType="com.back.org.dto.OrgPresidentRow">
+        SELECT <include refid="presidentColumns"/>
+        FROM org_presidents
+        WHERE state = 'normal'
+        ORDER BY seq_no ASC, president_id ASC
+    </select>
+
+    <select id="findPresidentById" resultType="com.back.org.dto.OrgPresidentRow">
+        SELECT <include refid="presidentColumns"/>
+        FROM org_presidents
+        WHERE president_id = #{presidentId}
+          AND state = 'normal'
+    </select>
+
+    <!-- 학기 라벨은 'YYYY' 또는 'YYYY-N학기' 꼴이라 문자열 정렬이 곧 시간순이다 -->
+    <select id="findMembers" resultType="com.back.org.dto.OrgMemberRow">
+        SELECT member_id    AS memberId,
+               president_id AS presidentId,
+               term_label   AS termLabel,
+               group_type   AS groupType,
+               group_title  AS groupTitle,
+               role,
+               name,
+               sort_order   AS sortOrder
+        FROM org_members
+        WHERE state = 'normal'
+        ORDER BY president_id ASC, term_label ASC, sort_order ASC, member_id ASC
+    </select>
+
+</mapper>
