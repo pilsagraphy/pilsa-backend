@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.stats.trending.mapper.TrendingNotifyMapper">
+
+    <select id="findBoardIdByName" resultType="long">
+        SELECT board_id
+        FROM boards
+        WHERE name = #{name}
+        LIMIT 1
+    </select>
+
+    <!-- 지난 7일 안에 급상승(is_trending=1)으로 집계된 글. 여러 구간에 걸쳐 뽑힌 글은 가장 높은 점수 하나로 -->
+    <select id="findTrendingPosts" resultType="com.back.stats.trending.dto.TrendingNotifyPost">
+        SELECT p.post_id AS postId,
+               p.title
+        FROM (
+            SELECT s.post_id, MAX(s.final_score) AS score
+            FROM stats_post_hourly s
+            WHERE s.board_id = #{boardId}
+              AND s.is_trending = 1
+              AND s.stat_hour >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+            GROUP BY s.post_id
+        ) t
+        JOIN posts p ON p.post_id = t.post_id AND p.state = 'normal'
+        ORDER BY t.score DESC, p.post_id DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 급상승이 없던 주 — 지난 7일 반응 상위. 가중치는 급상승 집계와 같은 기본값(조회 1 · 좋아요 5 · 댓글 3) -->
+    <select id="findTopReactedPosts" resultType="com.back.stats.trending.dto.TrendingNotifyPost">
+        SELECT p.post_id AS postId,
+               p.title
+        FROM posts p
+        WHERE p.board_id = #{boardId}
+          AND p.state = 'normal'
+          AND p.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+        ORDER BY (p.view_count
+                  + 5 * (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.post_id)
+                  + 3 * (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.post_id AND c.state = 'normal')) DESC,
+                 p.post_id DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 마지막 접속이 N일보다 오래됐거나 접속 기록이 없는 회원. 탈퇴·차단은 뺀다 (정지는 끝나면 돌아올 사람이라 둔다) -->
+    <select id="findInactiveUserIds" resultType="long">
+        SELECT u.user_id
+        FROM users u
+        WHERE u.is_deleted = 0
+          AND u.ban_status &lt;&gt; 'permanent'
+          AND NOT EXISTS (
+              SELECT 1 FROM stats_access_hourly s
+              WHERE s.user_id = u.user_id
+                AND s.access_hour >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
+          )
+    </select>
+
+</mapper>

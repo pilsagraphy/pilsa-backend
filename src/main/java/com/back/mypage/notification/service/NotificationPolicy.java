@@ -54,6 +54,7 @@ public class NotificationPolicy {
             case REPLY -> "notify_reply";
             case PINNED_POST -> "notify_pinned_post";
             case EVENT -> "notify_event";
+            case TRENDING -> "notify_trending";
             default -> null;
         };
     }
