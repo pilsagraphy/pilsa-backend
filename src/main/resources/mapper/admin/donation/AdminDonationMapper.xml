@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.admin.donation.mapper.AdminDonationMapper">
+
+    <sql id="columns">
+        d.donation_id  AS donationId,
+        d.user_id      AS userId,
+        u.name         AS userName,
+        u.login_id     AS userLoginId,
+        d.display_name AS displayName,
+        d.amount,
+        d.affiliation,
+        d.major,
+        d.message,
+        d.donated_at   AS donatedAt,
+        d.is_anonymous AS isAnonymous,
+        d.photo_url    AS photoUrl,
+        d.state
+    </sql>
+
+    <select id="findAll" resultType="com.back.admin.donation.dto.DonationAdminDto">
+        SELECT <include refid="columns"/>
+        FROM donations d
+        LEFT JOIN users u ON u.user_id = d.user_id
+        WHERE d.state = 'normal'
+        ORDER BY d.amount DESC, d.donated_at DESC
+    </select>
+
+    <select id="findById" resultType="com.back.admin.donation.dto.DonationAdminDto">
+        SELECT <include refid="columns"/>
+        FROM donations d
+        LEFT JOIN users u ON u.user_id = d.user_id
+        WHERE d.donation_id = #{donationId}
+    </select>
+
+    <select id="existsUser" resultType="boolean">
+        SELECT EXISTS (SELECT 1 FROM users WHERE user_id = #{userId})
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="d.donationId">
+        INSERT INTO donations (user_id, display_name, amount, affiliation, major, message, donated_at, is_anonymous, created_by)
+        VALUES (#{d.userId}, #{d.displayName}, #{d.amount}, #{d.affiliation}, #{d.major}, #{d.message}, #{d.donatedAt}, #{d.isAnonymous}, #{adminId})
+    </insert>
+
+    <update id="update">
+        UPDATE donations
+        SET user_id      = #{d.userId},
+            display_name = #{d.displayName},
+            amount       = #{d.amount},
+            affiliation  = #{d.affiliation},
+            major        = #{d.major},
+            message      = #{d.message},
+            donated_at   = #{d.donatedAt},
+            is_anonymous = #{d.isAnonymous}
+        WHERE donation_id = #{donationId}
+          AND state = 'normal'
+    </update>
+
+    <update id="updatePhoto">
+        UPDATE donations
+        SET photo_url = #{photoUrl}
+        WHERE donation_id = #{donationId}
+          AND state = 'normal'
+    </update>
+
+    <update id="softDelete">
+        UPDATE donations
+        SET state = 'deleted'
+        WHERE donation_id = #{donationId}
+          AND state = 'normal'
+    </update>
+
+</mapper>

@@ -16,6 +16,8 @@
             photo_url AS photoUrl
         FROM
             donations
+        WHERE
+            state = 'normal'
         ORDER BY
             amount DESC,
             donated_at DESC
