@@ -17,6 +17,7 @@ public class GuestbookNoteRequest {
     private String ink;
     private String paper;
     private String align;
+    private Integer marksSeed;
     private List<DrawingInput> drawings = new ArrayList<>();
 
     @Data

@@ -177,6 +177,7 @@ public class GuestbookService {
         note.setInk(INKS.contains(inkIn) || inkIn.matches("#[0-9a-f]{6}") ? inkIn : "black");
         note.setPaper(PAPERS.contains(req.getPaper()) ? req.getPaper() : "plain");
         note.setAlign(ALIGNS.contains(req.getAlign()) ? req.getAlign() : "left");
+        note.setMarksSeed(req.getMarksSeed()); // 얼룩 배치 씨앗 — 프론트가 뽑은 값 그대로 (없으면 null → 화면이 noteId 로)
     }
 
     /** 수·크기·위치 검사. 새 글은 전부 dataUrl 이어야 하고, 고치기는 drawingId 로 기존 그림을 가리킬 수 있다 */
