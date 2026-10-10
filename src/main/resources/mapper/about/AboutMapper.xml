@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.about.mapper.AboutMapper">
+
+    <!-- 동아리 소개 문단 -->
+    <sql id="introColumns">
+        section_id AS sectionId,
+        title,
+        content,
+        sort_order AS sortOrder,
+        state
+    </sql>
+
+    <select id="findIntroSections" resultType="com.back.about.dto.IntroSectionDto">
+        SELECT <include refid="introColumns"/>
+        FROM intro_sections
+        WHERE state = 'normal'
+        ORDER BY sort_order ASC, section_id ASC
+    </select>
+
+    <select id="findIntroSection" resultType="com.back.about.dto.IntroSectionDto">
+        SELECT <include refid="introColumns"/>
+        FROM intro_sections
+        WHERE section_id = #{sectionId}
+          AND state = 'normal'
+    </select>
+
+    <insert id="insertIntroSection" useGeneratedKeys="true" keyProperty="s.sectionId">
+        INSERT INTO intro_sections (title, content, sort_order, created_by)
+        VALUES (#{s.title}, #{s.content}, #{s.sortOrder}, #{userId})
+    </insert>
+
+    <update id="updateIntroSection">
+        UPDATE intro_sections
+        SET title      = #{s.title},
+            content    = #{s.content},
+            sort_order = #{s.sortOrder}
+        WHERE section_id = #{sectionId}
+          AND state = 'normal'
+    </update>
+
+    <update id="softDeleteIntroSection">
+        UPDATE intro_sections
+        SET state = 'deleted'
+        WHERE section_id = #{sectionId}
+          AND state = 'normal'
+    </update>
+
+    <!-- 연혁 항목 -->
+    <sql id="historyColumns">
+        item_id    AS itemId,
+        year,
+        sort_order AS sortOrder,
+        text,
+        href,
+        video_url  AS video,
+        link_href  AS linkHref,
+        link_label AS linkLabel,
+        images     AS imagesJson,
+        state
+    </sql>
+
+    <select id="findHistoryItems" resultType="com.back.about.dto.HistoryItemDto">
+        SELECT <include refid="historyColumns"/>
+        FROM history_items
+        WHERE state = 'normal'
+        ORDER BY year ASC, sort_order ASC, item_id ASC
+    </select>
+
+    <select id="findHistoryItem" resultType="com.back.about.dto.HistoryItemDto">
+        SELECT <include refid="historyColumns"/>
+        FROM history_items
+        WHERE item_id = #{itemId}
+          AND state = 'normal'
+    </select>
+
+    <insert id="insertHistoryItem" useGeneratedKeys="true" keyProperty="h.itemId">
+        INSERT INTO history_items (year, sort_order, text, href, video_url, link_href, link_label, images, created_by)
+        VALUES (#{h.year}, #{h.sortOrder}, #{h.text}, #{h.href}, #{h.video}, #{h.linkHref}, #{h.linkLabel}, #{h.imagesJson}, #{userId})
+    </insert>
+
+    <update id="updateHistoryItem">
+        UPDATE history_items
+        SET year       = #{h.year},
+            sort_order = #{h.sortOrder},
+            text       = #{h.text},
+            href       = #{h.href},
+            video_url  = #{h.video},
+            link_href  = #{h.linkHref},
+            link_label = #{h.linkLabel},
+            images     = #{h.imagesJson}
+        WHERE item_id = #{itemId}
+          AND state = 'normal'
+    </update>
+
+    <update id="softDeleteHistoryItem">
+        UPDATE history_items
+        SET state = 'deleted'
+        WHERE item_id = #{itemId}
+          AND state = 'normal'
+    </update>
+
+    <select id="findMaxHistoryOrder" resultType="java.lang.Integer">
+        SELECT MAX(sort_order)
+        FROM history_items
+        WHERE year = #{year}
+          AND state = 'normal'
+    </select>
+
+</mapper>
