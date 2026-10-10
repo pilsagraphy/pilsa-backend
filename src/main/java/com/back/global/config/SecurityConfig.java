@@ -42,6 +42,7 @@ public class SecurityConfig {
                     "/api/quotes/current",   // 이 주의 문장
                     "/api/org/**",           // 조직도 · 역대 회장 (소개 페이지, 비로그인 공개) + 회장 사진
                     "/api/guestbook/**",     // 방명록 — 읽기·남기기 모두 비로그인 허용 (로그인이면 회원 이름으로 남길 수 있다)
+                    "/api/gallery/**",       // 활동 사진 보기 + 사진 파일 (비로그인 공개). 올리기는 /api/user/gallery
                     "/api/event",              // 일정(캘린더) 조회
                     // /api/event 하위는 전부 비로그인 공개다 — 일정 상세, 카테고리 목록,
                     // 구글 캘린더 구독 피드(구글 서버가 인증 없이 가져감), 일정 1건 ICS.
