@@ -61,8 +61,10 @@ public class GalleryService {
         if (files == null || files.isEmpty()) throw new BaseException("사진을 골라 주세요.", HttpStatus.BAD_REQUEST);
         int max = maxFiles();
         if (files.size() > max) throw new BaseException("한 번에 " + max + "장까지 올릴 수 있어요.", HttpStatus.BAD_REQUEST);
-        String t = title == null ? null : title.strip();
-        if (t != null && t.length() > TITLE_MAX) throw new BaseException("제목은 " + TITLE_MAX + "자까지예요.", HttpStatus.BAD_REQUEST);
+        // 제목은 필수 (PM 10/11) — 갤러리 호버·크게 보기 띠에 그대로 나간다
+        String t = title == null ? "" : title.strip();
+        if (t.isEmpty()) throw new BaseException("제목을 적어 주세요.", HttpStatus.BAD_REQUEST);
+        if (t.length() > TITLE_MAX) throw new BaseException("제목은 " + TITLE_MAX + "자까지예요.", HttpStatus.BAD_REQUEST);
         String tags = normalizeHashtags(hashtags);
 
         String semester = currentSemesterLabel();
@@ -81,7 +83,7 @@ public class GalleryService {
             p.setFileType(type);
             Double r = ratios != null && i < ratios.size() ? ratios.get(i) : null;
             p.setRatio(r == null || r.isNaN() || r < 0.2 || r > 5 ? 1.0 : Math.round(r * 1000) / 1000.0);
-            p.setTitle(t == null || t.isEmpty() ? null : t);
+            p.setTitle(t);
             p.setHashtagsRaw(tags);
             p.setSortOrder(UPLOAD_SORT_ORDER);
             mapper.insert(p);
