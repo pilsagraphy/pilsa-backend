@@ -41,6 +41,8 @@ public class GuestbookNoteDto {
         private Double posY;
         private Double widthPct;
         private Integer rotation;
+        /** 0.1~1 (투명도) */
+        private Double opacity;
         private Integer sortOrder;
     }
 }

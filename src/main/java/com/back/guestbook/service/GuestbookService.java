@@ -57,7 +57,7 @@ public class GuestbookService {
     private static final int NAME_MAX = 30;
     private static final Set<String> FONTS = Set.of("pen", "brush", "gaegu", "himelody", "gamja", "poor");
     private static final Set<String> INKS = Set.of("black", "blueblack", "sepia", "burgundy", "forest", "pencil");
-    private static final Set<String> PAPERS = Set.of("plain", "lined", "grid", "cream");
+    private static final Set<String> PAPERS = Set.of("plain", "lined", "grid", "cream", "vintage");
     private static final Set<String> ALIGNS = Set.of("left", "center", "right");
     private static final String COOLDOWN_KEY = "guestbook:cooldown:";
     private static final String DRAWING_DIR = "uploads/guestbook/drawings";
@@ -213,6 +213,8 @@ public class GuestbookService {
             d.setPosY(clamp(d.getPosY(), 0, 100, 20));
             d.setWidthPct(clamp(d.getWidthPct(), 8, 80, 30));
             d.setRotation(d.getRotation() == null ? 0 : Math.max(-180, Math.min(180, d.getRotation())));
+            d.setOpacity(clamp(d.getOpacity(), 0.1, 1, 1));
+            d.setOpacity(clamp(d.getOpacity(), 0.1, 1, 1));
         }
         return list;
     }
@@ -233,6 +235,8 @@ public class GuestbookService {
             row.setPosY(in.getPosY());
             row.setWidthPct(in.getWidthPct());
             row.setRotation(in.getRotation());
+            row.setOpacity(in.getOpacity());
+            row.setOpacity(in.getOpacity());
             row.setSortOrder(order++);
             if (in.getDataUrl() != null && !in.getDataUrl().isBlank()) {
                 row.setFileUrl(storePng(noteId, in.getDataUrl()));
