@@ -38,7 +38,7 @@ public class TrendingNotifyBatch {
     private static final String MAX_POSTS = "trending_notify_max_posts";
     private static final int DEFAULT_INACTIVE_DAYS = 7;
     private static final String DEFAULT_BOARD_NAME = "자유게시판";
-    private static final int DEFAULT_MAX_POSTS = 3;
+    private static final int DEFAULT_MAX_POSTS = 1; // 1편만 — 누르면 바로 그 글로 (PM 2026-10-10)
     private static final int TITLE_MAX = 100;
     private static final int MESSAGE_MAX = 500;
 
@@ -74,14 +74,17 @@ public class TrendingNotifyBatch {
             return;
         }
 
-        String title = truncate("[" + boardName + "] 이번 주 인기 글 " + posts.size() + "편", TITLE_MAX);
-        String message = truncate(posts.stream().map(p -> "· " + p.getTitle()).collect(Collectors.joining("\n")), MESSAGE_MAX);
         TrendingNotifyPost first = posts.get(0);
+        String title = truncate("[" + boardName + "] 이번 주 인기 글", TITLE_MAX);
+        String message = truncate(posts.size() == 1
+                ? first.getTitle()
+                : posts.stream().map(p -> "· " + p.getTitle()).collect(Collectors.joining("\n")), MESSAGE_MAX);
 
         int sent = 0;
         for (Long receiverId : receivers) {
             try {
-                publisher.publish(receiverId, NotificationType.TRENDING, "post", first.getPostId(), boardId, title, message);
+                // 알림함에는 쌓지 않는다 — OS 푸시만, 누르면 그 글로 (PM 2026-10-10)
+                publisher.pushOnly(receiverId, NotificationType.TRENDING, "post", first.getPostId(), boardId, title, message);
                 sent++;
             } catch (Exception e) {
                 log.warn("주간 인기 글 알림 발행 실패 - userId: {}, {}", receiverId, e.getMessage());
