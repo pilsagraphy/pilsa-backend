@@ -45,6 +45,7 @@ public class BoardServiceImpl implements BoardService {
     private final FileStorageUtil fileStorageUtil;
     private final AttachmentService attachmentService;
     private final NotificationPublisher notificationPublisher;
+    private final com.back.mypage.notification.service.NotificationPreferenceService notificationPreferenceService;
     private final com.back.mypage.notification.mapper.NotificationMapper notificationMapper;
     // 발행 연동(초안 확인·삭제)용 — 첨부 소유 이전은 AttachmentService 가 담당한다
     private final DraftMapper draftMapper;
@@ -470,15 +471,17 @@ public class BoardServiceImpl implements BoardService {
                                              String commentContent, boolean privateComment) {
         try {
             // 수신자 → 알림유형. 삽입 순서(REPLY 먼저)를 유지해 동일인 중복 시 putIfAbsent 가 REPLY 를 남기게 한다.
+            // 글/댓글별 알림 끄기(notification_mutes, PM 2026-10-10): 부모 댓글 작성자가 그 댓글의 답글 알림을 껐으면 REPLY 를,
+            // 글 작성자가 그 글의 댓글 알림을 껐으면 COMMENT 를 빼고 간다. 유형 스위치는 NotificationPublisher 가 본다
             Map<Long, NotificationType> recipients = new LinkedHashMap<>();
             if (parentCommentId != null) {
                 Long parentAuthorId = boardMapper.findCommentAuthorId(parentCommentId);
-                if (parentAuthorId != null) {
+                if (parentAuthorId != null && !notificationPreferenceService.isMuted(parentAuthorId, "comment", parentCommentId)) {
                     recipients.put(parentAuthorId, NotificationType.REPLY);
                 }
             }
             Long postAuthorId = boardMapper.findAuthorIdByPostId(postId);
-            if (postAuthorId != null) {
+            if (postAuthorId != null && !notificationPreferenceService.isMuted(postAuthorId, "post", postId)) {
                 recipients.putIfAbsent(postAuthorId, NotificationType.COMMENT); // 이미 REPLY 로 잡혔으면 유지
             }
             recipients.remove(actorId); // 본인 제외 (내 글/내 댓글에 내가 달아도 나에겐 안 감)

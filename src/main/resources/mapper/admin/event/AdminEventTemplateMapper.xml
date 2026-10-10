@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.admin.event.mapper.AdminEventTemplateMapper">
+
+    <sql id="columns">
+        template_id                 AS templateId,
+        name,
+        title,
+        category,
+        description,
+        TIME_FORMAT(start_time, '%H:%i') AS startTime,
+        TIME_FORMAT(end_time, '%H:%i')   AS endTime,
+        created_by                  AS createdBy,
+        created_at                  AS createdAt,
+        updated_at                  AS updatedAt
+    </sql>
+
+    <select id="findAll" resultType="com.back.admin.event.dto.EventTemplateDto">
+        SELECT <include refid="columns"/>
+        FROM event_templates
+        WHERE state = 'normal'
+        ORDER BY name ASC, template_id ASC
+    </select>
+
+    <select id="findById" resultType="com.back.admin.event.dto.EventTemplateDto">
+        SELECT <include refid="columns"/>
+        FROM event_templates
+        WHERE template_id = #{templateId}
+          AND state = 'normal'
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="t.templateId">
+        INSERT INTO event_templates (name, title, category, description, start_time, end_time, created_by)
+        VALUES (#{t.name}, #{t.title}, #{t.category}, #{t.description}, #{t.startTime}, #{t.endTime}, #{userId})
+    </insert>
+
+    <update id="update">
+        UPDATE event_templates
+        SET name        = #{t.name},
+            title       = #{t.title},
+            category    = #{t.category},
+            description = #{t.description},
+            start_time  = #{t.startTime},
+            end_time    = #{t.endTime}
+        WHERE template_id = #{templateId}
+          AND state = 'normal'
+    </update>
+
+    <update id="softDelete">
+        UPDATE event_templates
+        SET state = 'deleted'
+        WHERE template_id = #{templateId}
+          AND state = 'normal'
+    </update>
+
+</mapper>

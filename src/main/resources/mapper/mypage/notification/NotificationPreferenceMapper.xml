@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.mypage.notification.mapper.NotificationPreferenceMapper">
+
+    <select id="findDisabledTypes" resultType="java.lang.String">
+        SELECT type
+        FROM user_notification_settings
+        WHERE user_id = #{userId}
+          AND enabled = 0
+    </select>
+
+    <insert id="upsertSetting">
+        INSERT INTO user_notification_settings (user_id, type, enabled)
+        VALUES (#{userId}, #{type}, #{enabled})
+        ON DUPLICATE KEY UPDATE enabled = VALUES(enabled)
+    </insert>
+
+    <select id="existsMute" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1 FROM notification_mutes
+            WHERE user_id = #{userId}
+              AND target_type = #{targetType}
+              AND target_id = #{targetId}
+        )
+    </select>
+
+    <insert id="insertMute">
+        INSERT IGNORE INTO notification_mutes (user_id, target_type, target_id)
+        VALUES (#{userId}, #{targetType}, #{targetId})
+    </insert>
+
+    <delete id="deleteMute">
+        DELETE FROM notification_mutes
+        WHERE user_id = #{userId}
+          AND target_type = #{targetType}
+          AND target_id = #{targetId}
+    </delete>
+
+</mapper>

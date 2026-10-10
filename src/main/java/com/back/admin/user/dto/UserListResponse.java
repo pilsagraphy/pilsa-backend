@@ -19,6 +19,7 @@ public class UserListResponse {
     private String phone;        // 전화번호
     private String studentNo;    // 학번
     private String email;        // Email
+    private LocalDateTime joinedAt; // 가입일 (users.created_at) — 회원 목록에 보여 준다 (PM, 2026-10-10)
     private String memberType;   // 회원 구분 (STUDENT: 재학생 / ALUMNI: 졸업생) — PR #66 권한 개편 반영
     private Integer adminLevel;  // 관리 권한 레벨 (0: 일반 / 1~3: 관리자)
     private int postCount;       // 게시글 수
