@@ -21,6 +21,7 @@
             u.phone        AS phone,
             u.student_no   AS studentNo,
             u.email        AS email,
+            u.created_at   AS joinedAt,
             u.member_type  AS memberType,
             u.admin_level  AS adminLevel,
             -- banStatus는 캐시 컬럼(u.ban_status) 대신 조인된 현재 유효 차단에서 파생

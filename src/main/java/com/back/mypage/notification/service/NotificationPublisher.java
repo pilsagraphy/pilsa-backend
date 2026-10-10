@@ -27,6 +27,7 @@ public class NotificationPublisher {
     private final NotificationMapper notificationMapper;
     private final NotificationPushService pushService;
     private final NotificationPolicy notificationPolicy;
+    private final NotificationPreferenceService preferenceService;
 
     /**
      * 알림 1건 발행.
@@ -59,6 +60,11 @@ public class NotificationPublisher {
         // 관리자가 '운영 관리 > 알림 설정' 에서 끈 유형은 저장도 발송도 하지 않는다 (호출부의 수신자 판정은 그대로)
         if (!notificationPolicy.isEnabled(type)) {
             log.debug("알림 발행 생략 - type={} 스위치 꺼짐, receiverId={}", type, receiverId);
+            return;
+        }
+        // 수신자가 마이페이지 설정에서 끈 유형도 저장·발송하지 않는다 (PM 2026-10-10). 글/댓글별 끄기는 호출부(BoardServiceImpl)가 본다
+        if (!preferenceService.isTypeEnabled(receiverId, type)) {
+            log.debug("알림 발행 생략 - type={} 회원 설정 꺼짐, receiverId={}", type, receiverId);
             return;
         }
 
