@@ -7,13 +7,15 @@
                n.semester_label AS semesterLabel,
                n.display_name   AS displayName,
                n.user_id        AS userId,
-               (n.user_id IS NOT NULL) AS isMember,
                n.content,
+               n.font,
                n.ink,
                n.paper,
+               n.align,
                n.tilt,
                n.state,
-               n.created_at     AS createdAt
+               n.created_at     AS createdAt,
+               n.updated_at     AS updatedAt
         FROM guestbook_notes n
         WHERE n.semester_label = #{semester}
         ORDER BY n.note_id DESC
@@ -31,31 +33,5 @@
         WHERE note_id = #{noteId}
           AND state = #{from}
     </update>
-
-    <insert id="insertSticker" useGeneratedKeys="true" keyProperty="s.stickerId">
-        INSERT INTO guestbook_stickers (name, file_url, file_type, sort_order, created_by)
-        VALUES (#{s.name}, #{s.fileUrl}, #{s.fileType}, #{s.sortOrder}, #{userId})
-    </insert>
-
-    <update id="updateSticker">
-        UPDATE guestbook_stickers
-        SET name       = #{name},
-            sort_order = #{sortOrder}
-        WHERE sticker_id = #{stickerId}
-          AND state = 'normal'
-    </update>
-
-    <update id="softDeleteSticker">
-        UPDATE guestbook_stickers
-        SET state = 'deleted'
-        WHERE sticker_id = #{stickerId}
-          AND state = 'normal'
-    </update>
-
-    <select id="findMaxStickerOrder" resultType="java.lang.Integer">
-        SELECT MAX(sort_order)
-        FROM guestbook_stickers
-        WHERE state = 'normal'
-    </select>
 
 </mapper>
