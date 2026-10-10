@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.guestbook.mapper.GuestbookMapper">
+
+    <select id="findPolicySetting" resultType="string">
+        SELECT setting_value
+        FROM policy_settings
+        WHERE code = #{code}
+    </select>
+
+    <select id="findUserName" resultType="string">
+        SELECT name
+        FROM users
+        WHERE user_id = #{userId}
+    </select>
+
+    <select id="findSemesters" resultType="string">
+        SELECT DISTINCT semester_label
+        FROM guestbook_notes
+        WHERE state = 'normal'
+        ORDER BY semester_label DESC
+    </select>
+
+    <sql id="noteColumns">
+        n.note_id        AS noteId,
+        n.semester_label AS semesterLabel,
+        n.display_name   AS displayName,
+        n.user_id        AS userId,
+        (n.user_id IS NOT NULL) AS isMember,
+        n.content,
+        n.ink,
+        n.paper,
+        n.tilt,
+        n.state,
+        n.created_at     AS createdAt
+    </sql>
+
+    <select id="findNotes" resultType="com.back.guestbook.dto.GuestbookNoteDto">
+        SELECT <include refid="noteColumns"/>
+        FROM guestbook_notes n
+        WHERE n.state = 'normal'
+          AND n.semester_label = #{semester}
+        ORDER BY n.note_id DESC
+    </select>
+
+    <select id="findNoteById" resultType="com.back.guestbook.dto.GuestbookNoteDto">
+        SELECT <include refid="noteColumns"/>
+        FROM guestbook_notes n
+        WHERE n.note_id = #{noteId}
+    </select>
+
+    <!-- 스티커 이미지 경로는 공개 API 로 — 파일 경로를 그대로 내보내지 않는다 -->
+    <select id="findNoteStickers" resultType="com.back.guestbook.dto.GuestbookNoteDto$StickerOnNote">
+        SELECT ns.note_id    AS noteId,
+               ns.sticker_id AS stickerId,
+               ns.slot,
+               s.name,
+               CONCAT('/api/guestbook/stickers/', s.sticker_id, '/image') AS imageUrl
+        FROM guestbook_note_stickers ns
+        JOIN guestbook_stickers s ON s.sticker_id = ns.sticker_id
+        WHERE ns.note_id IN
+        <foreach collection="noteIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        ORDER BY ns.note_id, ns.slot
+    </select>
+
+    <sql id="stickerColumns">
+        sticker_id AS stickerId,
+        name,
+        file_url   AS fileUrl,
+        file_type  AS fileType,
+        CONCAT('/api/guestbook/stickers/', sticker_id, '/image') AS imageUrl,
+        sort_order AS sortOrder
+    </sql>
+
+    <select id="findStickers" resultType="com.back.guestbook.dto.GuestbookStickerDto">
+        SELECT <include refid="stickerColumns"/>
+        FROM guestbook_stickers
+        WHERE state = 'normal'
+        ORDER BY sort_order ASC, sticker_id ASC
+    </select>
+
+    <!-- 지운 스티커도 이미 붙은 글에는 계속 보여야 하므로 state 를 보지 않는다 -->
+    <select id="findStickerById" resultType="com.back.guestbook.dto.GuestbookStickerDto">
+        SELECT <include refid="stickerColumns"/>
+        FROM guestbook_stickers
+        WHERE sticker_id = #{stickerId}
+    </select>
+
+    <select id="countStickersByIds" resultType="int">
+        SELECT COUNT(*)
+        FROM guestbook_stickers
+        WHERE state = 'normal'
+          AND sticker_id IN
+        <foreach collection="stickerIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </select>
+
+    <insert id="insertNote" useGeneratedKeys="true" keyProperty="n.noteId">
+        INSERT INTO guestbook_notes (semester_label, display_name, user_id, content, ink, paper, tilt, ip_hash)
+        VALUES (#{n.semesterLabel}, #{n.displayName}, #{n.userId}, #{n.content}, #{n.ink}, #{n.paper}, #{n.tilt}, #{ipHash})
+    </insert>
+
+    <insert id="insertNoteStickers">
+        INSERT INTO guestbook_note_stickers (note_id, sticker_id, slot)
+        VALUES
+        <foreach collection="stickerIds" item="id" index="i" separator=",">
+            (#{noteId}, #{id}, #{i})
+        </foreach>
+    </insert>
+
+    <update id="deleteOwnNote">
+        UPDATE guestbook_notes
+        SET state = 'deleted'
+        WHERE note_id = #{noteId}
+          AND user_id = #{userId}
+          AND state = 'normal'
+    </update>
+
+</mapper>
