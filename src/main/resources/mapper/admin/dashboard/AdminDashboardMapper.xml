@@ -54,6 +54,7 @@
          대상 단위로 묶는다(같은 글이 N번 신고돼도 1줄) — 안 묶으면 중복 신고 1건이 목록을 독점한다.
          preview 는 신고 대상 자체의 본문 앞부분(신고 관리 화면의 ReportedItemResponse 와 동일 규칙).
          postId 는 댓글 신고 행에서 원글로 이동하기 위한 값(댓글은 targetId 가 comment_id 라 그것만으론 못 감). -->
+    <!-- 반려(복원)된 신고는 신고 관리 목록과 같은 기준으로 뺀다 — 복원된 글이 대시보드에만 남아 있었다 (PM, 10/10) -->
     <select id="findRecentReports" resultType="com.back.admin.dashboard.dto.RecentReportResponse">
         SELECT targetType, targetId, postId, boardId, boardName, preview, createdAt
         FROM (
@@ -67,6 +68,7 @@
             FROM reports_log r
             INNER JOIN posts p ON r.target_type = 'post' AND r.target_id = p.post_id
             INNER JOIN boards b ON p.board_id = b.board_id
+            WHERE r.status &lt;&gt; 'rejected'
             GROUP BY p.post_id, b.board_id, b.name, LEFT(p.content, 30)
             UNION ALL
             SELECT 'comment'           AS targetType,
@@ -80,6 +82,7 @@
             INNER JOIN comments c ON r.target_type = 'comment' AND r.target_id = c.comment_id
             INNER JOIN posts p2 ON c.post_id = p2.post_id
             INNER JOIN boards b ON p2.board_id = b.board_id
+            WHERE r.status &lt;&gt; 'rejected'
             GROUP BY c.comment_id, p2.post_id, b.board_id, b.name, LEFT(c.content, 30)
         ) recent
         ORDER BY createdAt DESC

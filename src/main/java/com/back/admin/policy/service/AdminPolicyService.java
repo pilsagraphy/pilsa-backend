@@ -38,11 +38,20 @@ public class AdminPolicyService {
 
     private final AdminPolicyMapper mapper;
 
+    // 정책 설정 화면은 관리 레벨 3 전용 (PM, 2026-10-10). 그 아래 레벨은 알림 설정 화면이 쓰는 notify_* 스위치만 받는다 —
+    // 제재 수치·가입 형식·통계 기준은 보지도 못한다. ban_policy 도 비운다.
     public AdminPolicyResponse getAll() {
         AuthUtils.requireAdmin();
         AdminPolicyResponse res = new AdminPolicyResponse();
-        res.setSettings(mapper.findAllSettings());
-        res.setBanPolicies(mapper.findBanPolicies());
+        if (AuthUtils.adminLevel() >= EDIT_LEVEL) {
+            res.setSettings(mapper.findAllSettings());
+            res.setBanPolicies(mapper.findBanPolicies());
+        } else {
+            res.setSettings(mapper.findAllSettings().stream()
+                    .filter(item -> item.getCode() != null && item.getCode().startsWith("notify_"))
+                    .toList());
+            res.setBanPolicies(java.util.List.of());
+        }
         return res;
     }
 
