@@ -29,6 +29,8 @@ public class GuestbookNoteDto {
     private String paper;
     private String align;
     private Integer tilt;
+    /** 얼룩(잉크 방울·커피 자국) 배치 씨앗 — 작성자가 고른 배치가 그대로 남는다 (PM 10/11). null 이면 noteId 로 */
+    private Integer marksSeed;
     private String state;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
