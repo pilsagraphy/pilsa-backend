@@ -70,8 +70,8 @@ public class GuestbookService {
         List<String> semesters = new ArrayList<>(mapper.findSemesters());
         if (!semesters.contains(current)) semesters.add(0, current); // 글이 아직 없어도 이번 학기 탭은 보인다
         String picked = semester == null || semester.isBlank() || !semesters.contains(semester) ? current : semester;
-        // 관리자에게는 숨긴 글도 보여 그 자리에서 복원할 수 있게 (state 로 구분)
-        List<GuestbookNoteDto> notes = mapper.findNotes(picked, AuthUtils.isAdmin());
+        // 방명록 화면은 누구에게나 normal 만. 숨긴 글의 복원은 운영 관리 > 방명록 관리에서 (PM 10/11)
+        List<GuestbookNoteDto> notes = mapper.findNotes(picked, false);
         decorate(notes);
         return new GuestbookResponse(current, picked, semesters, maxLength(), maxDrawings(), drawingMaxKb(), notes);
     }
@@ -102,42 +102,30 @@ public class GuestbookService {
         return reload(note.getNoteId());
     }
 
-    /** 글 고치기 — 로그인 필수. 본인 글이거나 관리자(누구 글이든, PM 10/10 밤). 학기·기울기는 그대로, 그림은 보낸 목록으로 맞춘다 */
+    /**
+     * 글 고치기 — 로그인해서 남긴 내 글만 (관리자도 남의 글은 못 고친다. 숨기기는 방명록 관리에서 — PM 10/11).
+     * 학기·기울기는 그대로, 그림은 보낸 목록으로 맞춘다
+     */
     @Transactional
     public GuestbookNoteDto edit(Long noteId, GuestbookNoteRequest req) {
         Long me = AuthUtils.currentUserId();
         GuestbookNoteDto note = new GuestbookNoteDto();
         applyFields(note, req);
         List<GuestbookNoteRequest.DrawingInput> drawings = validateDrawings(req.getDrawings(), false);
-        int updated = mapper.updateOwnNote(noteId, me, note);
-        if (updated == 0 && AuthUtils.isAdmin()) updated = mapper.updateNoteAsAdmin(noteId, note);
-        if (updated == 0) {
+        if (mapper.updateOwnNote(noteId, me, note) == 0) {
             throw new BaseException("내가 남긴 글만 고칠 수 있어요.", HttpStatus.FORBIDDEN);
         }
         saveDrawings(noteId, drawings, false);
         return reload(noteId);
     }
 
-    /**
-     * 지우기 — 로그인 필수. 본인 글은 deleted, 관리자가 남의 글을 지우면 hidden(복원 가능).
-     * 비로그인으로 남긴 글은 주인을 알 수 없어 관리자만 숨길 수 있다
-     */
+    /** 지우기 — 로그인해서 남긴 내 글만 (deleted). 남의 글·비로그인 글은 관리자가 방명록 관리에서 숨긴다 */
     @Transactional
     public void delete(Long noteId) {
         Long me = AuthUtils.currentUserId();
-        if (mapper.deleteOwnNote(noteId, me) > 0) return;
-        if (AuthUtils.isAdmin() && mapper.updateNoteState(noteId, "normal", "hidden") > 0) return;
-        throw new BaseException("내가 남긴 글만 지울 수 있어요.", HttpStatus.FORBIDDEN);
-    }
-
-    /** 관리자 — 숨긴 글 복원 */
-    @Transactional
-    public GuestbookNoteDto restore(Long noteId) {
-        AuthUtils.requireAdmin();
-        if (mapper.updateNoteState(noteId, "hidden", "normal") == 0) {
-            throw new BaseException("복원할 글이 없어요.", HttpStatus.NOT_FOUND);
+        if (mapper.deleteOwnNote(noteId, me) == 0) {
+            throw new BaseException("내가 남긴 글만 지울 수 있어요.", HttpStatus.FORBIDDEN);
         }
-        return reload(noteId);
     }
 
     public GuestbookDrawingRow requireDrawing(Long drawingId) {
@@ -150,14 +138,14 @@ public class GuestbookService {
     public void decorate(List<GuestbookNoteDto> notes) {
         if (notes.isEmpty()) return;
         Long me = AuthUtils.currentUserIdOrNull();
-        boolean admin = AuthUtils.isAdmin();
         List<Long> ids = notes.stream().map(GuestbookNoteDto::getNoteId).toList();
         Map<Long, GuestbookNoteDto> byId = new HashMap<>();
         for (GuestbookNoteDto n : notes) {
             byId.put(n.getNoteId(), n);
+            // 고치고 지우는 건 로그인해서 남긴 내 글만 — 관리자도 예외 없음 (PM 10/11)
             boolean mine = me != null && me.equals(n.getUserId());
             n.setIsMine(mine);
-            n.setCanManage(mine || admin);
+            n.setCanManage(mine);
         }
         for (GuestbookNoteDto.Drawing d : mapper.findDrawingsOfNotes(ids)) {
             GuestbookNoteDto n = byId.get(d.getNoteId());

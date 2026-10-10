@@ -19,7 +19,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -69,7 +68,7 @@ public class GuestbookController {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.write(request, clientIp(http)));
     }
 
-    @Operation(summary = "내가 남긴 글 고치기 (로그인)", description = """
+    @Operation(summary = "내가 남긴 글 고치기 (로그인, 본인만)", description = """
             본문은 남기기와 같다. drawings 에는 기존 그림을 `drawingId` 로(자리만 바꿈), 새 그림을 `dataUrl` 로 보내고,
             목록에서 빠진 그림은 떼어진다. 학기·기울기는 그대로. 남의 글·비로그인으로 남긴 글은 403""")
     @PutMapping("/api/guestbook/{noteId}")
@@ -77,17 +76,11 @@ public class GuestbookController {
         return ResponseEntity.ok(service.edit(noteId, request));
     }
 
-    @Operation(summary = "글 지우기 (로그인)", description = "내 글은 deleted(소프트). 관리자가 남의 글을 지우면 hidden 이라 복원할 수 있다. 그 외 403")
+    @Operation(summary = "글 지우기 (로그인)", description = "로그인해서 남긴 내 글만 (소프트, deleted). 남의 글·비로그인 글은 관리자가 방명록 관리에서 숨긴다. 그 외 403")
     @DeleteMapping("/api/guestbook/{noteId}")
     public ResponseEntity<Map<String, String>> delete(@PathVariable Long noteId) {
         service.delete(noteId);
         return ResponseEntity.ok(Map.of("message", "지웠어요."));
-    }
-
-    @Operation(summary = "숨긴 글 복원 (관리자)", description = "관리자에게는 GET 응답에 숨긴 글(state=hidden)도 내려가므로 그 자리에서 되돌린다. 없으면 404")
-    @PatchMapping("/api/guestbook/{noteId}/restore")
-    public ResponseEntity<GuestbookNoteDto> restore(@PathVariable Long noteId) {
-        return ResponseEntity.ok(service.restore(noteId));
     }
 
     @Operation(summary = "그림 스티커 이미지 (비로그인 공개)", description = "`drawings[].imageUrl` 이 가리키는 경로. 투명 PNG. 없으면 404")
