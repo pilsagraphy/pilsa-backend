@@ -66,6 +66,14 @@
           AND state = 'normal'
     </update>
 
+    <update id="updateMeta">
+        UPDATE gallery_photos
+        SET title    = #{title},
+            hashtags = #{hashtags}
+        WHERE photo_id = #{photoId}
+          AND state IN ('normal', 'hidden')
+    </update>
+
     <update id="updateState">
         UPDATE gallery_photos
         SET state = #{to}

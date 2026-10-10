@@ -14,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -61,5 +63,11 @@ public class AdminGalleryController {
     @PatchMapping("/photos/{photoId}/restore")
     public ResponseEntity<GalleryPhotoDto> restore(@PathVariable Long photoId) {
         return ResponseEntity.ok(service.restore(photoId));
+    }
+
+    @Operation(summary = "제목·해시태그 수정", description = "본문 `{ \"title\": \"정기모임\", \"hashtags\": \"정기모임, 가을\" }` (해시태그는 쉼표/공백 구분, # 은 없어도 된다). 바뀐 사진을 돌려준다")
+    @PutMapping("/photos/{photoId}")
+    public ResponseEntity<GalleryPhotoDto> updateMeta(@PathVariable Long photoId, @RequestBody Map<String, String> body) {
+        return ResponseEntity.ok(service.updateMeta(photoId, body.get("title"), body.get("hashtags")));
     }
 }

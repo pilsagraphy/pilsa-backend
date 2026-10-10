@@ -45,8 +45,10 @@ public class GalleryService {
         boolean admin = AuthUtils.isAdmin();
         String current = currentSemesterLabel();
         List<String> semesters = new ArrayList<>(mapper.findSemesters(admin));
-        if (!semesters.contains(current)) semesters.add(0, current); // 아직 사진이 없어도 이번 학기 구간은 보인다
-        String picked = semester == null || semester.isBlank() || !semesters.contains(semester) ? current : semester;
+        // 이번 학기에 사진이 없으면 그 구간을 비워 보여 주지 않고 사진이 있는 가장 최근 학기부터 시작한다 (PM 10/10 밤).
+        // 사진이 한 장도 없을 때만 이번 학기 라벨을 둔다(빈 화면에도 학기 하나는 있어야 하니)
+        if (semesters.isEmpty()) semesters.add(current);
+        String picked = semester == null || semester.isBlank() || !semesters.contains(semester) ? semesters.get(0) : semester;
         List<GalleryPhotoDto> photos = mapper.findPhotos(picked, admin);
         decorate(photos);
         return new GalleryResponse(current, picked, semesters, maxFiles(), photos);
@@ -96,6 +98,20 @@ public class GalleryService {
         if (mapper.deleteOwn(photoId, me) > 0) return;
         if (AuthUtils.isAdmin() && mapper.updateState(photoId, "normal", "hidden") > 0) return;
         throw new BaseException("내가 올린 사진만 지울 수 있어요.", HttpStatus.FORBIDDEN);
+    }
+
+    /** 관리자 — 제목·해시태그 고치기 (PM 10/10 밤 "활동사진 관리에서 글자 수정") */
+    @Transactional
+    public GalleryPhotoDto updateMeta(Long photoId, String title, String hashtags) {
+        AuthUtils.requireAdmin();
+        String t = title == null ? null : title.strip();
+        if (t != null && t.length() > TITLE_MAX) throw new BaseException("제목은 " + TITLE_MAX + "자까지예요.", HttpStatus.BAD_REQUEST);
+        if (mapper.updateMeta(photoId, t == null || t.isEmpty() ? null : t, normalizeHashtags(hashtags)) == 0) {
+            throw new BaseException("사진이 없어요.", HttpStatus.NOT_FOUND);
+        }
+        GalleryPhotoDto p = mapper.findById(photoId);
+        decorate(List.of(p));
+        return p;
     }
 
     @Transactional

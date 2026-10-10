@@ -7,6 +7,8 @@
                n.semester_label AS semesterLabel,
                n.display_name   AS displayName,
                n.user_id        AS userId,
+               u.name           AS authorName,
+               u.login_id       AS authorLoginId,
                n.content,
                n.font,
                n.ink,
@@ -17,6 +19,7 @@
                n.created_at     AS createdAt,
                n.updated_at     AS updatedAt
         FROM guestbook_notes n
+        LEFT JOIN users u ON u.user_id = n.user_id
         WHERE n.semester_label = #{semester}
         ORDER BY n.note_id DESC
     </select>

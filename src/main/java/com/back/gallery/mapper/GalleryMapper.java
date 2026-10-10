@@ -25,4 +25,7 @@ public interface GalleryMapper {
     int deleteOwn(@Param("photoId") Long photoId, @Param("userId") Long userId);
 
     int updateState(@Param("photoId") Long photoId, @Param("from") String from, @Param("to") String to);
+
+    /** 관리자 — 제목·해시태그(쉼표 구분) 수정. 지운 사진은 제외 */
+    int updateMeta(@Param("photoId") Long photoId, @Param("title") String title, @Param("hashtags") String hashtags);
 }
