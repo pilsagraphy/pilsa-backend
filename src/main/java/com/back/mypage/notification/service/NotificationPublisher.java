@@ -76,4 +76,15 @@ public class NotificationPublisher {
         pushService.sendToUser(receiverId, command.getNotificationId(), type.name(),
                 title, message, targetType, targetId, boardId);
     }
+
+    /**
+     * 알림함에 쌓지 않고 OS 푸시만 보낸다 — 주간 인기 글처럼 "지금 들어와 보라" 는 안내용 (PM 2026-10-10: 알림 상자에 누적시키지 말 것).
+     * toastId 가 없으므로 누르면 읽음 처리 없이 대상 화면으로만 간다. 관리자 스위치(notify_*)는 똑같이 본다.
+     */
+    public void pushOnly(Long receiverId, NotificationType type,
+                         String targetType, Long targetId, Long boardId,
+                         String title, String message) {
+        if (!notificationPolicy.isEnabled(type)) return;
+        pushService.sendToUser(receiverId, null, type.name(), title, message, targetType, targetId, boardId);
+    }
 }
