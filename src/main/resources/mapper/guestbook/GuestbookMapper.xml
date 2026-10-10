@@ -8,12 +8,6 @@
         WHERE code = #{code}
     </select>
 
-    <select id="findUserName" resultType="string">
-        SELECT name
-        FROM users
-        WHERE user_id = #{userId}
-    </select>
-
     <select id="findSemesters" resultType="string">
         SELECT DISTINCT semester_label
         FROM guestbook_notes
@@ -26,20 +20,25 @@
         n.semester_label AS semesterLabel,
         n.display_name   AS displayName,
         n.user_id        AS userId,
-        (n.user_id IS NOT NULL) AS isMember,
         n.content,
+        n.font,
         n.ink,
         n.paper,
+        n.align,
         n.tilt,
         n.state,
-        n.created_at     AS createdAt
+        n.created_at     AS createdAt,
+        n.updated_at     AS updatedAt
     </sql>
 
     <select id="findNotes" resultType="com.back.guestbook.dto.GuestbookNoteDto">
         SELECT <include refid="noteColumns"/>
         FROM guestbook_notes n
-        WHERE n.state = 'normal'
-          AND n.semester_label = #{semester}
+        WHERE n.semester_label = #{semester}
+        <choose>
+            <when test="includeHidden">AND n.state IN ('normal', 'hidden')</when>
+            <otherwise>AND n.state = 'normal'</otherwise>
+        </choose>
         ORDER BY n.note_id DESC
     </select>
 
@@ -49,63 +48,75 @@
         WHERE n.note_id = #{noteId}
     </select>
 
-    <!-- 스티커 이미지 경로는 공개 API 로 — 파일 경로를 그대로 내보내지 않는다 -->
-    <select id="findNoteStickers" resultType="com.back.guestbook.dto.GuestbookNoteDto$StickerOnNote">
-        SELECT ns.note_id    AS noteId,
-               ns.sticker_id AS stickerId,
-               ns.slot,
-               s.name,
-               CONCAT('/api/guestbook/stickers/', s.sticker_id, '/image') AS imageUrl
-        FROM guestbook_note_stickers ns
-        JOIN guestbook_stickers s ON s.sticker_id = ns.sticker_id
-        WHERE ns.note_id IN
+    <!-- 그림 파일 경로는 공개 API 로 — 파일 경로를 그대로 내보내지 않는다 -->
+    <select id="findDrawingsOfNotes" resultType="com.back.guestbook.dto.GuestbookNoteDto$Drawing">
+        SELECT d.drawing_id AS drawingId,
+               d.note_id    AS noteId,
+               CONCAT('/api/guestbook/drawings/', d.drawing_id, '/image') AS imageUrl,
+               d.pos_x      AS posX,
+               d.pos_y      AS posY,
+               d.width_pct  AS widthPct,
+               d.rotation,
+               d.sort_order AS sortOrder
+        FROM guestbook_drawings d
+        WHERE d.state = 'normal'
+          AND d.note_id IN
         <foreach collection="noteIds" item="id" open="(" separator="," close=")">#{id}</foreach>
-        ORDER BY ns.note_id, ns.slot
+        ORDER BY d.note_id, d.sort_order, d.drawing_id
     </select>
 
-    <sql id="stickerColumns">
-        sticker_id AS stickerId,
-        name,
-        file_url   AS fileUrl,
-        file_type  AS fileType,
-        CONCAT('/api/guestbook/stickers/', sticker_id, '/image') AS imageUrl,
-        sort_order AS sortOrder
-    </sql>
-
-    <select id="findStickers" resultType="com.back.guestbook.dto.GuestbookStickerDto">
-        SELECT <include refid="stickerColumns"/>
-        FROM guestbook_stickers
-        WHERE state = 'normal'
-        ORDER BY sort_order ASC, sticker_id ASC
-    </select>
-
-    <!-- 지운 스티커도 이미 붙은 글에는 계속 보여야 하므로 state 를 보지 않는다 -->
-    <select id="findStickerById" resultType="com.back.guestbook.dto.GuestbookStickerDto">
-        SELECT <include refid="stickerColumns"/>
-        FROM guestbook_stickers
-        WHERE sticker_id = #{stickerId}
-    </select>
-
-    <select id="countStickersByIds" resultType="int">
-        SELECT COUNT(*)
-        FROM guestbook_stickers
-        WHERE state = 'normal'
-          AND sticker_id IN
-        <foreach collection="stickerIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    <!-- 뗀 그림도 이미지는 계속 내려준다 (캐시된 화면이 404 를 보지 않게) -->
+    <select id="findDrawingById" resultType="com.back.guestbook.dto.GuestbookDrawingRow">
+        SELECT drawing_id AS drawingId,
+               note_id    AS noteId,
+               file_url   AS fileUrl,
+               file_type  AS fileType,
+               pos_x      AS posX,
+               pos_y      AS posY,
+               width_pct  AS widthPct,
+               rotation,
+               sort_order AS sortOrder,
+               state
+        FROM guestbook_drawings
+        WHERE drawing_id = #{drawingId}
     </select>
 
     <insert id="insertNote" useGeneratedKeys="true" keyProperty="n.noteId">
-        INSERT INTO guestbook_notes (semester_label, display_name, user_id, content, ink, paper, tilt, ip_hash)
-        VALUES (#{n.semesterLabel}, #{n.displayName}, #{n.userId}, #{n.content}, #{n.ink}, #{n.paper}, #{n.tilt}, #{ipHash})
+        INSERT INTO guestbook_notes (semester_label, display_name, user_id, content, font, ink, paper, align, tilt, ip_hash)
+        VALUES (#{n.semesterLabel}, #{n.displayName}, #{n.userId}, #{n.content}, #{n.font}, #{n.ink}, #{n.paper}, #{n.align}, #{n.tilt}, #{ipHash})
     </insert>
 
-    <insert id="insertNoteStickers">
-        INSERT INTO guestbook_note_stickers (note_id, sticker_id, slot)
-        VALUES
-        <foreach collection="stickerIds" item="id" index="i" separator=",">
-            (#{noteId}, #{id}, #{i})
-        </foreach>
-    </insert>
+    <update id="updateOwnNote">
+        UPDATE guestbook_notes
+        SET display_name = #{n.displayName},
+            content      = #{n.content},
+            font         = #{n.font},
+            ink          = #{n.ink},
+            paper        = #{n.paper},
+            align        = #{n.align}
+        WHERE note_id = #{noteId}
+          AND user_id = #{userId}
+          AND state = 'normal'
+    </update>
+
+    <update id="updateNoteAsAdmin">
+        UPDATE guestbook_notes
+        SET display_name = #{n.displayName},
+            content      = #{n.content},
+            font         = #{n.font},
+            ink          = #{n.ink},
+            paper        = #{n.paper},
+            align        = #{n.align}
+        WHERE note_id = #{noteId}
+          AND state IN ('normal', 'hidden')
+    </update>
+
+    <update id="updateNoteState">
+        UPDATE guestbook_notes
+        SET state = #{to}
+        WHERE note_id = #{noteId}
+          AND state = #{from}
+    </update>
 
     <update id="deleteOwnNote">
         UPDATE guestbook_notes
@@ -113,6 +124,34 @@
         WHERE note_id = #{noteId}
           AND user_id = #{userId}
           AND state = 'normal'
+    </update>
+
+    <insert id="insertDrawing" useGeneratedKeys="true" keyProperty="d.drawingId">
+        INSERT INTO guestbook_drawings (note_id, file_url, file_type, pos_x, pos_y, width_pct, rotation, sort_order)
+        VALUES (#{d.noteId}, #{d.fileUrl}, #{d.fileType}, #{d.posX}, #{d.posY}, #{d.widthPct}, #{d.rotation}, #{d.sortOrder})
+    </insert>
+
+    <update id="updateDrawingPlacement">
+        UPDATE guestbook_drawings
+        SET pos_x      = #{d.posX},
+            pos_y      = #{d.posY},
+            width_pct  = #{d.widthPct},
+            rotation   = #{d.rotation},
+            sort_order = #{d.sortOrder}
+        WHERE drawing_id = #{d.drawingId}
+          AND note_id = #{noteId}
+          AND state = 'normal'
+    </update>
+
+    <update id="softDeleteDrawingsExcept">
+        UPDATE guestbook_drawings
+        SET state = 'deleted'
+        WHERE note_id = #{noteId}
+          AND state = 'normal'
+        <if test="keepIds != null and keepIds.size() > 0">
+            AND drawing_id NOT IN
+            <foreach collection="keepIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        </if>
     </update>
 
 </mapper>
