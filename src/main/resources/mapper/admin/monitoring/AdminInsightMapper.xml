@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.admin.monitoring.mapper.AdminInsightMapper">
+
+    <!-- 접속은 stats_access_hourly 하나에서 파생시킨다 (CLAUDE.md) -->
+    <select id="countActiveUsersSince" resultType="int">
+        SELECT COUNT(DISTINCT user_id)
+        FROM stats_access_hourly
+        WHERE access_hour &gt;= #{from}
+    </select>
+
+    <select id="countMembers" resultType="int">
+        SELECT COUNT(*) FROM users WHERE is_deleted = 0
+    </select>
+
+    <select id="countSignupsSince" resultType="int">
+        SELECT COUNT(*) FROM users WHERE is_deleted = 0 AND created_at &gt;= #{from}
+    </select>
+
+    <!-- 삭제·블라인드도 그 기간에 쓴 건 사실이라 state 를 보지 않는다 -->
+    <select id="countPostsSince" resultType="int">
+        SELECT COUNT(*) FROM posts WHERE created_at &gt;= #{from}
+    </select>
+
+    <select id="countCommentsSince" resultType="int">
+        SELECT COUNT(*) FROM comments WHERE created_at &gt;= #{from}
+    </select>
+
+    <!-- 신고 처리는 대상 단위로 pending 을 일괄 종료하므로 대상 단위로 센다 (관리자 홈 대시보드와 같은 기준) -->
+    <select id="countPendingReportTargets" resultType="int">
+        SELECT COUNT(*)
+        FROM (SELECT DISTINCT target_type, target_id FROM reports WHERE status = 'pending') t
+    </select>
+
+    <select id="countPushRegisteredMembers" resultType="int">
+        SELECT COUNT(DISTINCT user_id) FROM notification_devices
+    </select>
+
+    <sql id="memberColumns">
+        u.user_id       AS userId,
+        u.name,
+        u.login_id      AS loginId,
+        u.member_type   AS memberType,
+        u.admin_level   AS adminLevel,
+        u.created_at    AS joinedAt,
+        COALESCE(la.last_access, u.last_login_at) AS lastAccessAt,
+        (SELECT COUNT(*) FROM notification_devices d WHERE d.user_id = u.user_id) AS deviceCount
+    </sql>
+
+    <sql id="lastAccessJoin">
+        LEFT JOIN (SELECT user_id, MAX(access_hour) AS last_access FROM stats_access_hourly GROUP BY user_id) la
+               ON la.user_id = u.user_id
+    </sql>
+
+    <!-- 마지막 접속이 N일보다 오래된 회원. 접속 기록도 로그인 기록도 없으면 가입일 기준 -->
+    <select id="findInactiveMembers" resultType="com.back.admin.monitoring.dto.MemberActivityRow">
+        SELECT <include refid="memberColumns"/>
+        FROM users u
+        <include refid="lastAccessJoin"/>
+        WHERE u.is_deleted = 0
+          AND COALESCE(la.last_access, u.last_login_at, u.created_at) &lt; DATE_SUB(NOW(), INTERVAL #{days} DAY)
+        ORDER BY COALESCE(la.last_access, u.last_login_at, u.created_at) ASC, u.user_id ASC
+    </select>
+
+    <select id="findPushUnregisteredMembers" resultType="com.back.admin.monitoring.dto.MemberActivityRow">
+        SELECT <include refid="memberColumns"/>
+        FROM users u
+        <include refid="lastAccessJoin"/>
+        WHERE u.is_deleted = 0
+          AND NOT EXISTS (SELECT 1 FROM notification_devices d WHERE d.user_id = u.user_id)
+        ORDER BY COALESCE(la.last_access, u.last_login_at, u.created_at) DESC, u.user_id ASC
+    </select>
+
+    <select id="findTopMembers" resultType="com.back.admin.monitoring.dto.MemberActivityRow">
+        SELECT u.user_id     AS userId,
+               u.name,
+               u.login_id    AS loginId,
+               u.member_type AS memberType,
+               u.admin_level AS adminLevel,
+               u.created_at  AS joinedAt,
+               COALESCE(la.last_access, u.last_login_at) AS lastAccessAt,
+               (SELECT COUNT(*) FROM posts p WHERE p.user_id = u.user_id AND p.created_at &gt;= #{from})    AS postCount,
+               (SELECT COUNT(*) FROM comments c WHERE c.user_id = u.user_id AND c.created_at &gt;= #{from}) AS commentCount,
+               (SELECT COUNT(*) FROM notification_devices d WHERE d.user_id = u.user_id) AS deviceCount
+        FROM users u
+        <include refid="lastAccessJoin"/>
+        WHERE u.is_deleted = 0
+        HAVING postCount + commentCount &gt; 0
+        ORDER BY postCount + commentCount DESC, postCount DESC, u.user_id ASC
+        LIMIT #{limit}
+    </select>
+
+    <select id="findBoardActivity" resultType="com.back.admin.monitoring.dto.BoardActivityResponse$BoardRow">
+        SELECT b.board_id AS boardId,
+               b.name     AS boardName,
+               (SELECT COUNT(*) FROM posts p WHERE p.board_id = b.board_id AND p.created_at &gt;= #{from}) AS postCount,
+               (SELECT COUNT(*) FROM comments c JOIN posts p ON p.post_id = c.post_id
+                 WHERE p.board_id = b.board_id AND c.created_at &gt;= #{from}) AS commentCount,
+               (SELECT COUNT(*) FROM post_likes l JOIN posts p ON p.post_id = l.post_id
+                 WHERE p.board_id = b.board_id AND l.created_at &gt;= #{from}) AS likeCount
+        FROM boards b
+        ORDER BY b.display_order ASC, b.board_id ASC
+    </select>
+
+    <select id="countDailyPosts" resultType="com.back.admin.monitoring.dto.DateCountRow">
+        SELECT DATE(created_at) AS statDate, COUNT(*) AS count
+        FROM posts
+        WHERE created_at &gt;= #{from}
+        GROUP BY DATE(created_at)
+        ORDER BY statDate
+    </select>
+
+    <select id="countDailyComments" resultType="com.back.admin.monitoring.dto.DateCountRow">
+        SELECT DATE(created_at) AS statDate, COUNT(*) AS count
+        FROM comments
+        WHERE created_at &gt;= #{from}
+        GROUP BY DATE(created_at)
+        ORDER BY statDate
+    </select>
+
+</mapper>
