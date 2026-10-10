@@ -36,6 +36,8 @@ com.back
 │                   #   알림 발행·알림함 API 는 담당자 과제로 비워둠
 ├── event           # 일정 조회(회원 달력, 공개) + 구글 캘린더 구독 피드(/api/event/calendar.ics)
 ├── donation        # 명예의전당 (donations)
+├── org             # 조직 공개 조회 — 역대 회장(org_presidents)·학기별 임원진(org_members) + 회장 사진. 편집은 admin.org
+├── guestbook       # 방명록 (guestbook_notes/stickers) — 비로그인 작성 허용(permitAll), Redis cooldown 도배 방지. 관리는 admin.guestbook
 ├── stats           # 통계 — 접속 기록(JWT 필터 훅) + 급상승 집계·주간 가입·보존기간 정리 배치.
 │                   #   수집·집계만 있고 조회 API 는 아직 없다
 ├── admin           # 관리자 화면 전용 도메인
@@ -45,6 +47,8 @@ com.back
 │   ├── post        # 게시글 관리 (조회 전용 — 조치는 신고 관리 select-*)
 │   ├── comment     # 댓글 관리 (조회 전용 — 조치는 신고 관리 select-*, targetType=comment)
 │   ├── moderation  # 게시글·댓글 공통 조치(blind/restore/softDelete) + moderation_log/penalty_log
+│   ├── org         # 조직도 편집 (기수·사진·학기 명단 통째 교체) — 운영 관리
+│   ├── guestbook   # 방명록 관리 (글 숨김/복원, 스티커) — 운영 관리
 │   ├── quote       # 이 주의 문장 — 공개 랜덤(/api/quotes/current)도 예외적으로 여기 소속(PM 허용)
 │   ├── sanction    # 제재 현황/해제 + 주의→경고→정지 에스컬레이션 + 신고 처리(ReportAdminService, select-*)
 │   │                 BulkResultResponse(부분 성공 응답)도 여기 소속
