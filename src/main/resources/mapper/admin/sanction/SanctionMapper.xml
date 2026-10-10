@@ -166,7 +166,9 @@
             bd.name             AS boardName,
             p.title             AS title,
             LEFT(p.content, 30) AS preview,
-            p.state             AS state
+            p.state             AS state,
+            EXISTS (SELECT 1 FROM reports_log x WHERE x.target_type = 'post' AND x.target_id = p.post_id
+                      AND x.status &lt;&gt; 'rejected') AS listedInReports
         FROM reports_log r
         JOIN posts p ON r.target_type = 'post' AND r.target_id = p.post_id
         LEFT JOIN boards bd ON bd.board_id = p.board_id
@@ -193,7 +195,9 @@
             bd.name             AS boardName,
             p.title             AS title,
             LEFT(p.content, 30) AS preview,
-            p.state             AS state
+            p.state             AS state,
+            EXISTS (SELECT 1 FROM reports_log x WHERE x.target_type = 'post' AND x.target_id = p.post_id
+                      AND x.status &lt;&gt; 'rejected') AS listedInReports
         FROM moderation_log m
         JOIN posts p ON m.target_type = 'post' AND m.target_id = p.post_id
         LEFT JOIN boards bd ON bd.board_id = p.board_id
@@ -223,7 +227,9 @@
             bd.name             AS boardName,
             cp.title            AS title,
             LEFT(c.content, 30) AS preview,
-            c.state             AS state
+            c.state             AS state,
+            EXISTS (SELECT 1 FROM reports_log x WHERE x.target_type = 'comment' AND x.target_id = c.comment_id
+                      AND x.status &lt;&gt; 'rejected') AS listedInReports
         FROM reports_log r
         JOIN comments c ON r.target_type = 'comment' AND r.target_id = c.comment_id
         LEFT JOIN posts cp ON cp.post_id = c.post_id
@@ -251,7 +257,9 @@
             bd.name             AS boardName,
             cp.title            AS title,
             LEFT(c.content, 30) AS preview,
-            c.state             AS state
+            c.state             AS state,
+            EXISTS (SELECT 1 FROM reports_log x WHERE x.target_type = 'comment' AND x.target_id = c.comment_id
+                      AND x.status &lt;&gt; 'rejected') AS listedInReports
         FROM moderation_log m
         JOIN comments c ON m.target_type = 'comment' AND m.target_id = c.comment_id
         LEFT JOIN posts cp ON cp.post_id = c.post_id

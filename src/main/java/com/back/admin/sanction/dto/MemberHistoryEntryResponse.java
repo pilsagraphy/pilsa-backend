@@ -37,4 +37,5 @@ public class MemberHistoryEntryResponse {
     private String title;              // 게시글 제목 (댓글이면 원글 제목)
     private String preview;
     private String state;              // 대상의 현재 표시 상태 normal / blind / deleted
+    private Boolean listedInReports;   // 신고 관리 목록에 지금 보이는가 (반려되지 않은 신고 행이 있다). 없으면 화면이 신고 관리 링크를 숨긴다
 }
