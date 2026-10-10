@@ -14,6 +14,7 @@ public class ReportedItemResponse {
     private String preview;            // 대상 미리보기 (본문 앞부분)
     private Long boardId;
     private String boardName;          // boards.name (댓글은 소속 게시글의 게시판). 한글 게시판명
+    private Long authorId;             // 작성자 user_id — 작성자 팝업용 (10/10)
     private String authorName;         // 대상 콘텐츠 작성자
     private String reasonLabel;        // 대표 신고 사유 (reasons.label)
     private String reporterNames;      // 신고자 이름들 (반려 제외, 신고순, ', ' 구분) — 운영진에게는 숨기지 않는다

@@ -24,6 +24,7 @@ public class AdminCommentListResponse {
     private String boardName;
 
     @Schema(description = "작성자명 (관리자 화면에는 익명 댓글도 실제 작성자명 표시)")
+    private Long authorId;       // 작성자 user_id — 작성자 팝업용 (10/10)
     private String authorName;
 
     @Schema(description = "작성자 로그인 ID (조치 확인 모달 '대상 회원' 표기용, users.login_id). 탈퇴 회원은 null",
