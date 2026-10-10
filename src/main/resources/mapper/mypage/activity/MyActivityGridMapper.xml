@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.mypage.activity.mapper.MyActivityGridMapper">
+
+    <!-- 글 + 댓글을 날짜로 묶는다. 삭제·블라인드된 것도 그 날 쓴 건 사실이라 state 를 보지 않는다 -->
+    <select id="findActivityDaily" resultType="map">
+        SELECT d AS date, SUM(cnt) AS count
+        FROM (
+            SELECT DATE_FORMAT(p.created_at, '%Y-%m-%d') AS d, COUNT(*) AS cnt
+            FROM posts p
+            WHERE p.user_id = #{userId}
+              AND p.created_at >= DATE_SUB(CURDATE(), INTERVAL #{days} - 1 DAY)
+            GROUP BY DATE_FORMAT(p.created_at, '%Y-%m-%d')
+            UNION ALL
+            SELECT DATE_FORMAT(c.created_at, '%Y-%m-%d') AS d, COUNT(*) AS cnt
+            FROM comments c
+            WHERE c.user_id = #{userId}
+              AND c.created_at >= DATE_SUB(CURDATE(), INTERVAL #{days} - 1 DAY)
+            GROUP BY DATE_FORMAT(c.created_at, '%Y-%m-%d')
+        ) x
+        GROUP BY d
+        ORDER BY d
+    </select>
+
+    <select id="findAccessDaily" resultType="map">
+        SELECT DATE_FORMAT(access_hour, '%Y-%m-%d') AS date,
+               COUNT(*)                             AS count
+        FROM stats_access_hourly
+        WHERE user_id = #{userId}
+          AND access_hour >= DATE_SUB(CURDATE(), INTERVAL #{days} - 1 DAY)
+        GROUP BY DATE_FORMAT(access_hour, '%Y-%m-%d')
+        ORDER BY date
+    </select>
+
+</mapper>

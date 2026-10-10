@@ -77,6 +77,7 @@
             LEFT(p.content, 30)          AS preview,
             p.board_id                   AS boardId,
             b.name                       AS boardName,
+            u.user_id                    AS authorId,
             u.name                       AS authorName,
             rs.label                     AS reasonLabel,
             (SELECT GROUP_CONCAT(DISTINCT CASE WHEN r2.source = 'admin' THEN CONCAT('관리자(', ru.name, ')') ELSE ru.name END
@@ -138,6 +139,7 @@
             LEFT(c.content, 30)          AS preview,
             p.board_id                   AS boardId,
             b.name                       AS boardName,
+            u.user_id                    AS authorId,
             u.name                       AS authorName,
             rs.label                     AS reasonLabel,
             (SELECT GROUP_CONCAT(DISTINCT CASE WHEN r2.source = 'admin' THEN CONCAT('관리자(', ru.name, ')') ELSE ru.name END

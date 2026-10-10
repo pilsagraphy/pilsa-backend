@@ -12,6 +12,7 @@ public class AdminPostListResponse {
     private Long boardId;
     private String boardName;   // boards.name (한글 게시판명)
     private String title;
+    private Long authorId;       // 작성자 user_id — 관리자 화면의 작성자 팝업용 (10/10)
     private String authorName;   // 관리자 화면에는 익명글도 실제 작성자명 표시
     private String authorLoginId;   // 조치 확인 모달 '대상 회원' 표기용 (users.login_id). 탈퇴 회원은 null
     private String authorStudentNo; // 조치 확인 모달 '대상 회원' 표기용 (users.student_no). 탈퇴 회원은 null
