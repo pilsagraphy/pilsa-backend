@@ -65,7 +65,9 @@ public class GalleryService {
         String t = title == null ? "" : title.strip();
         if (t.isEmpty()) throw new BaseException("제목을 적어 주세요.", HttpStatus.BAD_REQUEST);
         if (t.length() > TITLE_MAX) throw new BaseException("제목은 " + TITLE_MAX + "자까지예요.", HttpStatus.BAD_REQUEST);
+        // 해시태그도 하나 이상 필수 (PM 10/11)
         String tags = normalizeHashtags(hashtags);
+        if (tags == null) throw new BaseException("해시태그를 하나 이상 적어 주세요.", HttpStatus.BAD_REQUEST);
 
         String semester = currentSemesterLabel();
         String dir = "uploads/gallery/" + LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMM"));
