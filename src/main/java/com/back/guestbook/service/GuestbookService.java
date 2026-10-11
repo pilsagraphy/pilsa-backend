@@ -163,7 +163,7 @@ public class GuestbookService {
 
     private void applyFields(GuestbookNoteDto note, GuestbookNoteRequest req) {
         // 끝의 빈 줄은 살려 둔다 — 작성자가 스티커 자리를 만들려고 넣은 줄이 저장 뒤 사라지면 카드가 작아진다 (검토 지적 10/11). 비어 있는지만 본다
-        String content = req.getContent() == null ? "" : req.getContent().replace("", "");
+        String content = req.getContent() == null ? "" : req.getContent().replace("\r", "");
         int maxLength = maxLength();
         if (content.isBlank()) throw new BaseException("내용을 적어 주세요.", HttpStatus.BAD_REQUEST);
         if (content.length() > maxLength) throw new BaseException(maxLength + "자까지 적을 수 있어요.", HttpStatus.BAD_REQUEST);
