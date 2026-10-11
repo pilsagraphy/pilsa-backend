@@ -27,6 +27,7 @@
         n.align,
         n.marks_seed     AS marksSeed,
         n.tape,
+        n.marks_on       AS marksOn,
         n.tilt,
         n.state,
         n.created_at     AS createdAt,
@@ -86,8 +87,8 @@
     </select>
 
     <insert id="insertNote" useGeneratedKeys="true" keyProperty="n.noteId">
-        INSERT INTO guestbook_notes (semester_label, display_name, user_id, content, font, ink, paper, align, marks_seed, tape, tilt, ip_hash)
-        VALUES (#{n.semesterLabel}, #{n.displayName}, #{n.userId}, #{n.content}, #{n.font}, #{n.ink}, #{n.paper}, #{n.align}, #{n.marksSeed}, #{n.tape}, #{n.tilt}, #{ipHash})
+        INSERT INTO guestbook_notes (semester_label, display_name, user_id, content, font, ink, paper, align, marks_seed, tape, marks_on, tilt, ip_hash)
+        VALUES (#{n.semesterLabel}, #{n.displayName}, #{n.userId}, #{n.content}, #{n.font}, #{n.ink}, #{n.paper}, #{n.align}, #{n.marksSeed}, #{n.tape}, #{n.marksOn}, #{n.tilt}, #{ipHash})
     </insert>
 
     <update id="updateOwnNote">
@@ -99,7 +100,8 @@
             paper        = #{n.paper},
             align        = #{n.align},
             marks_seed   = #{n.marksSeed},
-            tape         = #{n.tape}
+            tape         = #{n.tape},
+            marks_on     = #{n.marksOn}
         WHERE note_id = #{noteId}
           AND user_id = #{userId}
           AND state = 'normal'

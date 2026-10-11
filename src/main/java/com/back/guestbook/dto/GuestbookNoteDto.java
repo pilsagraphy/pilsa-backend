@@ -25,6 +25,7 @@ public class GuestbookNoteDto {
     private Boolean canManage;
     /** 테이프 색 #rrggbb (없으면 화면 기본색) — PM 10/11 */
     private String tape;
+    private Boolean marksOn; // 얼룩 켬/끔 (null=켬)
     private String content;
     private String font;
     private String ink;

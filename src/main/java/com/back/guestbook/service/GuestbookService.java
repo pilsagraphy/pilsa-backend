@@ -165,7 +165,9 @@ public class GuestbookService {
         // 끝의 빈 줄은 살려 둔다 — 작성자가 스티커 자리를 만들려고 넣은 줄이 저장 뒤 사라지면 카드가 작아진다 (검토 지적 10/11). 비어 있는지만 본다
         String content = req.getContent() == null ? "" : req.getContent().replace("\r", "");
         int maxLength = maxLength();
-        if (content.isBlank()) throw new BaseException("내용을 적어 주세요.", HttpStatus.BAD_REQUEST);
+        // 이름은 필수지만 내용은 스티커가 하나라도 있으면 비워도 된다 (PM 2026-10-11)
+        boolean hasDrawings = req.getDrawings() != null && !req.getDrawings().isEmpty();
+        if (content.isBlank() && !hasDrawings) throw new BaseException("내용을 쓰거나 스티커를 하나 붙여 주세요.", HttpStatus.BAD_REQUEST);
         if (content.length() > maxLength) throw new BaseException(maxLength + "자까지 적을 수 있어요.", HttpStatus.BAD_REQUEST);
         String name = req.getDisplayName() == null ? "" : req.getDisplayName().strip();
         if (name.isEmpty()) throw new BaseException("이름(닉네임)을 적어 주세요.", HttpStatus.BAD_REQUEST);
@@ -181,6 +183,7 @@ public class GuestbookService {
         note.setMarksSeed(req.getMarksSeed()); // 얼룩 배치 씨앗 — 프론트가 뽑은 값 그대로 (없으면 null → 화면이 noteId 로)
         String tape = req.getTape() == null ? "" : req.getTape().trim().toLowerCase();
         note.setTape(tape.matches("#[0-9a-f]{6}") ? tape : null); // 테이프 색 — #rrggbb 만, 아니면 기본색
+        note.setMarksOn(req.getMarksOn() == null || req.getMarksOn()); // 얼룩(무지 잉크 자국·빈티지 커피 자국) 켬/끔 — 안 보내면 켬 (PM 10/11)
     }
 
     /** 수·크기·위치 검사. 새 글은 전부 dataUrl 이어야 하고, 고치기는 drawingId 로 기존 그림을 가리킬 수 있다 */
