@@ -46,5 +46,9 @@ public class GoogleProperties {
     // 캘린더 권한은 사용자가 그 기능을 쓰겠다고 했을 때만 물어야 동의율이 올라가고,
     // 로그인만 하려는 사용자에게 캘린더 권한을 요구하면 이탈한다.
     public static final String LOGIN_SCOPE = "openid email profile";
-    public static final String CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events";
+    // 캘린더에도 openid·email 을 같이 요청한다 — 어느 구글 계정 캘린더인지 저장하려고 id_token 의 이메일을 읽는데,
+    // 구글은 scope 에 openid 가 있어야 id_token 을 준다. 전에는 소셜 로그인 때 받아 둔 openid 동의가
+    // include_granted_scopes 로 합쳐져 우연히 됐고, 연동 해제(토큰 폐기 = 그 계정의 이 앱 동의 전부 취소) 뒤 재연동하면
+    // "구글 응답에 id_token 이 없습니다" 로 실패했다 (PM 2026-10-11 16:23 운영 로그).
+    public static final String CALENDAR_SCOPE = "openid email https://www.googleapis.com/auth/calendar.events";
 }
