@@ -15,13 +15,23 @@
                n.paper,
                n.align,
                n.marks_seed     AS marksSeed,
+               n.tape,
+               n.marks_on       AS marksOn,
                n.tilt,
                n.state,
                n.created_at     AS createdAt,
                n.updated_at     AS updatedAt
         FROM guestbook_notes n
         LEFT JOIN users u ON u.user_id = n.user_id
-        WHERE n.semester_label = #{semester}
+        <where>
+            <if test="semester != null">n.semester_label = #{semester}</if>
+            <if test="keyword != null">
+                AND (n.display_name LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\'
+                  OR u.name LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\'
+                  OR u.login_id LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\'
+                  OR n.content LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\')
+            </if>
+        </where>
         ORDER BY n.note_id DESC
     </select>
 
