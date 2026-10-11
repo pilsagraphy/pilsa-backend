@@ -108,9 +108,13 @@ public class GalleryService {
     @Transactional
     public GalleryPhotoDto updateMeta(Long photoId, String title, String hashtags) {
         AuthUtils.requireAdmin();
-        String t = title == null ? null : title.strip();
-        if (t != null && t.length() > TITLE_MAX) throw new BaseException("제목은 " + TITLE_MAX + "자까지예요.", HttpStatus.BAD_REQUEST);
-        if (mapper.updateMeta(photoId, t == null || t.isEmpty() ? null : t, normalizeHashtags(hashtags)) == 0) {
+        // 관리자가 고칠 때도 제목·해시태그 필수 규칙은 같다
+        String t = title == null ? "" : title.strip();
+        if (t.isEmpty()) throw new BaseException("제목을 적어 주세요.", HttpStatus.BAD_REQUEST);
+        if (t.length() > TITLE_MAX) throw new BaseException("제목은 " + TITLE_MAX + "자까지예요.", HttpStatus.BAD_REQUEST);
+        String tags = normalizeHashtags(hashtags);
+        if (tags == null) throw new BaseException("해시태그를 하나 이상 적어 주세요.", HttpStatus.BAD_REQUEST);
+        if (mapper.updateMeta(photoId, t, tags) == 0) {
             throw new BaseException("사진이 없어요.", HttpStatus.NOT_FOUND);
         }
         GalleryPhotoDto p = mapper.findById(photoId);

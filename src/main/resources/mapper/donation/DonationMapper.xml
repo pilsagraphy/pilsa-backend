@@ -21,7 +21,6 @@
         ORDER BY
             amount DESC,
             donated_at DESC
-            LIMIT 14
     </select>
 
 </mapper>

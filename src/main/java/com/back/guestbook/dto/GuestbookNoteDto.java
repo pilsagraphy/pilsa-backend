@@ -21,8 +21,10 @@ public class GuestbookNoteDto {
     private String authorName;
     private String authorLoginId;
     private Boolean isMine;
-    /** 고치거나 지울 수 있는가 — 본인(로그인) 또는 관리자 */
+    /** 고치거나 지울 수 있는가 — 로그인해서 남긴 본인 글일 때만 (관리자 예외 없음, PM 10/11) */
     private Boolean canManage;
+    /** 테이프 색 #rrggbb (없으면 화면 기본색) — PM 10/11 */
+    private String tape;
     private String content;
     private String font;
     private String ink;

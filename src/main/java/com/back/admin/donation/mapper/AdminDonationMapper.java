@@ -14,7 +14,7 @@ public interface AdminDonationMapper {
 
     DonationAdminDto findById(@Param("donationId") Long donationId);
 
-    boolean existsUser(@Param("userId") Long userId);
+    boolean existsUser(@Param("userId") Long userId, @Param("activeOnly") boolean activeOnly);
 
     void insert(@Param("d") DonationAdminDto donation, @Param("adminId") Long adminId);
 

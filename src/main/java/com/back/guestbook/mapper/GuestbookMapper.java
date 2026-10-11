@@ -33,11 +33,6 @@ public interface GuestbookMapper {
     /** 본인 글만 지운다 (소프트) */
     int deleteOwnNote(@Param("noteId") Long noteId, @Param("userId") Long userId);
 
-    /** 관리자 — 누구 글이든 고친다 (normal·hidden) */
-    int updateNoteAsAdmin(@Param("noteId") Long noteId, @Param("n") GuestbookNoteDto note);
-
-    /** 관리자 — 상태 전환 (normal→hidden 숨김, hidden→normal 복원) */
-    int updateNoteState(@Param("noteId") Long noteId, @Param("from") String from, @Param("to") String to);
 
     void insertDrawing(@Param("d") GuestbookDrawingRow drawing);
 
