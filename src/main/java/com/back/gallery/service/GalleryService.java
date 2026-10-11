@@ -49,7 +49,7 @@ public class GalleryService {
         // 사진이 한 장도 없을 때만 이번 학기 라벨을 둔다(빈 화면에도 학기 하나는 있어야 하니)
         if (semesters.isEmpty()) semesters.add(current);
         String picked = semester == null || semester.isBlank() || !semesters.contains(semester) ? semesters.get(0) : semester;
-        List<GalleryPhotoDto> photos = mapper.findPhotos(picked, admin);
+        List<GalleryPhotoDto> photos = mapper.findPhotos(picked, admin, null);
         decorate(photos);
         return new GalleryResponse(current, picked, semesters, maxFiles(), photos);
     }
@@ -117,6 +117,33 @@ public class GalleryService {
         if (mapper.updateMeta(photoId, t, tags) == 0) {
             throw new BaseException("사진이 없어요.", HttpStatus.NOT_FOUND);
         }
+        GalleryPhotoDto p = mapper.findById(photoId);
+        decorate(List.of(p));
+        return p;
+    }
+
+    /** 관리자 — 한 학기 안의 순서를 통째로 다시 매긴다(배열 순서 = sort_order 0..n-1). 그 학기에 없는 사진이 섞이면 400 (PM 10/11) */
+    @Transactional
+    public void reorder(String semester, List<Long> photoIds) {
+        AuthUtils.requireAdmin();
+        if (semester == null || semester.isBlank() || photoIds == null || photoIds.isEmpty()) {
+            throw new BaseException("학기와 사진 순서를 보내 주세요.", HttpStatus.BAD_REQUEST);
+        }
+        for (int i = 0; i < photoIds.size(); i++) {
+            if (mapper.updateSortOrder(photoIds.get(i), semester, i) == 0) {
+                throw new BaseException("이 학기에 없는 사진이 섞여 있어요: " + photoIds.get(i), HttpStatus.BAD_REQUEST);
+            }
+        }
+    }
+
+    /** 관리자 — 등록 정보(학기·올린 사람) 고치기. userId 가 null 이면 '올린 사람 없음' (PM 10/11) */
+    @Transactional
+    public GalleryPhotoDto updateRegistration(Long photoId, String semesterLabel, Long userId) {
+        AuthUtils.requireAdmin();
+        String label = semesterLabel == null ? "" : semesterLabel.strip();
+        if (!label.matches("\\d{4}-[12]학기")) throw new BaseException("학기는 '2026-2학기' 꼴로 적어 주세요.", HttpStatus.BAD_REQUEST);
+        if (userId != null && !mapper.existsActiveUser(userId)) throw new BaseException("없는 회원이거나 탈퇴한 회원이에요.", HttpStatus.BAD_REQUEST);
+        if (mapper.updateRegistration(photoId, label, userId) == 0) throw new BaseException("사진이 없어요.", HttpStatus.NOT_FOUND);
         GalleryPhotoDto p = mapper.findById(photoId);
         decorate(List.of(p));
         return p;

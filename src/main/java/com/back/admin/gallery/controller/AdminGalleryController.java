@@ -1,5 +1,6 @@
 package com.back.admin.gallery.controller;
 
+import com.back.admin.common.AdminServiceSupport;
 import com.back.gallery.dto.GalleryPhotoDto;
 import com.back.gallery.mapper.GalleryMapper;
 import com.back.gallery.service.GalleryService;
@@ -37,17 +38,40 @@ public class AdminGalleryController {
     private final GalleryMapper mapper;
     private final GalleryService service;
 
-    @Operation(summary = "학기별 사진 전부 (숨긴 사진 포함)", description = "`semester` 비우면 이번 학기. `{ semester, semesters, photos: [ { ..., state } ] }`")
+    @Operation(summary = "학기별 사진 전부 (숨긴 사진 포함) + 검색", description = "`semester` 비우면 이번 학기. `keyword` 가 있으면 학기 무시(전체 학기, 최신 학기부터), 제목·해시태그·올린 사람 이름·아이디 LIKE. `{ semester, semesters, photos: [ { ..., state } ] }`")
     @GetMapping("/photos")
-    public ResponseEntity<Map<String, Object>> photos(@RequestParam(required = false) String semester) {
+    public ResponseEntity<Map<String, Object>> photos(@RequestParam(required = false) String semester,
+                                                      @RequestParam(required = false) String keyword) {
         AuthUtils.requireAdmin();
         String current = service.currentSemesterLabel();
         List<String> semesters = new ArrayList<>(mapper.findSemesters(true));
         if (!semesters.contains(current)) semesters.add(0, current);
         String picked = semester == null || semester.isBlank() ? current : semester;
-        List<GalleryPhotoDto> photos = mapper.findPhotos(picked, true);
+        String like = AdminServiceSupport.escapeLike(keyword);
+        List<GalleryPhotoDto> photos = mapper.findPhotos(like == null ? picked : null, true, like);
         service.decorate(photos);
         return ResponseEntity.ok(Map.of("semester", picked, "semesters", semesters, "photos", photos));
+    }
+
+    @Operation(summary = "순서 바꾸기", description = "본문 `{ \"semester\": \"2026-2학기\", \"photoIds\": [3, 1, 2] }` — 배열 순서가 곧 표시 순서(sort_order 0..). 그 학기의 사진 id 전부를 보낸다. 다른 학기 사진이 섞이면 400")
+    @PutMapping("/photos/order")
+    public ResponseEntity<Map<String, String>> reorder(@RequestBody Map<String, Object> body) {
+        String semester = body.get("semester") == null ? null : String.valueOf(body.get("semester"));
+        List<Long> ids = new ArrayList<>();
+        if (body.get("photoIds") instanceof List<?> raw) {
+            for (Object o : raw) ids.add(Long.valueOf(String.valueOf(o)));
+        }
+        service.reorder(semester, ids);
+        return ResponseEntity.ok(Map.of("message", "순서를 바꿨습니다."));
+    }
+
+    @Operation(summary = "등록 정보 수정 (학기·올린 사람)", description = "본문 `{ \"semesterLabel\": \"2026-1학기\", \"userId\": 15 }` — userId 를 null 로 보내면 '올린 사람 없음'. 바뀐 사진을 돌려준다")
+    @PutMapping("/photos/{photoId}/registration")
+    public ResponseEntity<GalleryPhotoDto> registration(@PathVariable Long photoId, @RequestBody Map<String, Object> body) {
+        Object uid = body.get("userId");
+        Long userId = uid == null || String.valueOf(uid).isBlank() ? null : Long.valueOf(String.valueOf(uid));
+        String label = body.get("semesterLabel") == null ? null : String.valueOf(body.get("semesterLabel"));
+        return ResponseEntity.ok(service.updateRegistration(photoId, label, userId));
     }
 
     @Operation(summary = "사진 숨기기", description = "normal → hidden. 이미 숨겼거나 지운 사진이면 404")
