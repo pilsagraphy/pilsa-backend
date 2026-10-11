@@ -48,6 +48,11 @@
         WHERE user_id = #{userId} AND provider = #{provider}
     </delete>
 
+    <delete id="deleteByProviderUser">
+        DELETE FROM user_social_accounts
+        WHERE provider = #{provider} AND provider_user_id = #{providerUserId}
+    </delete>
+
     <delete id="deleteByUserId">
         DELETE FROM user_social_accounts WHERE user_id = #{userId}
     </delete>
