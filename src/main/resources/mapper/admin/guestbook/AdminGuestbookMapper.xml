@@ -8,7 +8,7 @@
                n.display_name   AS displayName,
                n.user_id        AS userId,
                u.name           AS authorName,
-               u.login_id       AS authorLoginId,
+               CASE WHEN u.is_deleted = 1 THEN NULL ELSE u.login_id END AS authorLoginId, <!-- 탈퇴 회원의 deleted_{id} 가짜 아이디는 숨긴다 (다른 관리 매퍼와 같은 규칙) -->
                n.content,
                n.font,
                n.ink,
@@ -28,7 +28,7 @@
             <if test="keyword != null">
                 AND (n.display_name LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\'
                   OR u.name LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\'
-                  OR u.login_id LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\'
+                  OR (u.is_deleted = 0 AND u.login_id LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\')
                   OR n.content LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\')
             </if>
         </where>

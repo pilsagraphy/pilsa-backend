@@ -49,7 +49,7 @@
                 AND (g.title LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\'
                   OR g.hashtags LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\'
                   OR u.name LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\'
-                  OR u.login_id LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\')
+                  OR (u.is_deleted = 0 AND u.login_id LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\'))
             </if>
         </where>
         ORDER BY <if test="semester == null">g.semester_label DESC, </if>g.sort_order ASC, g.photo_id DESC
