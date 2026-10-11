@@ -6,7 +6,7 @@
         d.donation_id  AS donationId,
         d.user_id      AS userId,
         u.name         AS userName,
-        u.login_id     AS userLoginId,
+        CASE WHEN u.is_deleted = 1 THEN NULL ELSE u.login_id END AS userLoginId,
         d.display_name AS displayName,
         d.amount,
         d.affiliation,
@@ -33,8 +33,13 @@
         WHERE d.donation_id = #{donationId}
     </select>
 
+    <!-- 등록할 때는 탈퇴하지 않은 회원만. 수정할 때는 이미 후원한 회원이 나중에 탈퇴했어도 행을 고칠 수 있어야 하므로 is_deleted 를 보지 않는다 -->
     <select id="existsUser" resultType="boolean">
-        SELECT EXISTS (SELECT 1 FROM users WHERE user_id = #{userId})
+        SELECT EXISTS (
+            SELECT 1 FROM users
+            WHERE user_id = #{userId}
+            <if test="activeOnly">AND is_deleted = 0</if>
+        )
     </select>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="d.donationId">

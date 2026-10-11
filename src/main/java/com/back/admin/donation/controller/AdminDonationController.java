@@ -54,7 +54,7 @@ public class AdminDonationController {
     @Transactional
     public ResponseEntity<DonationAdminDto> create(@RequestBody DonationAdminDto body) {
         AuthUtils.requireAdmin();
-        validate(body);
+        validate(body, true);
         mapper.insert(body, AuthUtils.currentUserId());
         return ResponseEntity.status(HttpStatus.CREATED).body(mapper.findById(body.getDonationId()));
     }
@@ -64,7 +64,7 @@ public class AdminDonationController {
     @Transactional
     public ResponseEntity<DonationAdminDto> update(@PathVariable Long donationId, @RequestBody DonationAdminDto body) {
         AuthUtils.requireAdmin();
-        validate(body);
+        validate(body, false);
         if (mapper.update(donationId, body) == 0) throw new BaseException("후원 행이 없어요.", HttpStatus.NOT_FOUND);
         return ResponseEntity.ok(mapper.findById(donationId));
     }
@@ -97,8 +97,9 @@ public class AdminDonationController {
         return ResponseEntity.ok(Map.of("message", "삭제했습니다."));
     }
 
-    private void validate(DonationAdminDto d) {
-        if (d.getUserId() == null || !mapper.existsUser(d.getUserId())) throw new BaseException("후원한 회원을 골라 주세요.", HttpStatus.BAD_REQUEST);
+    /** creating 이면 탈퇴하지 않은 회원만 받는다 (수정은 후원자가 나중에 탈퇴했어도 행을 고칠 수 있게) */
+    private void validate(DonationAdminDto d, boolean creating) {
+        if (d.getUserId() == null || !mapper.existsUser(d.getUserId(), creating)) throw new BaseException("후원한 회원을 골라 주세요.", HttpStatus.BAD_REQUEST);
         String name = d.getDisplayName() == null ? "" : d.getDisplayName().strip();
         if (name.isEmpty()) throw new BaseException("표시 이름을 적어 주세요.", HttpStatus.BAD_REQUEST);
         if (name.length() > NAME_MAX) throw new BaseException("표시 이름은 " + NAME_MAX + "자까지예요.", HttpStatus.BAD_REQUEST);

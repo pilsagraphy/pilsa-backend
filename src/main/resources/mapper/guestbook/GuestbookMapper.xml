@@ -26,6 +26,7 @@
         n.paper,
         n.align,
         n.marks_seed     AS marksSeed,
+        n.tape,
         n.tilt,
         n.state,
         n.created_at     AS createdAt,
@@ -85,8 +86,8 @@
     </select>
 
     <insert id="insertNote" useGeneratedKeys="true" keyProperty="n.noteId">
-        INSERT INTO guestbook_notes (semester_label, display_name, user_id, content, font, ink, paper, align, marks_seed, tilt, ip_hash)
-        VALUES (#{n.semesterLabel}, #{n.displayName}, #{n.userId}, #{n.content}, #{n.font}, #{n.ink}, #{n.paper}, #{n.align}, #{n.marksSeed}, #{n.tilt}, #{ipHash})
+        INSERT INTO guestbook_notes (semester_label, display_name, user_id, content, font, ink, paper, align, marks_seed, tape, tilt, ip_hash)
+        VALUES (#{n.semesterLabel}, #{n.displayName}, #{n.userId}, #{n.content}, #{n.font}, #{n.ink}, #{n.paper}, #{n.align}, #{n.marksSeed}, #{n.tape}, #{n.tilt}, #{ipHash})
     </insert>
 
     <update id="updateOwnNote">
@@ -97,30 +98,11 @@
             ink          = #{n.ink},
             paper        = #{n.paper},
             align        = #{n.align},
-            marks_seed   = #{n.marksSeed}
+            marks_seed   = #{n.marksSeed},
+            tape         = #{n.tape}
         WHERE note_id = #{noteId}
           AND user_id = #{userId}
           AND state = 'normal'
-    </update>
-
-    <update id="updateNoteAsAdmin">
-        UPDATE guestbook_notes
-        SET display_name = #{n.displayName},
-            content      = #{n.content},
-            font         = #{n.font},
-            ink          = #{n.ink},
-            paper        = #{n.paper},
-            align        = #{n.align},
-            marks_seed   = #{n.marksSeed}
-        WHERE note_id = #{noteId}
-          AND state IN ('normal', 'hidden')
-    </update>
-
-    <update id="updateNoteState">
-        UPDATE guestbook_notes
-        SET state = #{to}
-        WHERE note_id = #{noteId}
-          AND state = #{from}
     </update>
 
     <update id="deleteOwnNote">

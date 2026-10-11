@@ -58,13 +58,8 @@ public class DonationController {
         // Service에서 목록을 가져옴
         List<DonationResponse> list = DonationService.getDonationList();
 
-        // 데이터가 없는 경우 예외를 던짐
-        // 예기치 못한 에러는 GlobalExceptionHandler가 처리하도록 exception만들음
-        if (list == null || list.isEmpty()) {
-            log.warn("명예의 전당 조회 실패 - 등록된 데이터 없음");
-            throw new DonationException("등록된 후원 내역이 없습니다.", HttpStatus.NOT_FOUND);
-        }
-
+        // 비어 있으면 빈 목록 — 예전엔 404 를 던져 화면이 오류로 보였다 (관리자가 전부 지울 수도 있으니 정상 상태다, 2026-10-11)
+        if (list == null) list = java.util.List.of();
         log.info("명예의 전당 조회 성공 - 총 {}명의 데이터 반환", list.size());
         return ResponseEntity.ok(list);
     }

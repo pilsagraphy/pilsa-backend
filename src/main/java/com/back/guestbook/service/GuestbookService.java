@@ -162,9 +162,10 @@ public class GuestbookService {
     }
 
     private void applyFields(GuestbookNoteDto note, GuestbookNoteRequest req) {
-        String content = req.getContent() == null ? "" : req.getContent().strip();
+        // 끝의 빈 줄은 살려 둔다 — 작성자가 스티커 자리를 만들려고 넣은 줄이 저장 뒤 사라지면 카드가 작아진다 (검토 지적 10/11). 비어 있는지만 본다
+        String content = req.getContent() == null ? "" : req.getContent().replace("", "");
         int maxLength = maxLength();
-        if (content.isEmpty()) throw new BaseException("내용을 적어 주세요.", HttpStatus.BAD_REQUEST);
+        if (content.isBlank()) throw new BaseException("내용을 적어 주세요.", HttpStatus.BAD_REQUEST);
         if (content.length() > maxLength) throw new BaseException(maxLength + "자까지 적을 수 있어요.", HttpStatus.BAD_REQUEST);
         String name = req.getDisplayName() == null ? "" : req.getDisplayName().strip();
         if (name.isEmpty()) throw new BaseException("이름(닉네임)을 적어 주세요.", HttpStatus.BAD_REQUEST);
@@ -178,6 +179,8 @@ public class GuestbookService {
         note.setPaper(PAPERS.contains(req.getPaper()) ? req.getPaper() : "plain");
         note.setAlign(ALIGNS.contains(req.getAlign()) ? req.getAlign() : "left");
         note.setMarksSeed(req.getMarksSeed()); // 얼룩 배치 씨앗 — 프론트가 뽑은 값 그대로 (없으면 null → 화면이 noteId 로)
+        String tape = req.getTape() == null ? "" : req.getTape().trim().toLowerCase();
+        note.setTape(tape.matches("#[0-9a-f]{6}") ? tape : null); // 테이프 색 — #rrggbb 만, 아니면 기본색
     }
 
     /** 수·크기·위치 검사. 새 글은 전부 dataUrl 이어야 하고, 고치기는 drawingId 로 기존 그림을 가리킬 수 있다 */
@@ -205,7 +208,6 @@ public class GuestbookService {
             d.setWidthPct(clamp(d.getWidthPct(), 8, 80, 30));
             d.setRotation(d.getRotation() == null ? 0 : Math.max(-180, Math.min(180, d.getRotation())));
             d.setOpacity(clamp(d.getOpacity(), 0.1, 1, 1));
-            d.setOpacity(clamp(d.getOpacity(), 0.1, 1, 1));
         }
         return list;
     }
@@ -226,7 +228,6 @@ public class GuestbookService {
             row.setPosY(in.getPosY());
             row.setWidthPct(in.getWidthPct());
             row.setRotation(in.getRotation());
-            row.setOpacity(in.getOpacity());
             row.setOpacity(in.getOpacity());
             row.setSortOrder(order++);
             if (in.getDataUrl() != null && !in.getDataUrl().isBlank()) {

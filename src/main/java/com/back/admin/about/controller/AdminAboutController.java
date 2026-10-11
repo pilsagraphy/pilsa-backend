@@ -5,7 +5,6 @@ import com.back.about.dto.IntroSectionDto;
 import com.back.about.service.AboutService;
 import com.back.global.exception.BaseException;
 import com.back.global.security.AuthUtils;
-import com.back.global.util.FileStorageUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -33,7 +32,6 @@ import java.util.Map;
 public class AdminAboutController {
 
     private final AboutService service;
-    private final FileStorageUtil fileStorageUtil;
 
     @Operation(summary = "소개 문단 목록", description = "공개 GET /api/intro 와 같다 (관리 화면 편의)")
     @GetMapping("/intro")
@@ -94,8 +92,16 @@ public class AdminAboutController {
         if (file == null || file.isEmpty() || type == null || !type.startsWith("image/") || type.contains("svg")) {
             throw new BaseException("이미지 파일만 올릴 수 있어요.", HttpStatus.BAD_REQUEST);
         }
-        String url = fileStorageUtil.save(file, "uploads/history"); // /uploads/history/파일명
-        String name = url.substring(url.lastIndexOf('/') + 1);
+        // 원본 파일명을 쓰면 공백·#·% 가 든 이름이 <img src> 에서 깨진다 — UUID 이름으로 직접 쓴다 (방명록 그림과 같은 방식)
+        String ext = type.contains("png") ? ".png" : type.contains("webp") ? ".webp" : type.contains("gif") ? ".gif" : ".jpg";
+        String name = java.util.UUID.randomUUID().toString().replace("-", "") + ext;
+        java.io.File dir = new java.io.File(new java.io.File("").getAbsolutePath(), "uploads/history");
+        if (!dir.exists() && !dir.mkdirs()) throw new BaseException("사진을 저장하지 못했어요.", HttpStatus.INTERNAL_SERVER_ERROR);
+        try {
+            file.transferTo(new java.io.File(dir, name));
+        } catch (java.io.IOException e) {
+            throw new BaseException("사진을 저장하지 못했어요.", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
         return ResponseEntity.ok(Map.of("src", "/api/history/images/" + name));
     }
 }
