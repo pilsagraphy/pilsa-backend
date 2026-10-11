@@ -36,4 +36,7 @@ public interface GalleryMapper {
 
     /** 관리자 — 제목·해시태그(쉼표 구분) 수정. 지운 사진은 제외 */
     int updateMeta(@Param("photoId") Long photoId, @Param("title") String title, @Param("hashtags") String hashtags);
+
+    /** 본인(user_id) 이 올린 normal 사진만 */
+    int updateMetaOwn(@Param("photoId") Long photoId, @Param("userId") Long userId, @Param("title") String title, @Param("hashtags") String hashtags);
 }

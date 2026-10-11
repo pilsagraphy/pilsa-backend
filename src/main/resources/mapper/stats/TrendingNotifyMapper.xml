@@ -42,11 +42,18 @@
     </select>
 
     <!-- 마지막 접속이 N일보다 오래됐거나 접속 기록이 없는 회원. 탈퇴·차단은 뺀다 (정지는 끝나면 돌아올 사람이라 둔다) -->
+    <!-- 받는 사람: 최근 activeWithinDays 일 안에 접속한 적은 있지만 최근 days 일 동안은 접속하지 않은 회원
+         (PM 2026-10-11 "최근 반년 이내 접속했지만 최근 1주일 동안 접속하지 않은 사람"). 접속 기록이 아예 없는 회원은 빠진다 -->
     <select id="findInactiveUserIds" resultType="long">
         SELECT u.user_id
         FROM users u
         WHERE u.is_deleted = 0
           AND u.ban_status &lt;&gt; 'permanent'
+          AND EXISTS (
+              SELECT 1 FROM stats_access_hourly a
+              WHERE a.user_id = u.user_id
+                AND a.access_hour >= DATE_SUB(NOW(), INTERVAL #{activeWithinDays} DAY)
+          )
           AND NOT EXISTS (
               SELECT 1 FROM stats_access_hourly s
               WHERE s.user_id = u.user_id

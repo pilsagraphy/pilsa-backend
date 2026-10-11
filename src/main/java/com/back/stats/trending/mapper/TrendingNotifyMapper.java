@@ -19,5 +19,5 @@ public interface TrendingNotifyMapper {
     List<TrendingNotifyPost> findTopReactedPosts(@Param("boardId") Long boardId, @Param("limit") int limit);
 
     /** N일 이상 접속 기록이 없는 회원 (기록이 아예 없는 회원 포함). 탈퇴·차단 제외 */
-    List<Long> findInactiveUserIds(@Param("days") int days);
+    List<Long> findInactiveUserIds(@Param("days") int days, @Param("activeWithinDays") int activeWithinDays);
 }

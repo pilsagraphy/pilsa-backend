@@ -25,7 +25,8 @@ import java.util.stream.Collectors;
  * 글 고르기: 지난 7일 stats_post_hourly 에서 is_trending=1 이었던 글을 final_score 순으로. 하나도 없으면 지난 7일 반응
  * (조회+좋아요×5+댓글×3) 상위로 대신한다 — 조용한 주에도 "아무것도 없어서 안 보냄" 보다는 보내는 편이 목적(재유입)에 맞다.
  * 그래도 없으면(글이 없음) 건너뛴다.
- * 받는 사람: 탈퇴·차단이 아니고, 마지막 접속(stats_access_hourly)이 N일보다 오래됐거나 접속 기록이 없는 회원.
+ * 받는 사람: 탈퇴·차단이 아니고, 최근 trending_notify_active_within_days(기본 183)일 안에 접속한 적은 있지만
+ * 최근 N일 동안은 접속하지 않은 회원 (PM 2026-10-11 "최근 반년 이내 접속했지만 최근 1주일 미접속"). 접속 기록이 없는 회원은 제외.
  * 회원 설정 스위치는 두지 않는다(PM) — NotificationPreferenceService.USER_TYPES 에 TRENDING 이 없어 항상 통과한다.
  */
 @Slf4j
@@ -34,9 +35,11 @@ import java.util.stream.Collectors;
 public class TrendingNotifyBatch {
 
     private static final String INACTIVE_DAYS = "trending_notify_inactive_days";
+    private static final String ACTIVE_WITHIN_DAYS = "trending_notify_active_within_days";
     private static final String BOARD_NAME = "trending_notify_board_name";
     private static final String MAX_POSTS = "trending_notify_max_posts";
     private static final int DEFAULT_INACTIVE_DAYS = 7;
+    private static final int DEFAULT_ACTIVE_WITHIN_DAYS = 183; // 반년
     private static final String DEFAULT_BOARD_NAME = "자유게시판";
     private static final int DEFAULT_MAX_POSTS = 1; // 1편만 — 누르면 바로 그 글로 (PM 2026-10-10)
     private static final int TITLE_MAX = 100;
@@ -54,6 +57,7 @@ public class TrendingNotifyBatch {
             return;
         }
         int inactiveDays = intSetting(INACTIVE_DAYS, DEFAULT_INACTIVE_DAYS);
+        int activeWithinDays = Math.max(inactiveDays + 1, intSetting(ACTIVE_WITHIN_DAYS, DEFAULT_ACTIVE_WITHIN_DAYS));
         int maxPosts = intSetting(MAX_POSTS, DEFAULT_MAX_POSTS);
         String boardName = stringSetting(BOARD_NAME, DEFAULT_BOARD_NAME);
 
@@ -68,9 +72,9 @@ public class TrendingNotifyBatch {
             log.info("주간 인기 글 알림 — 지난주 글이 없어 건너뜀 (board={})", boardName);
             return;
         }
-        List<Long> receivers = mapper.findInactiveUserIds(inactiveDays);
+        List<Long> receivers = mapper.findInactiveUserIds(inactiveDays, activeWithinDays);
         if (receivers.isEmpty()) {
-            log.info("주간 인기 글 알림 — {}일 이상 미접속 회원 없음", inactiveDays);
+            log.info("주간 인기 글 알림 — 최근 {}일 안에 접속했지만 {}일 이상 미접속인 회원 없음", activeWithinDays, inactiveDays);
             return;
         }
 
@@ -90,7 +94,7 @@ public class TrendingNotifyBatch {
                 log.warn("주간 인기 글 알림 발행 실패 - userId: {}, {}", receiverId, e.getMessage());
             }
         }
-        log.info("주간 인기 글 알림 — 글 {}편, {}일 미접속 {}명 중 {}명 발송", posts.size(), inactiveDays, receivers.size(), sent);
+        log.info("주간 인기 글 알림 — 글 {}편, 최근 {}일 접속·{}일 미접속 {}명 중 {}명 발송", posts.size(), activeWithinDays, inactiveDays, receivers.size(), sent);
     }
 
     private int intSetting(String code, int fallback) {

@@ -19,6 +19,8 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
@@ -77,13 +79,20 @@ public class GalleryController {
 
     @Operation(summary = "사진 올리기 (로그인 회원)", description = """
             multipart `files`(여러 장, 이미지만, 한 번에 gallery_max_files_per_upload 장), `ratios`(파일 순서대로 가로÷세로, 선택),
-            `title`(선택), `hashtags`(선택, 쉼표/공백 구분). 학기는 서버가 오늘 날짜로 매긴다. 201 과 올린 사진들""")
+            `title`(필수), `hashtags`(필수, 쉼표/공백 구분), `semester`(선택, '2026-2학기' 꼴 — 비우면 오늘 날짜의 학기). 201 과 올린 사진들""")
     @PostMapping("/api/user/gallery")
     public ResponseEntity<List<GalleryPhotoDto>> upload(@RequestPart("files") List<MultipartFile> files,
                                                         @RequestParam(value = "ratios", required = false) List<Double> ratios,
                                                         @RequestParam(value = "title", required = false) String title,
-                                                        @RequestParam(value = "hashtags", required = false) String hashtags) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.upload(files, ratios, title, hashtags));
+                                                        @RequestParam(value = "hashtags", required = false) String hashtags,
+                                                        @RequestParam(value = "semester", required = false) String semester) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.upload(files, ratios, title, hashtags, semester));
+    }
+
+    @Operation(summary = "내 사진 제목·해시태그 고치기 (로그인)", description = "body { title, hashtags } — 둘 다 필수. 내가 올린 normal 사진만, 그 외 403")
+    @PutMapping("/api/user/gallery/{photoId}")
+    public ResponseEntity<GalleryPhotoDto> updateOwn(@PathVariable Long photoId, @RequestBody Map<String, String> body) {
+        return ResponseEntity.ok(service.updateMetaOwn(photoId, body.get("title"), body.get("hashtags")));
     }
 
     @Operation(summary = "사진 지우기 (로그인)", description = "내 사진은 deleted(소프트). 관리자가 남의 사진을 지우면 hidden(복원 가능). 그 외 403")
