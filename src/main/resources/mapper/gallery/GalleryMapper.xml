@@ -38,12 +38,42 @@
         SELECT <include refid="columns"/>
         FROM gallery_photos g
         LEFT JOIN users u ON u.user_id = g.user_id
-        WHERE g.semester_label = #{semester}
-        <choose>
-            <when test="includeHidden">AND g.state IN ('normal', 'hidden')</when>
-            <otherwise>AND g.state = 'normal'</otherwise>
-        </choose>
-        ORDER BY g.sort_order ASC, g.photo_id DESC
+        <where>
+            <if test="semester != null">g.semester_label = #{semester}</if>
+            <choose>
+                <when test="includeHidden">AND g.state IN ('normal', 'hidden')</when>
+                <otherwise>AND g.state = 'normal'</otherwise>
+            </choose>
+            <!-- 관리자 검색: 제목·해시태그·올린 사람 이름·아이디 (PM 2026-10-11) -->
+            <if test="keyword != null">
+                AND (g.title LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\'
+                  OR g.hashtags LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\'
+                  OR u.name LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\'
+                  OR u.login_id LIKE CONCAT('%', #{keyword}, '%') ESCAPE '\\')
+            </if>
+        </where>
+        ORDER BY <if test="semester == null">g.semester_label DESC, </if>g.sort_order ASC, g.photo_id DESC
+    </select>
+
+    <!-- 관리자 — 순서 바꾸기(그 학기 사진만), 등록 정보(학기·올린 사람) 고치기 (PM 2026-10-11) -->
+    <update id="updateSortOrder">
+        UPDATE gallery_photos
+        SET sort_order = #{sortOrder}
+        WHERE photo_id = #{photoId}
+          AND semester_label = #{semester}
+          AND state IN ('normal', 'hidden')
+    </update>
+
+    <update id="updateRegistration">
+        UPDATE gallery_photos
+        SET semester_label = #{semesterLabel},
+            user_id        = #{userId}
+        WHERE photo_id = #{photoId}
+          AND state IN ('normal', 'hidden')
+    </update>
+
+    <select id="existsActiveUser" resultType="boolean">
+        SELECT EXISTS (SELECT 1 FROM users WHERE user_id = #{userId} AND is_deleted = 0)
     </select>
 
     <select id="findById" resultType="com.back.gallery.dto.GalleryPhotoDto">
