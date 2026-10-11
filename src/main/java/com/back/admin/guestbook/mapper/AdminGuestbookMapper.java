@@ -11,7 +11,8 @@ import java.util.List;
 public interface AdminGuestbookMapper {
 
     /** 한 학기의 글 전부 (normal · hidden · deleted), 최신순 */
-    List<GuestbookNoteDto> findNotesAllStates(@Param("semester") String semester);
+    /** semester 가 null 이면 전체 학기. keyword 는 escapeLike 를 거친 값(null 이면 검색 안 함) */
+    List<GuestbookNoteDto> findNotesAllStates(@Param("semester") String semester, @Param("keyword") String keyword);
 
     List<String> findSemestersAllStates();
 

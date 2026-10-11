@@ -35,15 +35,18 @@ public class AdminGuestbookController {
     private final AdminGuestbookMapper mapper;
     private final GuestbookService guestbookService;
 
-    @Operation(summary = "학기별 글 전부 (숨긴 글·지운 글 포함)", description = "`semester` 비우면 이번 학기. `{ semester, semesters, notes: [ { ..., state: normal|hidden|deleted } ] }`")
+    @Operation(summary = "학기별 글 전부 (숨긴 글·지운 글 포함) + 검색", description = "`semester` 비우면 이번 학기. `keyword` 가 있으면 학기 무시, 작성자 이름·아이디·표시 이름·내용 LIKE. `{ semester, semesters, notes: [ { ..., state: normal|hidden|deleted } ] }`")
     @GetMapping("/notes")
-    public ResponseEntity<Map<String, Object>> notes(@RequestParam(required = false) String semester) {
+    public ResponseEntity<Map<String, Object>> notes(@RequestParam(required = false) String semester,
+                                                     @RequestParam(required = false) String keyword) {
         AuthUtils.requireAdmin();
         String current = guestbookService.currentSemesterLabel();
         List<String> semesters = new ArrayList<>(mapper.findSemestersAllStates());
         if (!semesters.contains(current)) semesters.add(0, current);
         String picked = semester == null || semester.isBlank() ? current : semester;
-        List<GuestbookNoteDto> notes = mapper.findNotesAllStates(picked);
+        // 검색어가 있으면 학기와 무관하게 전체에서 찾는다 — 작성자 이름·아이디·표시 이름·내용 (PM 2026-10-11)
+        String like = com.back.admin.common.AdminServiceSupport.escapeLike(keyword);
+        List<GuestbookNoteDto> notes = mapper.findNotesAllStates(like == null ? picked : null, like);
         guestbookService.decorate(notes);
         return ResponseEntity.ok(Map.of("semester", picked, "semesters", semesters, "notes", notes));
     }
