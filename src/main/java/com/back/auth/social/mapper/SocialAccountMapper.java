@@ -25,4 +25,7 @@ public interface SocialAccountMapper {
     int deleteByUserAndProvider(@Param("userId") Long userId, @Param("provider") String provider);
 
     int deleteByUserId(@Param("userId") Long userId);
+
+    /** 제공자 쪽 연결 해제 통보(카카오 웹훅·네이버 콜백) */
+    int deleteByProviderUser(@Param("provider") String provider, @Param("providerUserId") String providerUserId);
 }

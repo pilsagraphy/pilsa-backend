@@ -114,6 +114,10 @@ public class GoogleAccountService {
     @Transactional
     public String completePendingLink(Long userId, String token) {
         PendingLinkStore.PendingLink pending = pendingLinkStore.consume(token);
+        // 네이버·카카오 대기를 구글 연결 API 로 마무리하면 안 된다 (대기 쿠키를 같이 쓴다)
+        if (!OAuthProvider.GOOGLE.equals(pending.providerOrGoogle())) {
+            throw new GoogleIntegrationException("연결 대기 중인 구글 계정이 없습니다.", HttpStatus.BAD_REQUEST);
+        }
         link(userId, pending.sub(), pending.email());
         return pending.email();
     }
@@ -127,7 +131,7 @@ public class GoogleAccountService {
         if (pending == null) {
             return null;
         }
-        return new GooglePendingLinkResponse(true, pending.email(), maskEmail(pending.email()),
+        return new GooglePendingLinkResponse(pending.providerOrGoogle(), true, pending.email(), maskEmail(pending.email()),
                 pending.matchedLoginId() != null, maskLoginId(pending.matchedLoginId()));
     }
 

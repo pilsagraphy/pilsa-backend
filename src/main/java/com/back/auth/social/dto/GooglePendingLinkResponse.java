@@ -13,6 +13,8 @@ import lombok.Getter;
 @Getter
 @AllArgsConstructor
 public class GooglePendingLinkResponse {
+    /** 보관 중인 계정의 제공자 — GOOGLE | NAVER | KAKAO (2026-10-11). 대기가 없으면 null */
+    private String provider;
     private boolean pending;
     private String googleEmail;
     private String maskedEmail;
@@ -20,6 +22,6 @@ public class GooglePendingLinkResponse {
     private String maskedLoginId;
 
     public static GooglePendingLinkResponse none() {
-        return new GooglePendingLinkResponse(false, null, null, false, null);
+        return new GooglePendingLinkResponse(null, false, null, null, false, null);
     }
 }

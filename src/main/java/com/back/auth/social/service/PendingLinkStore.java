@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
+import com.back.global.oauth.OAuthProvider;
 import org.springframework.stereotype.Service;
 
 import java.security.SecureRandom;
@@ -30,8 +31,11 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class PendingLinkStore {
 
-    /** matchedLoginId: 구글 이메일과 같은 이메일로 가입된 회원의 아이디. 없으면 null. */
-    public record PendingLink(String sub, String email, String matchedLoginId) {
+    /** provider: GOOGLE|NAVER|KAKAO (옛 항목은 null=구글). sub: 제공자 안의 사용자 id. matchedLoginId: 같은 이메일로 가입된 회원 아이디, 없으면 null. */
+    public record PendingLink(String provider, String sub, String email, String matchedLoginId) {
+        public String providerOrGoogle() {
+            return provider == null ? OAuthProvider.GOOGLE : provider;
+        }
     }
 
     private static final String KEY_PREFIX = "google:pending-link:";
@@ -42,11 +46,15 @@ public class PendingLinkStore {
     private final SecureRandom random = new SecureRandom();
 
     public String issue(String sub, String email, String matchedLoginId) {
+        return issue(OAuthProvider.GOOGLE, sub, email, matchedLoginId);
+    }
+
+    public String issue(String provider, String sub, String email, String matchedLoginId) {
         byte[] bytes = new byte[32];
         random.nextBytes(bytes);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
 
-        redisTemplate.opsForValue().set(KEY_PREFIX + token, write(new PendingLink(sub, email, matchedLoginId)),
+        redisTemplate.opsForValue().set(KEY_PREFIX + token, write(new PendingLink(provider, sub, email, matchedLoginId)),
                 TTL_SECONDS, TimeUnit.SECONDS);
         return token;
     }
