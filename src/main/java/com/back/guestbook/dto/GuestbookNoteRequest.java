@@ -19,6 +19,7 @@ public class GuestbookNoteRequest {
     private String align;
     private Integer marksSeed;
     private String tape;
+    private Boolean marksOn; // 얼룩 켬/끔 (null=켬)
     private List<DrawingInput> drawings = new ArrayList<>();
 
     @Data
