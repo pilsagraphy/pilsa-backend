@@ -54,9 +54,9 @@ public class GalleryService {
         return new GalleryResponse(current, picked, semesters, maxFiles(), photos);
     }
 
-    /** 회원 업로드 — 여러 장. ratios 는 파일과 같은 순서의 가로÷세로(프론트가 잰 값, 없으면 1) */
+    /** 회원 업로드 — 여러 장. ratios 는 파일과 같은 순서의 가로÷세로(프론트가 잰 값, 없으면 1). semesterLabel 은 비우면 이번 학기 (PM 2026-10-11 "업로드시 학기 선택") */
     @Transactional
-    public List<GalleryPhotoDto> upload(List<MultipartFile> files, List<Double> ratios, String title, String hashtags) {
+    public List<GalleryPhotoDto> upload(List<MultipartFile> files, List<Double> ratios, String title, String hashtags, String semesterLabel) {
         Long me = AuthUtils.currentUserId();
         if (files == null || files.isEmpty()) throw new BaseException("사진을 골라 주세요.", HttpStatus.BAD_REQUEST);
         int max = maxFiles();
@@ -69,7 +69,8 @@ public class GalleryService {
         String tags = normalizeHashtags(hashtags);
         if (tags == null) throw new BaseException("해시태그를 하나 이상 적어 주세요.", HttpStatus.BAD_REQUEST);
 
-        String semester = currentSemesterLabel();
+        String semester = semesterLabel == null || semesterLabel.isBlank() ? currentSemesterLabel() : semesterLabel.strip();
+        if (!semester.matches("\\d{4}-[12]학기")) throw new BaseException("학기는 '2026-2학기' 꼴로 적어 주세요.", HttpStatus.BAD_REQUEST);
         String dir = "uploads/gallery/" + LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMM"));
         List<GalleryPhotoDto> saved = new ArrayList<>();
         for (int i = 0; i < files.size(); i++) {
@@ -102,6 +103,23 @@ public class GalleryService {
         if (mapper.deleteOwn(photoId, me) > 0) return;
         if (AuthUtils.isAdmin() && mapper.updateState(photoId, "normal", "hidden") > 0) return;
         throw new BaseException("내가 올린 사진만 지울 수 있어요.", HttpStatus.FORBIDDEN);
+    }
+
+    /** 회원 — 내가 올린 사진(normal)의 제목·해시태그 고치기 (PM 2026-10-11 "올린 사람은 본인 거 수정"). 남의 사진·숨김·삭제된 사진은 403 */
+    @Transactional
+    public GalleryPhotoDto updateMetaOwn(Long photoId, String title, String hashtags) {
+        Long me = AuthUtils.currentUserId();
+        String t = title == null ? "" : title.strip();
+        if (t.isEmpty()) throw new BaseException("제목을 적어 주세요.", HttpStatus.BAD_REQUEST);
+        if (t.length() > TITLE_MAX) throw new BaseException("제목은 " + TITLE_MAX + "자까지예요.", HttpStatus.BAD_REQUEST);
+        String tags = normalizeHashtags(hashtags);
+        if (tags == null) throw new BaseException("해시태그를 하나 이상 적어 주세요.", HttpStatus.BAD_REQUEST);
+        if (mapper.updateMetaOwn(photoId, me, t, tags) == 0) {
+            throw new BaseException("내가 올린 사진만 고칠 수 있어요.", HttpStatus.FORBIDDEN);
+        }
+        GalleryPhotoDto p = mapper.findById(photoId);
+        decorate(List.of(p));
+        return p;
     }
 
     /** 관리자 — 제목·해시태그 고치기 (PM 10/10 밤 "활동사진 관리에서 글자 수정") */
