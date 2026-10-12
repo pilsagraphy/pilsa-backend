@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
@@ -45,11 +46,15 @@ public class SocialAccountController {
         ));
     }
 
-    @Operation(summary = "계정 연결 - 동의 화면 URL 발급", description = "돌아올 때 /mypage?naver=linked|already_linked|failed")
+    @Operation(summary = "계정 연결 - 동의 화면 URL 발급", description = "돌아올 때 {returnTo|/mypage}?naver=linked|already_linked|failed|cancelled. returnTo(선택) 는 '/...' 경로만")
     @GetMapping("/{provider}/authorize")
-    public ResponseEntity<Map<String, String>> authorize(@PathVariable String provider, HttpServletResponse response) {
+    public ResponseEntity<Map<String, String>> authorize(@PathVariable String provider,
+                                                         @RequestParam(value = "returnTo", required = false) String returnTo,
+                                                         HttpServletResponse response) {
         String p = requireProvider(provider);
-        SocialAccountService.Authorize authorize = accountService.buildLinkAuthorize(p, AuthUtils.currentUserId());
+        // returnTo(선택): 돌아갈 프론트 경로('/...' 만). 없으면 /mypage
+        SocialAccountService.Authorize authorize = accountService.buildLinkAuthorize(p, AuthUtils.currentUserId(),
+                com.back.mypage.calendar.controller.GoogleCalendarController.sanitizeReturnTo(returnTo));
         stateCookie.bindState(response, authorize.state());
         return ResponseEntity.ok(Map.of("authorizeUrl", authorize.url()));
     }

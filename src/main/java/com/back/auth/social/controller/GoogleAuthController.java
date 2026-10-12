@@ -92,39 +92,41 @@ public class GoogleAuthController {
                                          @RequestParam(value = "error", required = false) String error,
                                          HttpServletRequest request,
                                          HttpServletResponse response) {
+        // 이 브라우저가 시작한 흐름인지 — authorize 때 심은 쿠키와 쿼리의 state 가 같아야 한다 (검사 후 쿠키는 지운다).
+        // 남의 콜백 URL 을 열게 해서 그 세션에 자기 구글 계정을 붙이는 공격은 여기서 걸린다.
+        boolean sameBrowser = stateCookie.consumeState(request, response, state);
+
+        // 취소·실패라도 시작한 화면으로 돌려보내야 하므로 state 를 먼저 소비해 목적·returnTo 를 꺼낸다.
+        // 계정 연결은 이미 로그인한 사용자가 설정 화면에서 시작한 흐름이라 /login 으로 보내면 안 된다 (PM 2026-10-13 "취소하면 마이페이지까지 돌아간다")
+        OAuthStateService.StateData data = null;
+        try {
+            if (state != null) data = stateService.consume(state);
+        } catch (Exception e) {
+            log.info("구글 콜백 state 검증 실패: {}", e.getMessage());
+        }
+        boolean isLink = data != null && OAuthStateService.PURPOSE_LINK.equals(data.purpose());
+        String linkReturn = isLink && data.returnTo() != null ? data.returnTo() : "/mypage";
+
         // 사용자가 동의 화면에서 취소를 누른 경우
         if (error != null) {
             log.info("구글 동의 취소 또는 오류: {}", error);
-            return redirect("/login", "error", "GOOGLE_CANCELLED");
+            return isLink ? redirect(linkReturn, "google", "cancelled") : redirect("/login", "error", "GOOGLE_CANCELLED");
         }
-
-        // 이 브라우저가 시작한 흐름인지 먼저 확인한다 — authorize 때 심은 쿠키와 쿼리의 state 가 같아야 한다.
-        // 남의 콜백 URL 을 열게 해서 그 세션에 자기 구글 계정을 붙이는 공격은 여기서 걸린다.
-        if (!stateCookie.consumeState(request, response, state)) {
+        if (data == null) {
+            return redirect("/login", "error", "INVALID_STATE");
+        }
+        if (!sameBrowser) {
             log.info("구글 콜백 - state 쿠키 불일치 (다른 브라우저에서 시작된 흐름이거나 쿠키 만료)");
-            return redirect("/login", "error", "INVALID_STATE");
+            return isLink ? redirect(linkReturn, "google", "failed") : redirect("/login", "error", "INVALID_STATE");
         }
-
-        // state 를 소비해 목적을 확보한다.
-        // 목적을 모르면 실패했을 때 어디로 돌려보낼지 알 수 없다 — 계정 연결은 이미 로그인한 사용자가
-        // 마이페이지에서 시작한 흐름이라 /login 으로 보내면 안 되고, 안내 문구도 로그인 실패와 정반대여야 한다.
-        OAuthStateService.StateData data;
-        try {
-            data = stateService.consume(state);
-        } catch (Exception e) {
-            log.info("구글 콜백 state 검증 실패: {}", e.getMessage());
-            return redirect("/login", "error", "INVALID_STATE");
-        }
-
-        boolean isLink = OAuthStateService.PURPOSE_LINK.equals(data.purpose());
 
         try {
             if (isLink) {
                 if (data.userId() == null) {
-                    return redirect("/mypage", "google", "failed");
+                    return redirect(linkReturn, "google", "failed");
                 }
                 accountService.linkAccount(data.userId(), code);
-                return redirect("/mypage", "google", "linked");
+                return redirect(linkReturn, "google", "linked");
             }
 
             accountService.loginWithGoogle(code, response);
@@ -146,7 +148,7 @@ public class GoogleAuthController {
 
             if (isLink) {
                 // CONFLICT = 그 구글 계정이 이미 다른 회원에게 붙어 있다
-                return redirect("/mypage", "google",
+                return redirect(linkReturn, "google",
                         e.getStatus() == HttpStatus.CONFLICT ? "already_linked" : "failed");
             }
             // CONFLICT = 이 구글 계정에 연결된 회원이 없다
@@ -156,7 +158,7 @@ public class GoogleAuthController {
         } catch (Exception e) {
             log.error("구글 콜백 처리 중 예기치 못한 오류 (purpose={})", data.purpose(), e);
             return isLink
-                    ? redirect("/mypage", "google", "failed")
+                    ? redirect(linkReturn, "google", "failed")
                     : redirect("/login", "error", "GOOGLE_LOGIN_FAILED");
         }
     }

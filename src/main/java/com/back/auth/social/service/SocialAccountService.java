@@ -81,9 +81,10 @@ public class SocialAccountService {
         return new Authorize(c.buildAuthorizeUrl(state), state);
     }
 
-    public Authorize buildLinkAuthorize(String provider, Long userId) {
+    public Authorize buildLinkAuthorize(String provider, Long userId, String returnTo) {
         SocialOAuthClient c = client(provider);
-        String state = stateService.issue(OAuthStateService.PURPOSE_LINK, userId);
+        // returnTo: 동의(또는 취소) 뒤 돌아갈 프론트 경로 — 설정 페이지에서 시작했으면 설정 페이지로 (PM 2026-10-13)
+        String state = stateService.issue(OAuthStateService.PURPOSE_LINK, userId, returnTo);
         return new Authorize(c.buildAuthorizeUrl(state), state);
     }
 
