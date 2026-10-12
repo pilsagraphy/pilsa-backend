@@ -47,6 +47,7 @@ public class AdminEventService {
 
     private final AdminEventMapper adminEventMapper;
     private final GoogleCalendarSyncService calendarSyncService;
+    private final com.back.mypage.calendar.service.NaverCalendarService naverCalendarService; // 네이버는 새 일정 넣기만 (수정·삭제 API 없음, 2026-10-12)
     private final FileStorageUtil fileStorageUtil;
     private final NotificationPublisher notificationPublisher;
     private final NotificationMapper notificationMapper;
@@ -217,6 +218,7 @@ public class AdminEventService {
 
         Long eventId = request.getEventId();
         afterCommit(() -> calendarSyncService.onEventCreated(eventId));
+        afterCommit(() -> naverCalendarService.onEventCreated(eventId));
         // 회원 전원에게 알림 — 관리자가 '알림 보내기'를 끄면 안 보낸다 (PM, 2026-09-21)
         if (!Boolean.FALSE.equals(request.getNotify())) {
             notifyEvent(eventId, false);
