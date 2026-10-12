@@ -73,27 +73,31 @@ public class SocialAuthController {
         String p = OAuthProvider.fromPath(provider);
         if (p == null) return redirect("/login", "error", "INVALID_STATE");
         String lower = p.toLowerCase(Locale.ROOT);
-        if (error != null) {
-            log.info("{} 동의 취소 또는 오류: {}", p, error);
-            return redirect("/login", "error", p + "_CANCELLED");
-        }
-        if (!stateCookie.consumeState(request, response, state)) {
-            log.info("{} 콜백 - state 쿠키 불일치", p);
-            return redirect("/login", "error", "INVALID_STATE");
-        }
-        OAuthStateService.StateData data;
+        // 이 브라우저가 시작한 흐름인지 (검사 후 쿠키는 지운다)
+        boolean sameBrowser = stateCookie.consumeState(request, response, state);
+        // 취소·실패라도 시작한 화면으로 돌려보내야 하므로 state 를 먼저 소비해 목적·returnTo 를 꺼낸다 (PM 2026-10-13)
+        OAuthStateService.StateData data = null;
         try {
-            data = stateService.consume(state);
+            if (state != null) data = stateService.consume(state);
         } catch (Exception e) {
             log.info("{} 콜백 state 검증 실패: {}", p, e.getMessage());
-            return redirect("/login", "error", "INVALID_STATE");
         }
-        boolean isLink = OAuthStateService.PURPOSE_LINK.equals(data.purpose());
+        boolean isLink = data != null && OAuthStateService.PURPOSE_LINK.equals(data.purpose());
+        String linkReturn = isLink && data.returnTo() != null ? data.returnTo() : "/mypage";
+        if (error != null) {
+            log.info("{} 동의 취소 또는 오류: {}", p, error);
+            return isLink ? redirect(linkReturn, lower, "cancelled") : redirect("/login", "error", p + "_CANCELLED");
+        }
+        if (data == null) return redirect("/login", "error", "INVALID_STATE");
+        if (!sameBrowser) {
+            log.info("{} 콜백 - state 쿠키 불일치", p);
+            return isLink ? redirect(linkReturn, lower, "failed") : redirect("/login", "error", "INVALID_STATE");
+        }
         try {
             if (isLink) {
-                if (data.userId() == null) return redirect("/mypage", lower, "failed");
+                if (data.userId() == null) return redirect(linkReturn, lower, "failed");
                 accountService.linkAccount(p, data.userId(), code, state);
-                return redirect("/mypage", lower, "linked");
+                return redirect(linkReturn, lower, "linked");
             }
             accountService.login(p, code, state, response);
             return redirect("/login", "login", lower);
@@ -102,11 +106,11 @@ public class SocialAuthController {
             return redirect("/login", "socialLink", lower, "matched", e.isEmailMatched() ? "1" : "0", "hint", e.getMaskedEmail());
         } catch (GoogleIntegrationException e) {
             log.info("{} 콜백 실패 (purpose={}): {}", p, data.purpose(), e.getMessage());
-            if (isLink) return redirect("/mypage", lower, e.getStatus() == HttpStatus.CONFLICT ? "already_linked" : "failed");
+            if (isLink) return redirect(linkReturn, lower, e.getStatus() == HttpStatus.CONFLICT ? "already_linked" : "failed");
             return redirect("/login", "error", e.getStatus() == HttpStatus.CONFLICT ? p + "_NOT_LINKED" : p + "_LOGIN_FAILED");
         } catch (Exception e) {
             log.error("{} 콜백 처리 중 예기치 못한 오류 (purpose={})", p, data.purpose(), e);
-            return isLink ? redirect("/mypage", lower, "failed") : redirect("/login", "error", p + "_LOGIN_FAILED");
+            return isLink ? redirect(linkReturn, lower, "failed") : redirect("/login", "error", p + "_LOGIN_FAILED");
         }
     }
 

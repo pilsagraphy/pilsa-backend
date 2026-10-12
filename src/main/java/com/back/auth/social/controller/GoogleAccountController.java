@@ -14,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
@@ -60,8 +61,11 @@ public class GoogleAccountController {
                     `{프론트}/mypage?google=already_linked` 로 돌아온다 (그 외 실패는 `?google=failed`).
                     로그인 화면으로 보내지 않는다 — 이 흐름은 이미 로그인한 사용자가 시작한 것이다.""")
     @GetMapping("/api/user/mypage/google/authorize")
-    public ResponseEntity<Map<String, String>> authorize(HttpServletResponse response) {
-        GoogleAccountService.Authorize authorize = accountService.buildLinkAuthorize(AuthUtils.currentUserId());
+    public ResponseEntity<Map<String, String>> authorize(@RequestParam(value = "returnTo", required = false) String returnTo,
+                                                         HttpServletResponse response) {
+        // returnTo(선택): 돌아갈 프론트 경로('/...' 만). 없으면 /mypage. 캘린더 authorize 와 같은 규칙
+        GoogleAccountService.Authorize authorize = accountService.buildLinkAuthorize(AuthUtils.currentUserId(),
+                com.back.mypage.calendar.controller.GoogleCalendarController.sanitizeReturnTo(returnTo));
         // 로그인 콜백과 같은 대조를 받는다 — 이 브라우저가 시작한 흐름이어야 콜백이 통과된다
         stateCookie.bindState(response, authorize.state());
         return ResponseEntity.ok(Map.of("authorizeUrl", authorize.url()));

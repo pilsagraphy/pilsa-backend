@@ -67,8 +67,9 @@ public class GoogleAccountService {
     }
 
     /** 계정 연결 동의 화면 URL (로그인 상태에서 호출). */
-    public Authorize buildLinkAuthorize(Long userId) {
-        String state = stateService.issue(OAuthStateService.PURPOSE_LINK, userId);
+    public Authorize buildLinkAuthorize(Long userId, String returnTo) {
+        // returnTo: 동의(또는 취소) 뒤 돌아갈 프론트 경로 — 설정 페이지에서 시작했으면 설정 페이지로 (PM 2026-10-13)
+        String state = stateService.issue(OAuthStateService.PURPOSE_LINK, userId, returnTo);
         String url = oauthClient.buildAuthorizeUrl(
                 GoogleProperties.LOGIN_SCOPE, properties.getLoginRedirectUri(), state, false);
         return new Authorize(url, state);

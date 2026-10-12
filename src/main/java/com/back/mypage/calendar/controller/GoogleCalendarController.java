@@ -167,7 +167,7 @@ public class GoogleCalendarController {
      * returnTo 는 같은 사이트 안 경로('/...')만 받는다 — 외부 주소·프로토콜 상대 주소('//evil')를 넣어
      * 동의 뒤 다른 사이트로 보내는 열린 리다이렉트를 막는다. 조건에 안 맞으면 기본 화면으로 간다.
      */
-    static String sanitizeReturnTo(String returnTo) {
+    public static String sanitizeReturnTo(String returnTo) {
         if (returnTo == null || returnTo.isBlank()) {
             return null;
         }
