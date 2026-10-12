@@ -9,6 +9,7 @@ import com.back.global.oauth.OAuthStateService;
 import com.back.global.oauth.TokenCipher;
 import com.back.global.oauth.dto.SocialUserInfo;
 import com.back.mypage.calendar.dto.NaverCalendarLink;
+import com.back.mypage.calendar.mapper.CalendarSyncMapper;
 import com.back.mypage.calendar.mapper.NaverCalendarMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,6 +48,7 @@ public class NaverCalendarService {
     private final OAuthStateService stateService;
     private final NaverCalendarMapper mapper;
     private final EventMapper eventMapper;
+    private final CalendarSyncMapper eventSource; // 초기 넣기 범위를 구글·카카오와 같게(최근 30일 안에 끝난 일정 + 앞으로)
     private final EventService eventService;
     private final TokenCipher tokenCipher;
 
@@ -107,15 +109,12 @@ public class NaverCalendarService {
         log.info("네이버 캘린더 연동 해제 - userId={}", userId);
     }
 
-    /** 연동 직후 — 오늘 이후 일정을 한 번 넣는다 (커밋 뒤 호출) */
+    /** 연동 직후 — 구글·카카오와 같은 범위(최근 30일 안에 끝난 일정 + 앞으로)를 한 번 넣는다 (PM 2026-10-13 "왜 오늘 이후만") */
     @Async
     public void pushUpcomingForUser(Long userId) {
         NaverCalendarLink link = mapper.findByUserId(userId);
         if (link == null) return;
-        String today = LocalDate.now().format(YMD);
-        List<EventCalendarRow> upcoming = eventMapper.findAllForCalendar().stream()
-                .filter(r -> r.getStartDate() != null && r.getStartDate().compareTo(today) >= 0)
-                .toList();
+        List<EventCalendarRow> upcoming = eventSource.findUpcomingEventsForSync();
         int sent = 0;
         String accessToken = accessTokenFor(link);
         if (accessToken == null) return;
