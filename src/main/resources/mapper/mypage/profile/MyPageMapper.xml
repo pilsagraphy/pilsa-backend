@@ -14,10 +14,19 @@
          ============================================================ -->
 
     <select id="findBasicInfo" resultType="com.back.mypage.profile.dto.MyPageBasicInfoRow">
-        SELECT login_id AS loginId, name, created_at AS joinedAt
+        SELECT login_id AS loginId, name, phone, created_at AS joinedAt
         FROM users
         WHERE user_id = #{userId} AND is_deleted = 0
     </select>
+
+    <!-- 이름·연락처 고치기 (PM 2026-10-12 "설정에 본인 개인정보 수정"). 연락처는 다른 회원과 겹치면 안 된다(users.phone 유니크) -->
+    <select id="existsPhoneOfOther" resultType="boolean">
+        SELECT COUNT(*) > 0 FROM users WHERE phone = #{phone} AND user_id != #{userId} AND is_deleted = 0
+    </select>
+
+    <update id="updateProfile">
+        UPDATE users SET name = #{name}, phone = #{phone} WHERE user_id = #{userId} AND is_deleted = 0
+    </update>
 
     <select id="countMyPosts" resultType="int">
         SELECT COUNT(*)

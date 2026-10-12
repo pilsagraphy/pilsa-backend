@@ -79,14 +79,17 @@ public class GalleryController {
 
     @Operation(summary = "사진 올리기 (로그인 회원)", description = """
             multipart `files`(여러 장, 이미지만, 한 번에 gallery_max_files_per_upload 장), `ratios`(파일 순서대로 가로÷세로, 선택),
-            `title`(필수), `hashtags`(필수, 쉼표/공백 구분), `semester`(선택, '2026-2학기' 꼴 — 비우면 오늘 날짜의 학기). 201 과 올린 사진들""")
+            `title`·`hashtags`(공통값), `titles[]`·`hashtagsList[]`(파일 순서대로 사진별 값 — 있으면 공통값보다 우선, 사진마다 제목·해시태그 필수),
+            `semester`(선택, '2026-2학기' 꼴 — 비우면 오늘 날짜의 학기). 201 과 올린 사진들""")
     @PostMapping("/api/user/gallery")
     public ResponseEntity<List<GalleryPhotoDto>> upload(@RequestPart("files") List<MultipartFile> files,
                                                         @RequestParam(value = "ratios", required = false) List<Double> ratios,
                                                         @RequestParam(value = "title", required = false) String title,
                                                         @RequestParam(value = "hashtags", required = false) String hashtags,
-                                                        @RequestParam(value = "semester", required = false) String semester) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.upload(files, ratios, title, hashtags, semester));
+                                                        @RequestParam(value = "semester", required = false) String semester,
+                                                        @RequestParam(value = "titles", required = false) List<String> titles,
+                                                        @RequestParam(value = "hashtagsList", required = false) List<String> hashtagsList) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.upload(files, ratios, title, hashtags, semester, titles, hashtagsList));
     }
 
     @Operation(summary = "내 사진 제목·해시태그 고치기 (로그인)", description = "body { title, hashtags } — 둘 다 필수. 내가 올린 normal 사진만, 그 외 403")

@@ -18,6 +18,13 @@ public class MyPageProfileController {
 
     private final MyPageService myPageService;
 
+    @Operation(summary = "이름·연락처 고치기", description = "body { name, phone }. 이름 2~20자, 연락처 010-0000-0000(다른 회원과 겹치면 409). 응답 { message }")
+    @org.springframework.web.bind.annotation.PutMapping("/api/user/mypage/profile")
+    public ResponseEntity<java.util.Map<String, String>> updateProfile(@org.springframework.web.bind.annotation.RequestBody java.util.Map<String, String> body) {
+        myPageService.updateProfile(body.get("name"), body.get("phone"));
+        return ResponseEntity.ok(java.util.Map.of("message", "내 정보를 고쳤어요."));
+    }
+
     @Operation(summary = "마이페이지 프로필/활동 요약", description = """
             마이페이지 진입 시 호출한다.
 

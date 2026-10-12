@@ -10,5 +10,6 @@ import lombok.Setter;
 public class MyPageBasicInfoRow {
     private String loginId;
     private String name;
+    private String phone;
     private LocalDateTime joinedAt;
 }

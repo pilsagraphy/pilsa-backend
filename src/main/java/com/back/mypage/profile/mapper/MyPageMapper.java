@@ -12,6 +12,9 @@ public interface MyPageMapper {
     // 로그인아이디/이름/가입일
     MyPageBasicInfoRow findBasicInfo(@Param("userId") Long userId);
 
+    // 이름·연락처 고치기 (2026-10-12)
+    boolean existsPhoneOfOther(@Param("phone") String phone, @Param("userId") Long userId);
+    int updateProfile(@Param("userId") Long userId, @Param("name") String name, @Param("phone") String phone);
     // 전체 기간 작성글 수 (state='normal')
     int countMyPosts(@Param("userId") Long userId);
 

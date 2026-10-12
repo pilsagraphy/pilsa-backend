@@ -57,17 +57,31 @@ public class GalleryService {
     /** 회원 업로드 — 여러 장. ratios 는 파일과 같은 순서의 가로÷세로(프론트가 잰 값, 없으면 1). semesterLabel 은 비우면 이번 학기 (PM 2026-10-11 "업로드시 학기 선택") */
     @Transactional
     public List<GalleryPhotoDto> upload(List<MultipartFile> files, List<Double> ratios, String title, String hashtags, String semesterLabel) {
+        return upload(files, ratios, title, hashtags, semesterLabel, null, null);
+    }
+
+    /** titles / hashtagsList: 파일과 같은 순서의 사진별 제목·해시태그 (PM 2026-10-12 "사진별로 제목과 해시태그"). 비면 공통 title/hashtags 로 */
+    @Transactional
+    public List<GalleryPhotoDto> upload(List<MultipartFile> files, List<Double> ratios, String title, String hashtags, String semesterLabel,
+                                        List<String> titles, List<String> hashtagsList) {
         Long me = AuthUtils.currentUserId();
         if (files == null || files.isEmpty()) throw new BaseException("사진을 골라 주세요.", HttpStatus.BAD_REQUEST);
         int max = maxFiles();
         if (files.size() > max) throw new BaseException("한 번에 " + max + "장까지 올릴 수 있어요.", HttpStatus.BAD_REQUEST);
-        // 제목은 필수 (PM 10/11) — 갤러리 호버·크게 보기 띠에 그대로 나간다
-        String t = title == null ? "" : title.strip();
-        if (t.isEmpty()) throw new BaseException("제목을 적어 주세요.", HttpStatus.BAD_REQUEST);
-        if (t.length() > TITLE_MAX) throw new BaseException("제목은 " + TITLE_MAX + "자까지예요.", HttpStatus.BAD_REQUEST);
-        // 해시태그도 하나 이상 필수 (PM 10/11)
-        String tags = normalizeHashtags(hashtags);
-        if (tags == null) throw new BaseException("해시태그를 하나 이상 적어 주세요.", HttpStatus.BAD_REQUEST);
+        // 제목·해시태그는 사진마다 필수 (PM 10/11) — 갤러리 호버·크게 보기 띠에 그대로 나간다. 사진별 값이 없으면 공통값
+        List<String> finalTitles = new ArrayList<>();
+        List<String> finalTags = new ArrayList<>();
+        for (int i = 0; i < files.size(); i++) {
+            String rawTitle = titles != null && i < titles.size() && titles.get(i) != null && !titles.get(i).isBlank() ? titles.get(i) : title;
+            String rawTags = hashtagsList != null && i < hashtagsList.size() && hashtagsList.get(i) != null && !hashtagsList.get(i).isBlank() ? hashtagsList.get(i) : hashtags;
+            String t = rawTitle == null ? "" : rawTitle.strip();
+            if (t.isEmpty()) throw new BaseException((files.size() > 1 ? (i + 1) + "번째 사진의 " : "") + "제목을 적어 주세요.", HttpStatus.BAD_REQUEST);
+            if (t.length() > TITLE_MAX) throw new BaseException("제목은 " + TITLE_MAX + "자까지예요.", HttpStatus.BAD_REQUEST);
+            String tags = normalizeHashtags(rawTags);
+            if (tags == null) throw new BaseException((files.size() > 1 ? (i + 1) + "번째 사진의 " : "") + "해시태그를 하나 이상 적어 주세요.", HttpStatus.BAD_REQUEST);
+            finalTitles.add(t);
+            finalTags.add(tags);
+        }
 
         String semester = semesterLabel == null || semesterLabel.isBlank() ? currentSemesterLabel() : semesterLabel.strip();
         if (!semester.matches("\\d{4}-[12]학기")) throw new BaseException("학기는 '2026-2학기' 꼴로 적어 주세요.", HttpStatus.BAD_REQUEST);
@@ -86,8 +100,8 @@ public class GalleryService {
             p.setFileType(type);
             Double r = ratios != null && i < ratios.size() ? ratios.get(i) : null;
             p.setRatio(r == null || r.isNaN() || r < 0.2 || r > 5 ? 1.0 : Math.round(r * 1000) / 1000.0);
-            p.setTitle(t);
-            p.setHashtagsRaw(tags);
+            p.setTitle(finalTitles.get(i));
+            p.setHashtagsRaw(finalTags.get(i));
             p.setSortOrder(UPLOAD_SORT_ORDER);
             mapper.insert(p);
             saved.add(mapper.findById(p.getPhotoId()));
