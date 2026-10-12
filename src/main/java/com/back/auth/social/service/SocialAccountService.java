@@ -49,15 +49,21 @@ public class SocialAccountService {
     private final AuthMapper authMapper;
     private final PendingLinkStore pendingLinkStore;
     private final TokenIssuer tokenIssuer;
+    private final com.back.mypage.calendar.service.NaverCalendarService naverCalendarService;
+    private final com.back.mypage.calendar.service.KakaoCalendarService kakaoCalendarService;
 
     public SocialAccountService(List<SocialOAuthClient> clientList, OAuthStateService stateService, SocialAccountMapper accountMapper,
-                                AuthMapper authMapper, PendingLinkStore pendingLinkStore, TokenIssuer tokenIssuer) {
+                                AuthMapper authMapper, PendingLinkStore pendingLinkStore, TokenIssuer tokenIssuer,
+                                com.back.mypage.calendar.service.NaverCalendarService naverCalendarService,
+                                com.back.mypage.calendar.service.KakaoCalendarService kakaoCalendarService) {
         this.clients = clientList.stream().collect(Collectors.toMap(SocialOAuthClient::provider, Function.identity()));
         this.stateService = stateService;
         this.accountMapper = accountMapper;
         this.authMapper = authMapper;
         this.pendingLinkStore = pendingLinkStore;
         this.tokenIssuer = tokenIssuer;
+        this.naverCalendarService = naverCalendarService;
+        this.kakaoCalendarService = kakaoCalendarService;
     }
 
     /** 키가 아직 properties 에 없으면 503 — 버튼은 보이되 "준비 중" 으로 안내한다 */
@@ -157,6 +163,13 @@ public class SocialAccountService {
             throw new GoogleIntegrationException("연결된 " + OAuthProvider.label(provider) + " 계정이 없습니다.", HttpStatus.NOT_FOUND);
         }
         log.info("{} 계정 연결 해제 - userId={}", provider, userId);
+        // 그 계정의 캘린더 연동도 함께 끊는다 (PM 2026-10-13). 톡캘린더에 넣어 둔 일정은 남긴다
+        try {
+            if (OAuthProvider.NAVER.equals(provider) && Boolean.TRUE.equals(naverCalendarService.getStatus(userId).get("linked"))) naverCalendarService.unlink(userId);
+            if (OAuthProvider.KAKAO.equals(provider) && Boolean.TRUE.equals(kakaoCalendarService.getStatus(userId).get("linked"))) kakaoCalendarService.unlink(userId, false);
+        } catch (Exception e) {
+            log.warn("{} 계정 해제에 딸린 캘린더 해제 실패 - userId={}, {}", provider, userId, e.getMessage());
+        }
     }
 
     /** 제공자 쪽에서 연결을 끊었다는 통보(카카오 웹훅·네이버 연결 끊기 콜백) — 우리 쪽 연결도 지운다 */
