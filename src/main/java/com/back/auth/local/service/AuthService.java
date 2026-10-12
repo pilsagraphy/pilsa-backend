@@ -35,7 +35,8 @@ public interface AuthService {
     void resetPassword(PasswordResetRequest request);
 
     // 마이페이지 비밀번호 변경 — 로그인 상태에서 현재 비밀번호 재확인 후 변경 (비로그인 초기화와 별개)
-    void changePassword(PasswordChangeRequest request);
+    /** @return 소셜 전용 회원이 비밀번호를 새로 만든 경우 true (응답 문구 분기용) */
+    boolean changePassword(PasswordChangeRequest request);
 
     // 이메일 찾기 - 학번/이름 일치 시 마스킹된 이메일 반환
     String findMaskedEmail(String studentNo, String name);

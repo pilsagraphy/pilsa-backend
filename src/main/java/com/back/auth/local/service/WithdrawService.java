@@ -46,6 +46,12 @@ public class WithdrawService {
     private final AttachmentService attachmentService;
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate redisTemplate;
+    // 탈퇴 시 소셜 연결·캘린더 연동을 같이 지운다 — 남겨 두면 그 소셜 계정으로 재가입·재연결이 영구히 막히고(탈퇴 행에 붙어 있어 409),
+    // 캘린더 배치는 탈퇴자에게 계속 일정을 보낸다 (감사 2026-10-13)
+    private final com.back.auth.social.mapper.SocialAccountMapper socialAccountMapper;
+    private final com.back.mypage.calendar.service.GoogleCalendarService googleCalendarService;
+    private final com.back.mypage.calendar.service.KakaoCalendarService kakaoCalendarService;
+    private final com.back.mypage.calendar.service.NaverCalendarService naverCalendarService;
 
     /** 소셜 전용 계정의 탈퇴 확인 문구 — 프론트 WithdrawModal 과 같은 값 */
     public static final String WITHDRAW_CONFIRM_TEXT = "회원 탈퇴";
@@ -63,7 +69,7 @@ public class WithdrawService {
         // 비밀번호 없는 소셜 전용 계정은 확인 문구("회원 탈퇴")를 그대로 입력받는다 (PM 2026-10-13)
         if (com.back.auth.core.SocialOnlyPassword.is(target.getPasswordHash())) {
             if (!WITHDRAW_CONFIRM_TEXT.equals(request.getConfirmText() == null ? null : request.getConfirmText().trim())) {
-                throw new AuthException("확인 문구가 일치하지 않습니다. '" + WITHDRAW_CONFIRM_TEXT + "' 를 그대로 입력해주세요.", HttpStatus.BAD_REQUEST);
+                throw new AuthException("'" + WITHDRAW_CONFIRM_TEXT + "'를 정확히 입력해 주세요.", HttpStatus.BAD_REQUEST);
             }
         } else if (request.getPassword() == null
                 || !passwordEncoder.matches(request.getPassword(), target.getPasswordHash())) {
@@ -107,6 +113,13 @@ public class WithdrawService {
         notificationDeviceMapper.deleteByUserId(userId);
         notificationMapper.softDeleteAllByUser(userId);
 
+        // 간편로그인 연결 — 소셜 계정 ID 도 개인정보이고, 남겨 두면 그 소셜 계정을 다시는 못 쓴다
+        socialAccountMapper.deleteByUserId(userId);
+        // 캘린더 연동 — 제공자 토큰 폐기까지. 연동이 없으면 404 가 나므로 조용히 넘긴다. 실패해도 탈퇴는 진행
+        unlinkCalendarQuietly("구글", () -> googleCalendarService.unlink(userId, false));
+        unlinkCalendarQuietly("카카오", () -> kakaoCalendarService.unlink(userId, false));
+        unlinkCalendarQuietly("네이버", () -> naverCalendarService.unlink(userId));
+
         // 임시저장(초안)과 초안에 묶인 선업로드 파일 정리 — 초안은 본인만 보던 미발행 개인 작업물이라
         // 개인정보 즉시 파기 원칙의 대상이고, 여기서 지우지 않으면 어떤 배치도 못 지운다:
         // 탈퇴자는 재로그인 불가(초안 삭제 API 재진입 불가), 04:50 정리 배치는 초안 귀속 파일을 명시 제외,
@@ -124,6 +137,16 @@ public class WithdrawService {
             redisTemplate.delete("auth:mail:verified:" + target.getEmail());
         } catch (Exception e) {
             log.warn("탈퇴 시 Redis 정리 실패 - userId: {}, {}", userId, e.getMessage());
+        }
+    }
+
+    private void unlinkCalendarQuietly(String label, Runnable unlink) {
+        try {
+            unlink.run();
+        } catch (com.back.global.oauth.GoogleIntegrationException e) {
+            if (e.getStatus() != HttpStatus.NOT_FOUND) log.warn("탈퇴 시 {} 캘린더 연동 해제 실패 (무시): {}", label, e.getMessage());
+        } catch (Exception e) {
+            log.warn("탈퇴 시 {} 캘린더 연동 해제 실패 (무시): {}", label, e.getMessage());
         }
     }
 

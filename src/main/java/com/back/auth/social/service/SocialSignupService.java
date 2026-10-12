@@ -32,6 +32,7 @@ public class SocialSignupService {
     private final GoogleAccountService googleAccountService;
     private final SocialAccountService socialAccountService;
     private final AuthMapper authMapper;
+    private final com.back.auth.social.mapper.SocialAccountMapper accountMapper;
     private final TokenIssuer tokenIssuer;
 
     public record Result(AuthResponse auth, String provider) {
@@ -41,9 +42,15 @@ public class SocialSignupService {
     public Result signup(SignupRequest request, String pendingToken, HttpServletResponse response) {
         PendingLinkStore.PendingLink pending = pendingToken == null ? null : pendingLinkStore.peek(pendingToken);
         if (pending == null) {
-            throw new GoogleIntegrationException("간편 로그인 정보가 없거나 만료됐어요. 로그인 화면에서 소셜 로그인을 다시 시도해주세요.", HttpStatus.BAD_REQUEST);
+            throw new GoogleIntegrationException("간편 로그인 정보가 만료됐어요. 다시 로그인해 주세요.", HttpStatus.BAD_REQUEST);
         }
         String provider = pending.providerOrGoogle();
+
+        // 10분 사이 같은 소셜 계정이 다른 회원에게 붙었으면 여기서 막는다 — users INSERT 뒤에 걸리면 행은 롤백돼도
+        // 이메일 인증 플래그·대기 토큰(Redis)은 이미 소진돼 사용자가 둘 다 다시 해야 한다
+        if (accountMapper.findByProviderUser(provider, pending.sub()) != null) {
+            throw new GoogleIntegrationException("이미 다른 회원에게 연결된 " + OAuthProvider.label(provider) + " 계정이에요.", HttpStatus.CONFLICT);
+        }
 
         Long userId = authService.signupSocialOnly(request);
 

@@ -192,7 +192,7 @@ public class AuthServicempl implements AuthService {
         // 이메일 인증을 실제로 통과했는지 서버에서 확인 — 프론트 화면 검증은 API 직접 호출로 우회된다.
         // (인증 성공 시 MailServiceImpl 이 30분짜리 통과 플래그를 남긴다)
         if (redisTemplate.opsForValue().get("auth:mail:verified:" + request.getEmail()) == null) {
-            throw new AuthException("이메일 인증이 완료되지 않았거나 만료되었습니다. 이메일 인증을 다시 진행해주세요.", HttpStatus.FORBIDDEN);
+            throw new AuthException("이메일 인증을 다시 해 주세요.", HttpStatus.FORBIDDEN);
         }
 
         // 중복 아이디 확인
@@ -284,8 +284,14 @@ public class AuthServicempl implements AuthService {
                 .map(a -> OAuthProvider.label(a.getProvider()))
                 .distinct()
                 .collect(java.util.stream.Collectors.joining(", "));
-        if (providers.isBlank()) providers = "간편 로그인";
-        return "간편 로그인 전용 계정이에요. " + providers + "로 로그인해 보세요. 로그인 후 마이페이지에서 비밀번호를 만들 수 있어요.";
+        // 연결이 하나도 없으면(카카오 쪽에서 끊음·네이버 연결 끊기 콜백) 로그인할 길이 없다 — 비밀번호 찾기가 "비밀번호 만들기" 로 열린다
+        if (providers.isBlank()) return "간편 로그인 연결이 끊긴 계정이에요. 비밀번호 찾기에서 비밀번호를 만들어 주세요.";
+        return providers + "로 로그인하는 계정이에요. 로그인 후 마이페이지에서 비밀번호를 만들 수 있어요.";
+    }
+
+    /** 소셜 전용 회원이면서 간편로그인 연결이 남아 있는가 — 비밀번호 찾기는 연결이 0건일 때만 열어 준다(복구 경로) */
+    private boolean socialOnlyWithLinks(UserDto user) {
+        return user != null && SocialOnlyPassword.is(user.getPasswordHash()) && !socialAccountMapper.findByUserId(user.getUserId()).isEmpty();
     }
 
     // 회원가입 - 아이디 중복
@@ -335,7 +341,7 @@ public class AuthServicempl implements AuthService {
         String verified = redisTemplate.opsForValue().get(verifiedKey);
 
         if (!"true".equals(verified)) {
-            throw new AuthException("이메일 인증이 완료되지 않았거나 만료되었습니다. 이메일 인증을 다시 진행해주세요.", HttpStatus.UNAUTHORIZED);
+            throw new AuthException("이메일 인증을 다시 해 주세요.", HttpStatus.UNAUTHORIZED);
         }
 
         String loginId = authMapper.findLoginIdByEmail(email);
@@ -360,7 +366,7 @@ public class AuthServicempl implements AuthService {
 
         // 소셜 전용 계정은 찾을 비밀번호가 없다 — 메일을 보내기 전에 안내 (PM 2026-10-13)
         UserDto socialCheck = authMapper.findByLoginId(loginId);
-        if (socialCheck != null && SocialOnlyPassword.is(socialCheck.getPasswordHash())) {
+        if (socialOnlyWithLinks(socialCheck)) {
             throw new AuthException(socialOnlyMessage(socialCheck.getUserId()), HttpStatus.FORBIDDEN);
         }
 
@@ -432,7 +438,7 @@ public class AuthServicempl implements AuthService {
         if (user == null) {
             throw new AuthException("해당 아이디는 존재하지 않습니다.", HttpStatus.NOT_FOUND);
         }
-        if (SocialOnlyPassword.is(user.getPasswordHash())) {
+        if (socialOnlyWithLinks(user)) {
             throw new AuthException(socialOnlyMessage(user.getUserId()), HttpStatus.FORBIDDEN);
         }
 
@@ -444,7 +450,7 @@ public class AuthServicempl implements AuthService {
         // 이메일 인증(인증번호) 통과 여부를 서버에서 확인 — 없으면 아이디만 알면 남의 비밀번호를 바꿀 수 있다 (계정 탈취 구멍)
         String verifiedKey = "auth:mail:verified:" + user.getEmail();
         if (redisTemplate.opsForValue().get(verifiedKey) == null) {
-            throw new AuthException("이메일 인증이 완료되지 않았거나 만료되었습니다. 이메일 인증을 다시 진행해주세요.", HttpStatus.UNAUTHORIZED);
+            throw new AuthException("이메일 인증을 다시 해 주세요.", HttpStatus.UNAUTHORIZED);
         }
 
 //        // 승인 Y / 대기 N / 탈퇴 X
@@ -461,7 +467,7 @@ public class AuthServicempl implements AuthService {
     // 마이페이지 비밀번호 변경 — 로그인 상태에서 현재 비밀번호를 재확인하므로 토큰 탈취만으로는 변경 불가
     @Override
     @Transactional
-    public void changePassword(PasswordChangeRequest request) {
+    public boolean changePassword(PasswordChangeRequest request) {
         Long userId = AuthUtils.currentUserId();
         WithdrawTarget me = withdrawMapper.findWithdrawTarget(userId);
         if (me == null) {
@@ -494,6 +500,7 @@ public class AuthServicempl implements AuthService {
         }
 
         authMapper.updatePassword(me.getLoginId(), passwordEncoder.encode(newPassword));
+        return creating;
     }
 
     // 이메일 찾기 - 학번+이름 일치 시 마스킹된 이메일 반환
@@ -588,11 +595,11 @@ public class AuthServicempl implements AuthService {
             // Refresh Token 자체가 만료된 경우
             // 정상종료이므로 사용자의 재로그인이 필요함
             log.info("Refresh token expired at {}", e.getClaims().getExpiration());
-            throw new AuthException("Refresh token (로그인을 다시 해주세요.)", HttpStatus.UNAUTHORIZED);
+            throw new AuthException("로그인이 만료됐어요. 다시 로그인해 주세요.", HttpStatus.UNAUTHORIZED);
         } catch (JwtException e) {
             // 비정상 종료
             log.warn("Invalid refresh token: {}", e.getMessage());
-            throw new AuthException("Invalid refresh token", HttpStatus.UNAUTHORIZED);
+            throw new AuthException("로그인 정보가 올바르지 않아요. 다시 로그인해 주세요.", HttpStatus.UNAUTHORIZED);
         }
     }
 
@@ -628,12 +635,12 @@ public class AuthServicempl implements AuthService {
             // Refresh Token 자체가 만료된 경우
             // 정상종료이므로 사용자의 재로그인이 필요함
             log.info("Refresh token expired at {}", e.getClaims().getExpiration());
-            throw new AuthException("Refresh token expired(로그인을 다시 해주세요.)", HttpStatus.UNAUTHORIZED);
+            throw new AuthException("로그인이 만료됐어요. 다시 로그인해 주세요.", HttpStatus.UNAUTHORIZED);
 
         } catch (JwtException e) {
             // 비정상 종료
             log.warn("Invalid refresh token: {}", e.getMessage());
-            throw new AuthException("Invalid refresh token", HttpStatus.UNAUTHORIZED);
+            throw new AuthException("로그인 정보가 올바르지 않아요. 다시 로그인해 주세요.", HttpStatus.UNAUTHORIZED);
         }
     }
 }

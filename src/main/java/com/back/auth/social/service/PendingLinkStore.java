@@ -71,7 +71,7 @@ public class PendingLinkStore {
     /** 연결에 쓴다 — 검증하고 소비한다. 없거나 만료됐으면 예외. */
     public PendingLink consume(String token) {
         if (token == null || token.isBlank()) {
-            throw new GoogleIntegrationException("연결 대기 중인 구글 계정이 없습니다. 구글 로그인을 다시 시도해주세요.",
+            throw new GoogleIntegrationException("간편 로그인 정보가 없어요. 다시 로그인해 주세요.",
                     HttpStatus.BAD_REQUEST);
         }
         String key = KEY_PREFIX + token;
@@ -79,7 +79,7 @@ public class PendingLinkStore {
         redisTemplate.delete(key);
 
         if (stored == null) {
-            throw new GoogleIntegrationException("연결 요청이 만료되었습니다. 구글 로그인을 다시 시도해주세요.",
+            throw new GoogleIntegrationException("간편 로그인 정보가 만료됐어요. 다시 로그인해 주세요.",
                     HttpStatus.BAD_REQUEST);
         }
         return read(stored);
@@ -104,7 +104,7 @@ public class PendingLinkStore {
         try {
             return objectMapper.readValue(json, PendingLink.class);
         } catch (JsonProcessingException e) {
-            throw new GoogleIntegrationException("연결 요청 정보를 읽을 수 없습니다. 구글 로그인을 다시 시도해주세요.",
+            throw new GoogleIntegrationException("간편 로그인 정보를 읽을 수 없어요. 다시 로그인해 주세요.",
                     HttpStatus.BAD_REQUEST);
         }
     }
