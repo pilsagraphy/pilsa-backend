@@ -48,6 +48,7 @@ public class AdminEventService {
     private final AdminEventMapper adminEventMapper;
     private final GoogleCalendarSyncService calendarSyncService;
     private final com.back.mypage.calendar.service.NaverCalendarService naverCalendarService; // 네이버는 새 일정 넣기만 (수정·삭제 API 없음, 2026-10-12)
+    private final com.back.mypage.calendar.service.KakaoCalendarService kakaoCalendarService; // 톡캘린더는 구글처럼 등록·수정·삭제 전부 (2026-10-12)
     private final FileStorageUtil fileStorageUtil;
     private final NotificationPublisher notificationPublisher;
     private final NotificationMapper notificationMapper;
@@ -219,6 +220,7 @@ public class AdminEventService {
         Long eventId = request.getEventId();
         afterCommit(() -> calendarSyncService.onEventCreated(eventId));
         afterCommit(() -> naverCalendarService.onEventCreated(eventId));
+        afterCommit(() -> kakaoCalendarService.onEventCreated(eventId));
         // 회원 전원에게 알림 — 관리자가 '알림 보내기'를 끄면 안 보낸다 (PM, 2026-09-21)
         if (!Boolean.FALSE.equals(request.getNotify())) {
             notifyEvent(eventId, false);
@@ -280,6 +282,7 @@ public class AdminEventService {
         }
 
         afterCommit(() -> calendarSyncService.onEventUpdated(eventId));
+        afterCommit(() -> kakaoCalendarService.onEventUpdated(eventId));
 
         // 수정 알림은 관리자가 켰을 때만 — "(수정)" 을 붙여 보낸다
         if (Boolean.TRUE.equals(request.getNotify())) {
@@ -305,6 +308,7 @@ public class AdminEventService {
         // 소프트 삭제라 events 행은 남지만, 사용자 캘린더에서는 지워야 한다.
         // 매핑 테이블의 google_event_id 만 있으면 되므로 일정 본문을 다시 읽지 않는다.
         afterCommit(() -> calendarSyncService.onEventDeleted(eventId));
+        afterCommit(() -> kakaoCalendarService.onEventDeleted(eventId));
 
         return new EventResponse("일정이 정상적으로 삭제되었습니다.", null);
     }

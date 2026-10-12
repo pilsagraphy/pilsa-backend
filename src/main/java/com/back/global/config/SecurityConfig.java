@@ -60,6 +60,7 @@ public class SecurityConfig {
                     // /api/user/mypage/** 아래에 있지만 이 한 경로만 예외로 연다.
                     "/api/user/mypage/calendar/google/callback",
                     "/api/user/mypage/calendar/naver/callback", // 네이버 캘린더 콜백도 같은 이유 (2026-10-12)
+                    "/api/user/mypage/calendar/kakao/callback",
                     "/api/mail/**", // 인증번호 관련
                     "/swagger-ui/**", // 스웨거 관련
                     "/v3/api-docs/**", // 스웨거 관련
