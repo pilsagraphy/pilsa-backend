@@ -18,6 +18,9 @@ public interface AuthService {
     void logout(HttpServletResponse response, HttpServletRequest request);
     //회원가입
     void signup(SignupRequest request);
+
+    /** 비밀번호 없는 소셜 가입 — 검증은 signup 과 같고 password_hash 에 SocialOnlyPassword.MARKER 를 넣는다. 만든 userId 반환 */
+    Long signupSocialOnly(SignupRequest request);
     // 회원가입 - 아이디 & 이메일 중복 확인
     boolean existsByLoginId(String loginId);
     boolean existsByEmail(String email);

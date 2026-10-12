@@ -1,6 +1,10 @@
 package com.back.auth.local.service;
 
+import com.back.auth.core.SocialOnlyPassword;
 import com.back.auth.core.TokenIssuer;
+import com.back.auth.social.mapper.SocialAccountMapper;
+import com.back.auth.social.dto.UserSocialAccount;
+import com.back.global.oauth.OAuthProvider;
 import com.back.auth.core.dto.*;
 import com.back.auth.local.dto.*;
 import com.back.auth.core.mapper.AuthMapper;
@@ -44,6 +48,7 @@ public class AuthServicempl implements AuthService {
     private final JwtUtil jwtUtil;
     private final MailService mailService;
     private final StringRedisTemplate redisTemplate;
+    private final SocialAccountMapper socialAccountMapper; // 소셜 전용 계정 안내문에 "어느 버튼으로 로그인하라" 를 넣기 위해
 
     /**
      * 세션을 여는 일(제재 확인·토큰 발급·리프레시 쿠키)은 전부 여기에 맡긴다.
@@ -75,6 +80,11 @@ public class AuthServicempl implements AuthService {
                               HttpServletResponse response) {
         // DB 조회
         UserDto user = authMapper.findByLoginId(request.getLoginId());
+
+        // 비밀번호 없는 소셜 가입 회원 — 어떤 비밀번호도 맞지 않으니 "틀렸다" 대신 어느 버튼으로 들어오라고 알려 준다 (PM 2026-10-13)
+        if (user != null && SocialOnlyPassword.is(user.getPasswordHash())) {
+            throw new AuthException(socialOnlyMessage(user.getUserId()), HttpStatus.FORBIDDEN);
+        }
 
         // 아이디/비밀번호 확인
         if (user == null || !passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
@@ -155,10 +165,29 @@ public class AuthServicempl implements AuthService {
     // 회원가입
     @Transactional
     public void signup(SignupRequest request) {
-
         // 입력 형식 검증 — 규칙은 프론트(pilsa-frontend schemas/auth.js zod)와 동일하며,
         // 정규식은 policy_settings(signup_*_regex)에서 로드한다. 프론트 검증만으로는 API 직접 호출을 못 막는다.
         validateSignupFormat(request);
+        requireMatch(request.getPassword(), "signup_password_regex",
+                "^(?=.*[A-Za-z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,20}$",
+                "비밀번호는 문자, 숫자, 특수문자를 포함한 8~20자여야 합니다.");
+        createUser(request, passwordEncoder.encode(request.getPassword()));
+    }
+
+    /**
+     * 비밀번호 없는 소셜 가입 (PM 2026-10-13). 아이디·이름·학과·학번·전화·이메일(인증번호 그대로)은 보통 가입과 똑같이 받고
+     * 비밀번호만 없다. password_hash 에는 SocialOnlyPassword.MARKER 를 넣어 아이디·비밀번호 로그인이 되지 않게 한다.
+     * 소셜 계정을 붙이고 토큰을 발급하는 건 SocialSignupService 가 한다(여기서는 users 행만).
+     */
+    @Override
+    @Transactional
+    public Long signupSocialOnly(SignupRequest request) {
+        validateSignupFormat(request);
+        return createUser(request, SocialOnlyPassword.MARKER);
+    }
+
+    // 중복·재가입 대조·INSERT — 보통 가입과 소셜 가입이 함께 쓴다. passwordHash 는 bcrypt 해시 또는 소셜 전용 표식
+    private Long createUser(SignupRequest request, String passwordHash) {
 
         // 이메일 인증을 실제로 통과했는지 서버에서 확인 — 프론트 화면 검증은 API 직접 호출로 우회된다.
         // (인증 성공 시 MailServiceImpl 이 30분짜리 통과 플래그를 남긴다)
@@ -218,9 +247,6 @@ public class AuthServicempl implements AuthService {
             }
         }
 
-        // 비밀번호 암호화
-        String encodedPw = passwordEncoder.encode(request.getPassword());
-
         UserSignupDto user = new UserSignupDto();
 
         user.setName(request.getName());
@@ -229,7 +255,7 @@ public class AuthServicempl implements AuthService {
         user.setStudentNo(request.getStudentNo());
         user.setEmail(request.getEmail());
         user.setLoginId(request.getLoginId());
-        user.setPasswordHash(encodedPw);
+        user.setPasswordHash(passwordHash);
         // 가입은 재학생 기본, 관리자는 별도 승격(admin_level)으로만 부여.
         // memberType은 화이트리스트로만 허용 - 임의 문자열(예: "ADMIN")이 member_type에 저장되면
         // JWT 필터의 "ROLE_" + memberType 변환으로 권한이 상승할 수 있어 반드시 차단한다.
@@ -245,6 +271,21 @@ public class AuthServicempl implements AuthService {
 
         // 인증 통과 플래그는 1회용 — 같은 인증으로 계정을 반복 생성하지 못하게 소진시킨다
         redisTemplate.delete("auth:mail:verified:" + request.getEmail());
+        return user.getUserId();
+    }
+
+    /**
+     * 소셜 전용 계정에 비밀번호 경로(로그인·비밀번호 찾기)로 들어왔을 때의 안내문 (PM 2026-10-13 문구).
+     * 그 회원이 실제로 연결해 둔 제공자만 나열한다.
+     */
+    private String socialOnlyMessage(Long userId) {
+        java.util.List<UserSocialAccount> accounts = socialAccountMapper.findByUserId(userId);
+        String providers = accounts.stream()
+                .map(a -> OAuthProvider.label(a.getProvider()))
+                .distinct()
+                .collect(java.util.stream.Collectors.joining(", "));
+        if (providers.isBlank()) providers = "간편 로그인";
+        return "간편 로그인 전용 계정이에요. " + providers + "로 로그인해 보세요. 로그인 후 마이페이지에서 비밀번호를 만들 수 있어요.";
     }
 
     // 회원가입 - 아이디 중복
@@ -317,6 +358,12 @@ public class AuthServicempl implements AuthService {
             throw new AuthException("해당 정보를 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
         }
 
+        // 소셜 전용 계정은 찾을 비밀번호가 없다 — 메일을 보내기 전에 안내 (PM 2026-10-13)
+        UserDto socialCheck = authMapper.findByLoginId(loginId);
+        if (socialCheck != null && SocialOnlyPassword.is(socialCheck.getPasswordHash())) {
+            throw new AuthException(socialOnlyMessage(socialCheck.getUserId()), HttpStatus.FORBIDDEN);
+        }
+
         long expireTime = mailService.sendCode(email);
 
         if (expireTime <= 0) {
@@ -351,9 +398,7 @@ public class AuthServicempl implements AuthService {
         requireMatch(request.getLoginId(), "signup_login_id_regex",
                 "^[a-zA-Z0-9]{8,50}$",
                 "아이디는 8자 이상, 영문과 숫자만 입력할 수 있습니다.");
-        requireMatch(request.getPassword(), "signup_password_regex",
-                "^(?=.*[A-Za-z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,20}$",
-                "비밀번호는 문자, 숫자, 특수문자를 포함한 8~20자여야 합니다.");
+        // 비밀번호 규칙은 signup() 이 따로 본다 — 소셜 가입(signupSocialOnly)은 비밀번호가 없다
     }
 
     // 정책 정규식 검사 — 값이 null 이거나 불일치면 400. 정책 행이 없거나 컴파일 불가면 기본 정규식 사용
@@ -386,6 +431,9 @@ public class AuthServicempl implements AuthService {
         UserDto user = authMapper.findByLoginId(request.getLoginId());
         if (user == null) {
             throw new AuthException("해당 아이디는 존재하지 않습니다.", HttpStatus.NOT_FOUND);
+        }
+        if (SocialOnlyPassword.is(user.getPasswordHash())) {
+            throw new AuthException(socialOnlyMessage(user.getUserId()), HttpStatus.FORBIDDEN);
         }
 
         // 새 비밀번호 형식 검증 — 회원가입과 동일 규칙 재사용. 초기화 경로로 규칙 위반 비밀번호가 설정되는 구멍 봉쇄
@@ -420,8 +468,11 @@ public class AuthServicempl implements AuthService {
             throw new AuthException("사용자 정보를 찾을 수 없습니다.", HttpStatus.NOT_FOUND);
         }
 
-        if (request.getCurrentPassword() == null
-                || !passwordEncoder.matches(request.getCurrentPassword(), me.getPasswordHash())) {
+        // 소셜 전용 계정은 현재 비밀번호가 없다 — 같은 API 가 "비밀번호 만들기" 로 동작한다 (PM 2026-10-13).
+        // 로그인 상태(토큰)만으로 허용하는 이유: 만들어 봐야 로그인 수단이 하나 늘 뿐, 기존 수단을 빼앗지 못한다.
+        boolean creating = SocialOnlyPassword.is(me.getPasswordHash());
+        if (!creating && (request.getCurrentPassword() == null
+                || !passwordEncoder.matches(request.getCurrentPassword(), me.getPasswordHash()))) {
             throw new AuthException("현재 비밀번호가 일치하지 않습니다.", HttpStatus.BAD_REQUEST);
         }
 
@@ -438,7 +489,7 @@ public class AuthServicempl implements AuthService {
                 "^(?=.*[A-Za-z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,20}$",
                 "비밀번호는 문자, 숫자, 특수문자를 포함한 8~20자여야 합니다.");
 
-        if (passwordEncoder.matches(newPassword, me.getPasswordHash())) {
+        if (!creating && passwordEncoder.matches(newPassword, me.getPasswordHash())) {
             throw new AuthException("새 비밀번호가 현재 비밀번호와 같습니다.", HttpStatus.BAD_REQUEST);
         }
 

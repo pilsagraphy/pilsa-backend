@@ -178,11 +178,20 @@ public class GoogleAccountService {
      */
     @Transactional
     public void unlinkAccount(Long userId) {
+        requireNotLastLoginMethod(userId);
         int deleted = accountMapper.deleteByUserAndProvider(userId, OAuthProvider.GOOGLE);
         if (deleted == 0) {
             throw new GoogleIntegrationException("연결된 구글 계정이 없습니다.", HttpStatus.NOT_FOUND);
         }
         log.info("구글 계정 연결 해제 - userId={}", userId);
+    }
+
+    /** 비밀번호 없는 소셜 전용 회원이 마지막 소셜 연결까지 끊으면 로그인할 길이 없어진다 — 먼저 비밀번호를 만들게 한다 (PM 2026-10-13) */
+    private void requireNotLastLoginMethod(Long userId) {
+        if (!com.back.auth.core.SocialOnlyPassword.is(authMapper.findPasswordHashByUserId(userId))) return;
+        if (accountMapper.findByUserId(userId).size() <= 1) {
+            throw new GoogleIntegrationException("유일한 로그인 수단이라 해제할 수 없어요. 먼저 마이페이지에서 비밀번호를 만들어 주세요.", HttpStatus.CONFLICT);
+        }
     }
 
     private GoogleUserInfo exchangeAndParse(String code, String redirectUri) {

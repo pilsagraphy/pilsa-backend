@@ -153,6 +153,11 @@ public class SocialAccountService {
 
     @Transactional
     public void unlinkAccount(String provider, Long userId) {
+        // 비밀번호 없는 소셜 전용 회원이 마지막 소셜 연결까지 끊으면 로그인할 길이 없어진다 (PM 2026-10-13)
+        if (com.back.auth.core.SocialOnlyPassword.is(authMapper.findPasswordHashByUserId(userId))
+                && accountMapper.findByUserId(userId).size() <= 1) {
+            throw new GoogleIntegrationException("유일한 로그인 수단이라 해제할 수 없어요. 먼저 마이페이지에서 비밀번호를 만들어 주세요.", HttpStatus.CONFLICT);
+        }
         if (accountMapper.deleteByUserAndProvider(userId, provider) == 0) {
             throw new GoogleIntegrationException("연결된 " + OAuthProvider.label(provider) + " 계정이 없습니다.", HttpStatus.NOT_FOUND);
         }

@@ -47,6 +47,9 @@ public class WithdrawService {
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate redisTemplate;
 
+    /** 소셜 전용 계정의 탈퇴 확인 문구 — 프론트 WithdrawModal 과 같은 값 */
+    public static final String WITHDRAW_CONFIRM_TEXT = "회원 탈퇴";
+
     @Transactional
     public void withdraw(WithdrawRequest request) {
         Long userId = AuthUtils.currentUserId();
@@ -56,8 +59,13 @@ public class WithdrawService {
             throw new AuthException("탈퇴 처리할 수 없는 계정입니다.", HttpStatus.NOT_FOUND);
         }
 
-        // 본인 확인 — 토큰 탈취만으로는 탈퇴할 수 없게 현재 비밀번호를 재확인한다
-        if (request.getPassword() == null
+        // 본인 확인 — 토큰 탈취만으로는 탈퇴할 수 없게 현재 비밀번호를 재확인한다.
+        // 비밀번호 없는 소셜 전용 계정은 확인 문구("회원 탈퇴")를 그대로 입력받는다 (PM 2026-10-13)
+        if (com.back.auth.core.SocialOnlyPassword.is(target.getPasswordHash())) {
+            if (!WITHDRAW_CONFIRM_TEXT.equals(request.getConfirmText() == null ? null : request.getConfirmText().trim())) {
+                throw new AuthException("확인 문구가 일치하지 않습니다. '" + WITHDRAW_CONFIRM_TEXT + "' 를 그대로 입력해주세요.", HttpStatus.BAD_REQUEST);
+            }
+        } else if (request.getPassword() == null
                 || !passwordEncoder.matches(request.getPassword(), target.getPasswordHash())) {
             throw new AuthException("비밀번호가 일치하지 않습니다.", HttpStatus.BAD_REQUEST);
         }

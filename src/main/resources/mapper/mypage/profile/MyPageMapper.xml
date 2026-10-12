@@ -14,7 +14,7 @@
          ============================================================ -->
 
     <select id="findBasicInfo" resultType="com.back.mypage.profile.dto.MyPageBasicInfoRow">
-        SELECT login_id AS loginId, name, phone, created_at AS joinedAt
+        SELECT login_id AS loginId, name, phone, created_at AS joinedAt, password_hash AS passwordHash
         FROM users
         WHERE user_id = #{userId} AND is_deleted = 0
     </select>

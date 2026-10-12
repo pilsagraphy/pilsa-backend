@@ -10,18 +10,20 @@ public class MyPageSummaryResponse {
     private final String name;
     private final String phone; // 설정 > 내 정보 수정용 (2026-10-12)
     private final LocalDateTime joinedAt;
+    private final Boolean socialOnly; // 비밀번호 없는 소셜 가입 회원 — 설정의 "비밀번호 재설정" 이 "비밀번호 만들기" 로, 탈퇴는 확인 문구로 (2026-10-13)
     private final int postCount;         // 전체 기간 작성글 수
     private final int commentCount;      // 전체 기간 작성한 댓글 수
     private final int likedCount;        // 전체 기간 좋아요 누른 글 수
     private final SemesterActivityResponse semester;
 
-    public MyPageSummaryResponse(String loginId, String name, String phone, LocalDateTime joinedAt,
+    public MyPageSummaryResponse(String loginId, String name, String phone, LocalDateTime joinedAt, Boolean socialOnly,
                                   int postCount, int commentCount, int likedCount,
                                   SemesterActivityResponse semester) {
         this.loginId = loginId;
         this.name = name;
         this.phone = phone;
         this.joinedAt = joinedAt;
+        this.socialOnly = socialOnly;
         this.postCount = postCount;
         this.commentCount = commentCount;
         this.likedCount = likedCount;

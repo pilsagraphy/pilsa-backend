@@ -57,6 +57,7 @@ public class MyPageServiceImpl implements MyPageService {
         );
 
         return new MyPageSummaryResponse(basicInfo.getLoginId(), basicInfo.getName(), basicInfo.getPhone(), basicInfo.getJoinedAt(),
+                com.back.auth.core.SocialOnlyPassword.is(basicInfo.getPasswordHash()),
                 postCount, commentCount, likedCount, semester);
     }
 
