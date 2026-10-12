@@ -24,6 +24,19 @@ public class MyPageServiceImpl implements MyPageService {
     private final MyPageMapper myPageMapper;
 
     @Override
+    /** 이름·연락처 고치기 — 회원가입과 같은 규칙(이름 2~20자, 연락처 010-0000-0000). 연락처가 다른 회원 것이면 409 */
+    @org.springframework.transaction.annotation.Transactional
+    public void updateProfile(String name, String phone) {
+        Long userId = com.back.global.security.AuthUtils.currentUserId();
+        String n = name == null ? "" : name.strip();
+        String p = phone == null ? "" : phone.strip();
+        if (n.length() < 2 || n.length() > 20) throw new com.back.global.exception.BaseException("이름은 2~20자로 적어 주세요.", org.springframework.http.HttpStatus.BAD_REQUEST);
+        if (!p.matches("^010-[0-9]{4}-[0-9]{4}$")) throw new com.back.global.exception.BaseException("연락처는 010-0000-0000 꼴로 적어 주세요.", org.springframework.http.HttpStatus.BAD_REQUEST);
+        if (myPageMapper.existsPhoneOfOther(p, userId)) throw new com.back.global.exception.BaseException("이미 다른 회원이 쓰는 연락처예요.", org.springframework.http.HttpStatus.CONFLICT);
+        if (myPageMapper.updateProfile(userId, n, p) == 0) throw new com.back.global.exception.BaseException("회원 정보를 찾지 못했어요.", org.springframework.http.HttpStatus.NOT_FOUND);
+    }
+
+    @Override
     public MyPageSummaryResponse getSummary() {
         Long userId = AuthUtils.currentUserId();
 
@@ -43,7 +56,7 @@ public class MyPageServiceImpl implements MyPageService {
                 myPageMapper.countMyReceivedLikesInPeriod(userId, from, to)
         );
 
-        return new MyPageSummaryResponse(basicInfo.getLoginId(), basicInfo.getName(), basicInfo.getJoinedAt(),
+        return new MyPageSummaryResponse(basicInfo.getLoginId(), basicInfo.getName(), basicInfo.getPhone(), basicInfo.getJoinedAt(),
                 postCount, commentCount, likedCount, semester);
     }
 
