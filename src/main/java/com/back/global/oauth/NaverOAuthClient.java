@@ -2,6 +2,7 @@ package com.back.global.oauth;
 
 import com.back.global.oauth.dto.SocialUserInfo;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
@@ -49,6 +50,7 @@ public class NaverOAuthClient implements SocialOAuthClient {
     private String calendarRedirectUri;
 
     private final RestClient restClient = RestClient.create();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     public String provider() {
@@ -155,11 +157,13 @@ public class NaverOAuthClient implements SocialOAuthClient {
             MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
             form.add("calendarId", "defaultCalendarId");
             form.add("scheduleIcalString", ical);
-            JsonNode res = restClient.post().uri(CREATE_SCHEDULE_URL)
+            // 네이버가 Content-Type 을 text/plain 으로 주므로 문자열로 받아 직접 파싱한다 (JsonNode 로 받으면 변환기가 없어 실패, 2026-10-13 운영 로그)
+            String raw = restClient.post().uri(CREATE_SCHEDULE_URL)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
                     .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                     .body(form)
-                    .retrieve().body(JsonNode.class);
+                    .retrieve().body(String.class);
+            JsonNode res = raw == null || raw.isBlank() ? null : objectMapper.readTree(raw);
             String code = res == null ? null : res.path("resultcode").asText(null);
             if (code != null && !"00".equals(code)) {
                 throw new GoogleIntegrationException("네이버 캘린더 응답 오류: " + res.path("message").asText(code), HttpStatus.BAD_GATEWAY);
