@@ -154,6 +154,9 @@ public class SocialAccountService {
 
     @Transactional
     public void unlinkAccount(String provider, Long userId) {
+        if (accountMapper.findByUserAndProvider(userId, provider) == null) {
+            throw new GoogleIntegrationException("연결된 " + OAuthProvider.label(provider) + " 계정이 없습니다.", HttpStatus.NOT_FOUND);
+        }
         // 비밀번호 없는 소셜 전용 회원이 마지막 소셜 연결까지 끊으면 로그인할 길이 없어진다 (PM 2026-10-13)
         if (com.back.auth.core.SocialOnlyPassword.is(authMapper.findPasswordHashByUserId(userId))
                 && accountMapper.findByUserId(userId).size() <= 1) {

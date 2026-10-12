@@ -179,6 +179,9 @@ public class GoogleAccountService {
      */
     @Transactional
     public void unlinkAccount(Long userId) {
+        if (accountMapper.findByUserAndProvider(userId, OAuthProvider.GOOGLE) == null) {
+            throw new GoogleIntegrationException("연결된 구글 계정이 없습니다.", HttpStatus.NOT_FOUND);
+        }
         requireNotLastLoginMethod(userId);
         int deleted = accountMapper.deleteByUserAndProvider(userId, OAuthProvider.GOOGLE);
         if (deleted == 0) {

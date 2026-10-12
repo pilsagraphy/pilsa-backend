@@ -38,7 +38,7 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequiredArgsConstructor
-@Tag(name = "로그인-구글", description = "구글 소셜 로그인 (연결된 계정으로만 로그인 가능 — 구글만으로는 가입되지 않는다)")
+@Tag(name = "로그인-구글", description = "구글 소셜 로그인. 연결된 회원이 없으면 비밀번호 없는 소셜 가입(POST /api/auth/register/social) 또는 아이디·비밀번호 로그인 후 연결")
 public class GoogleAuthController {
 
     private final GoogleProperties properties;

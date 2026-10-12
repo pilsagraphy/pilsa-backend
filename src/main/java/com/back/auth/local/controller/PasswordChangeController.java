@@ -38,6 +38,8 @@ public class PasswordChangeController {
                     ⚠️ **성공 시 기존 토큰이 전부 무효화된다**(users.token_version +1) — 변경을 요청한 본인 세션도 포함이다.
                     프론트는 이 응답을 받으면 저장한 토큰을 버리고 **로그인 화면으로 이동**시켜야 한다.
                     그대로 두면 다음 요청에서 401(X-Token-Expired: 1)이 떨어진다.
+                    ※ 비밀번호 없는 소셜 가입 회원(GET /api/user/mypage 의 socialOnly)은 currentPassword 없이 보내면 "비밀번호 만들기" 로 동작하고
+                      응답은 {"message":"비밀번호를 만들었어요. 다시 로그인해 주세요."} — 이 경우도 token_version 이 올라 다시 로그인해야 한다.
                     실패: 400 {"message":"현재 비밀번호가 일치하지 않습니다."}
                     실패: 400 {"message":"비밀번호는 문자, 숫자, 특수문자를 포함한 8~20자여야 합니다."} (policy_settings.signup_password_regex)
                     실패: 400 {"message":"새 비밀번호가 현재 비밀번호와 같습니다."}
@@ -45,7 +47,7 @@ public class PasswordChangeController {
                     """)
     @PatchMapping("/api/user/mypage/password/reset")
     public ResponseEntity<Map<String, String>> changePassword(@RequestBody PasswordChangeRequest request) {
-        authService.changePassword(request);
-        return ResponseEntity.ok(Map.of("message", "비밀번호가 변경되었습니다."));
+        boolean created = authService.changePassword(request);
+        return ResponseEntity.ok(Map.of("message", created ? "비밀번호를 만들었어요. 다시 로그인해 주세요." : "비밀번호가 변경되었습니다."));
     }
 }

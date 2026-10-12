@@ -44,7 +44,7 @@ import java.util.Map;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/auth")
-@Tag(name = "로그인-네이버·카카오", description = "네이버·카카오 소셜 로그인 (연결된 계정으로만 로그인 가능 — 소셜 계정만으로는 가입되지 않는다)")
+@Tag(name = "로그인-네이버·카카오", description = "네이버·카카오 소셜 로그인. 연결된 회원이 없으면 비밀번호 없는 소셜 가입(POST /api/auth/register/social) 또는 아이디·비밀번호 로그인 후 연결")
 public class SocialAuthController {
 
     private final GoogleProperties properties;
