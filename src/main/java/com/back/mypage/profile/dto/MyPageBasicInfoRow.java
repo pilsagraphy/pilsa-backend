@@ -12,4 +12,5 @@ public class MyPageBasicInfoRow {
     private String name;
     private String phone;
     private LocalDateTime joinedAt;
+    private String passwordHash; // socialOnly 판정용(SocialOnlyPassword.is) — 응답에는 내보내지 않는다
 }

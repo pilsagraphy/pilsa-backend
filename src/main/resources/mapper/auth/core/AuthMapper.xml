@@ -103,6 +103,10 @@
     </update>
 
     <!-- 모든 기기에서 로그아웃 -->
+    <select id="findPasswordHashByUserId" resultType="string">
+        SELECT password_hash FROM users WHERE user_id = #{userId} AND is_deleted = 0
+    </select>
+
     <update id="bumpTokenVersion">
         UPDATE users SET token_version = token_version + 1
         WHERE user_id = #{userId}

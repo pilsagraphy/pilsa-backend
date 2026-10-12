@@ -35,6 +35,9 @@ public interface AuthMapper {
     // 모든 기기에서 로그아웃 — token_version 을 올려 그 사용자의 기존 토큰을 전부 무효화한다
     void bumpTokenVersion(@Param("userId") Long userId);
 
+    /** 소셜 전용 회원 판정용(SocialOnlyPassword.is). 탈퇴·미존재면 null */
+    String findPasswordHashByUserId(@Param("userId") Long userId);
+
     // 이메일 찾기 - 학번+이름이 모두 일치하는 사용자의 이메일 조회
     String findEmailByStudentNoAndName(@Param("studentNo") String studentNo, @Param("name") String name);
 

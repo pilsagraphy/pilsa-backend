@@ -8,4 +8,6 @@ import lombok.Setter;
 @Setter
 public class WithdrawRequest {
     private String password;
+    /** 소셜 전용 계정(비밀번호 없음)은 비밀번호 대신 이 문구를 그대로 입력한다 (PM 2026-10-13) */
+    private String confirmText;
 }
