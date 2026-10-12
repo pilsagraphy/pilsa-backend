@@ -57,8 +57,6 @@ public class GoogleAccountService {
     private final AuthMapper authMapper;
     private final PendingLinkStore pendingLinkStore;
     private final TokenIssuer tokenIssuer;
-    // 계정 연결을 끊으면 그 계정의 캘린더 연동도 함께 끊는다 (PM 2026-10-13 "자동 해제 되어야"). 캘린더 → 계정 방향 의존은 없어 순환 아님
-    private final com.back.mypage.calendar.service.GoogleCalendarService googleCalendarService;
 
     /** 로그인 동의 화면 URL. */
     public Authorize buildLoginAuthorize() {
@@ -185,11 +183,6 @@ public class GoogleAccountService {
             throw new GoogleIntegrationException("연결된 구글 계정이 없습니다.", HttpStatus.NOT_FOUND);
         }
         log.info("구글 계정 연결 해제 - userId={}", userId);
-        try {
-            if (googleCalendarService.getStatus(userId).isLinked()) googleCalendarService.unlink(userId, false);
-        } catch (Exception e) {
-            log.warn("구글 계정 해제에 딸린 캘린더 해제 실패 - userId={}, {}", userId, e.getMessage());
-        }
     }
 
     private GoogleUserInfo exchangeAndParse(String code, String redirectUri) {
