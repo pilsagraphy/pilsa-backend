@@ -27,11 +27,13 @@ public class CalendarSyncRetryScheduler {
     private static final int BATCH_LIMIT = 200;
 
     private final GoogleCalendarSyncService syncService;
+    private final KakaoCalendarService kakaoCalendarService;
 
     @Scheduled(cron = "0 */10 * * * *")
     public void retryFailedSyncs() {
         try {
             syncService.retryFailed(GoogleCalendarSyncService.MAX_RETRY, BATCH_LIMIT);
+            kakaoCalendarService.retryFailed(KakaoCalendarService.MAX_RETRY, BATCH_LIMIT);
         } catch (Exception e) {
             // 배치가 죽으면 다음 주기까지 재시도가 멈춘다 — 여기서 삼키고 다음 회차에 다시 시도한다
             log.error("캘린더 동기화 재시도 배치 실패", e);
