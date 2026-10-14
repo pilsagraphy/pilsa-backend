@@ -147,4 +147,122 @@
         ORDER BY statDate
     </select>
 
+    <!-- ── 인사이트 (PM 2026-10-15 "인사이트가 없다") — 새 테이블·배치 없이 원본에서 계산 ── -->
+
+    <!-- 가입 코호트 잔존. N주차 창 = 가입일+7N ~ +7N+7 (회원별). 창이 다 지난 회원만 분모(eligible)에 넣는다 -->
+    <sql id="retainedInWeek">
+        EXISTS (SELECT 1 FROM stats_access_hourly a
+                WHERE a.user_id = u.user_id
+                  AND a.access_hour &gt;= DATE(u.created_at) + INTERVAL ${n} * 7 DAY
+                  AND a.access_hour &lt;  DATE(u.created_at) + INTERVAL ${n} * 7 + 7 DAY)
+    </sql>
+    <select id="findCohortRetention" resultType="com.back.admin.monitoring.dto.CohortRetentionRow">
+        SELECT DATE(u.created_at) - INTERVAL WEEKDAY(u.created_at) DAY AS weekStart,
+               COUNT(*) AS signups,
+               SUM(DATE(u.created_at) + INTERVAL 14 DAY &lt;= CURDATE()) AS w1Eligible,
+               SUM(DATE(u.created_at) + INTERVAL 14 DAY &lt;= CURDATE() AND <include refid="retainedInWeek"><property name="n" value="1"/></include>) AS w1Retained,
+               SUM(DATE(u.created_at) + INTERVAL 21 DAY &lt;= CURDATE()) AS w2Eligible,
+               SUM(DATE(u.created_at) + INTERVAL 21 DAY &lt;= CURDATE() AND <include refid="retainedInWeek"><property name="n" value="2"/></include>) AS w2Retained,
+               SUM(DATE(u.created_at) + INTERVAL 35 DAY &lt;= CURDATE()) AS w4Eligible,
+               SUM(DATE(u.created_at) + INTERVAL 35 DAY &lt;= CURDATE() AND <include refid="retainedInWeek"><property name="n" value="4"/></include>) AS w4Retained
+        FROM users u
+        WHERE u.is_deleted = 0
+          AND u.created_at &gt;= #{from}
+        GROUP BY weekStart
+        ORDER BY weekStart DESC
+    </select>
+
+    <!-- 콘텐츠 반응. 댓글은 정상·공개만 (급상승과 같은 기준) -->
+    <select id="findContentReaction" resultType="com.back.admin.monitoring.dto.ContentReactionResponse$BoardRow">
+        SELECT b.board_id AS boardId,
+               b.name     AS boardName,
+               COUNT(p.post_id)                AS postCount,
+               COALESCE(SUM(c.cnt), 0)         AS commentCount,
+               COALESCE(SUM(l.cnt), 0)         AS likeCount,
+               COALESCE(SUM(p.post_id IS NOT NULL AND c.cnt IS NULL), 0) AS zeroCommentPosts
+        FROM boards b
+        LEFT JOIN posts p ON p.board_id = b.board_id AND p.state = 'normal' AND p.created_at &gt;= #{from}
+        LEFT JOIN (SELECT cm.post_id, COUNT(*) AS cnt
+                   FROM comments cm JOIN posts pp ON pp.post_id = cm.post_id AND pp.created_at &gt;= #{from}
+                   WHERE cm.state = 'normal' AND cm.is_private = 0
+                   GROUP BY cm.post_id) c ON c.post_id = p.post_id
+        LEFT JOIN (SELECT pl.post_id, COUNT(*) AS cnt
+                   FROM post_likes pl JOIN posts pp ON pp.post_id = pl.post_id AND pp.created_at &gt;= #{from}
+                   GROUP BY pl.post_id) l ON l.post_id = p.post_id
+        WHERE b.state = 'normal'
+        GROUP BY b.board_id, b.name, b.display_order
+        ORDER BY b.display_order ASC, b.board_id ASC
+    </select>
+
+    <!-- 글마다 첫 댓글까지 걸린 분 — 글쓴이 본인 댓글은 반응이 아니라서 뺀다. 중앙값은 서비스에서 -->
+    <select id="findFirstCommentMinutes" resultType="com.back.admin.monitoring.dto.ContentReactionResponse$FirstCommentRow">
+        SELECT p.board_id AS boardId,
+               TIMESTAMPDIFF(MINUTE, p.created_at, MIN(c.created_at)) AS minutes
+        FROM posts p
+        JOIN comments c ON c.post_id = p.post_id AND c.state = 'normal' AND c.is_private = 0 AND c.user_id &lt;&gt; p.user_id
+        WHERE p.state = 'normal' AND p.created_at &gt;= #{from}
+        GROUP BY p.post_id, p.board_id, p.created_at
+    </select>
+
+    <!-- 구글·카카오: FAILED 매핑이 남은 회원 (재시도 중 + 상한 소진 모두) -->
+    <select id="findCalendarFailedMembers" resultType="com.back.admin.monitoring.dto.CalendarIssueResponse$Row">
+        SELECT x.provider, 'FAILED' AS issue, u.user_id AS userId, u.name, u.login_id AS loginId, u.member_type AS memberType,
+               x.failedCount, x.exhaustedCount, x.lastError, x.lastReflectedAt
+        FROM (
+            SELECT 'google' AS provider, e.user_id, COUNT(*) AS failedCount, SUM(e.retry_count &gt;= #{maxRetry}) AS exhaustedCount,
+                   SUBSTRING_INDEX(GROUP_CONCAT(e.last_error ORDER BY e.updated_at DESC SEPARATOR '\n'), '\n', 1) AS lastError,
+                   (SELECT COALESCE(g.last_synced_at, g.linked_at) FROM user_google_calendar g WHERE g.user_id = e.user_id) AS lastReflectedAt
+            FROM user_calendar_events e
+            WHERE e.sync_status = 'FAILED'
+            GROUP BY e.user_id
+            UNION ALL
+            SELECT 'kakao', e.user_id, COUNT(*), SUM(e.retry_count &gt;= #{maxRetry}),
+                   SUBSTRING_INDEX(GROUP_CONCAT(e.last_error ORDER BY e.updated_at DESC SEPARATOR '\n'), '\n', 1),
+                   (SELECT COALESCE(k.last_synced_at, k.linked_at) FROM user_kakao_calendar k WHERE k.user_id = e.user_id)
+            FROM user_kakao_calendar_events e
+            WHERE e.sync_status = 'FAILED'
+            GROUP BY e.user_id
+        ) x JOIN users u ON u.user_id = x.user_id AND u.is_deleted = 0
+        ORDER BY x.provider, x.failedCount DESC, u.user_id
+    </select>
+
+    <!-- 네이버는 실패를 저장하지 않는다. access 토큰은 일정 등록 팬아웃 때 갱신되므로, 만료 뒤 등록된 일정이
+         있는데도 만료 시각이 그대로면 그때 갱신이 실패한 것이다 (팬아웃은 비동기라 5분 여유) -->
+    <select id="findNaverStuckMembers" resultType="com.back.admin.monitoring.dto.CalendarIssueResponse$Row">
+        SELECT 'naver' AS provider, 'TOKEN' AS issue, u.user_id AS userId, u.name, u.login_id AS loginId, u.member_type AS memberType,
+               COALESCE(n.last_sent_at, n.linked_at) AS lastReflectedAt
+        FROM user_naver_calendar n
+        JOIN users u ON u.user_id = n.user_id AND u.is_deleted = 0
+        WHERE n.access_expires_at &lt; NOW()
+          AND EXISTS (SELECT 1 FROM events ev
+                      WHERE ev.created_at &gt; n.access_expires_at + INTERVAL 5 MINUTE
+                        AND ev.created_at &gt; n.linked_at)
+        ORDER BY n.access_expires_at ASC, u.user_id
+    </select>
+
+    <!-- 기타 장애 신호 — DB 에 남는 흔적만 -->
+    <select id="findHealthSignals" resultType="com.back.admin.monitoring.dto.HealthSignalResponse">
+        SELECT (SELECT MAX(access_hour) FROM stats_access_hourly)       AS lastAccessHour,
+               (SELECT MAX(stat_hour) FROM stats_post_hourly)           AS lastTrendingHour,
+               (SELECT MAX(captured_at) FROM stats_signup_weekly)       AS lastSignupCapturedAt,
+               (SELECT COUNT(DISTINCT x.user_id) FROM (
+                    SELECT user_id FROM user_calendar_events WHERE sync_status = 'FAILED' AND retry_count &gt;= #{maxRetry}
+                    UNION SELECT user_id FROM user_kakao_calendar_events WHERE sync_status = 'FAILED' AND retry_count &gt;= #{maxRetry}
+                ) x JOIN users u ON u.user_id = x.user_id AND u.is_deleted = 0) AS calendarExhaustedMembers
+    </select>
+
+    <select id="findStaleCalendarLinks" resultType="com.back.admin.monitoring.dto.CalendarIssueResponse$Row">
+        SELECT x.provider, 'STALE' AS issue, u.user_id AS userId, u.name, u.login_id AS loginId, u.member_type AS memberType,
+               x.lastReflectedAt
+        FROM (
+            SELECT 'google' AS provider, user_id, COALESCE(last_synced_at, linked_at) AS lastReflectedAt FROM user_google_calendar
+            UNION ALL
+            SELECT 'kakao', user_id, COALESCE(last_synced_at, linked_at) FROM user_kakao_calendar
+            UNION ALL
+            SELECT 'naver', user_id, COALESCE(last_sent_at, linked_at) FROM user_naver_calendar
+        ) x JOIN users u ON u.user_id = x.user_id AND u.is_deleted = 0
+        WHERE x.lastReflectedAt &lt; NOW() - INTERVAL #{days} DAY
+        ORDER BY x.lastReflectedAt ASC, u.user_id
+    </select>
+
 </mapper>

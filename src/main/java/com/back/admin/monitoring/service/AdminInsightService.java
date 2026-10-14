@@ -1,20 +1,28 @@
 package com.back.admin.monitoring.service;
 
 import com.back.admin.monitoring.dto.BoardActivityResponse;
+import com.back.admin.monitoring.dto.CalendarIssueResponse;
+import com.back.admin.monitoring.dto.CohortRetentionRow;
+import com.back.admin.monitoring.dto.ContentReactionResponse;
+import com.back.admin.monitoring.dto.HealthSignalResponse;
 import com.back.admin.monitoring.dto.DateCountRow;
 import com.back.admin.monitoring.dto.MemberActivityRow;
 import com.back.admin.monitoring.dto.MonitoringSummaryResponse;
 import com.back.admin.monitoring.dto.TrendingReportResponse;
 import com.back.admin.monitoring.mapper.AdminInsightMapper;
 import com.back.global.security.AuthUtils;
+import com.back.mypage.calendar.service.GoogleCalendarSyncService;
 import com.back.stats.policy.StatsPolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -116,6 +124,69 @@ public class AdminInsightService {
     public TrendingReportResponse getTrendingPolicy() {
         AuthUtils.requireAdmin();
         return new TrendingReportResponse(statsPolicy.trendingMinScore(), statsPolicy.trendingSpikeRatio(), statsPolicy.trendingTopN(), List.of());
+    }
+
+    /** 가입 코호트 잔존 — 이번 주 포함 최근 weeks 주(월요일 기준) */
+    public List<CohortRetentionRow> getCohortRetention(int weeks) {
+        AuthUtils.requireAdmin();
+        int n = Math.max(1, Math.min(weeks, 52));
+        LocalDate monday = LocalDate.now().with(DayOfWeek.MONDAY).minusWeeks(n - 1L);
+        return mapper.findCohortRetention(monday.atStartOfDay());
+    }
+
+    /** 최근 days 일 게시판별 반응 + 첫 댓글까지 걸린 시간 중앙값 */
+    public ContentReactionResponse getContentReaction(int days) {
+        AuthUtils.requireAdmin();
+        int n = Math.max(1, Math.min(days, 365));
+        LocalDateTime from = LocalDate.now().minusDays(n - 1L).atStartOfDay();
+        ContentReactionResponse res = new ContentReactionResponse();
+        res.setDays(n);
+        res.setBoards(mapper.findContentReaction(from));
+        Map<Long, List<Integer>> minutes = new HashMap<>();
+        for (ContentReactionResponse.FirstCommentRow r : mapper.findFirstCommentMinutes(from)) {
+            minutes.computeIfAbsent(r.getBoardId(), k -> new ArrayList<>()).add(r.getMinutes());
+        }
+        for (ContentReactionResponse.BoardRow b : res.getBoards()) {
+            b.setMedianFirstCommentMinutes(median(minutes.get(b.getBoardId())));
+        }
+        return res;
+    }
+
+    /** 캘린더 연동 장애 — 실패 남은 회원(구글·카카오) · 토큰 갱신 실패(네이버) · staleDays 일 넘게 반영 없음 */
+    public CalendarIssueResponse getCalendarIssues(int staleDays) {
+        AuthUtils.requireAdmin();
+        int days = Math.max(1, Math.min(staleDays, 365));
+        CalendarIssueResponse res = new CalendarIssueResponse();
+        res.setStaleDays(days);
+        List<CalendarIssueResponse.Row> failed = mapper.findCalendarFailedMembers(GoogleCalendarSyncService.MAX_RETRY);
+        List<CalendarIssueResponse.Row> naver = mapper.findNaverStuckMembers();
+        List<CalendarIssueResponse.Row> stale = mapper.findStaleCalendarLinks(days);
+        res.setGoogleFailedMembers((int) failed.stream().filter(r -> "google".equals(r.getProvider())).count());
+        res.setKakaoFailedMembers((int) failed.stream().filter(r -> "kakao".equals(r.getProvider())).count());
+        res.setNaverStuckMembers(naver.size());
+        res.setStaleLinks(stale.size());
+        res.getRows().addAll(failed);
+        res.getRows().addAll(naver);
+        res.getRows().addAll(stale);
+        return res;
+    }
+
+    /** 기타 장애 신호 — DB 에 흔적이 남는 것만. 판정 기준: 접속 기록 3시간, 주간 가입 배치 2일 */
+    public HealthSignalResponse getHealthSignals() {
+        AuthUtils.requireAdmin();
+        HealthSignalResponse r = mapper.findHealthSignals(GoogleCalendarSyncService.MAX_RETRY);
+        LocalDateTime now = LocalDateTime.now();
+        r.setAccessStale(r.getLastAccessHour() == null || r.getLastAccessHour().isBefore(now.minusHours(3)));
+        r.setSignupBatchStale(r.getLastSignupCapturedAt() == null || r.getLastSignupCapturedAt().isBefore(now.minusDays(2)));
+        return r;
+    }
+
+    private static Integer median(List<Integer> values) {
+        if (values == null || values.isEmpty()) return null;
+        List<Integer> v = new ArrayList<>(values);
+        Collections.sort(v);
+        int mid = v.size() / 2;
+        return v.size() % 2 == 1 ? v.get(mid) : (v.get(mid - 1) + v.get(mid)) / 2;
     }
 
     private void fillDaysSince(MemberActivityRow m) {
