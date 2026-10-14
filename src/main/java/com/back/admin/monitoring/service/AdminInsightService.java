@@ -4,6 +4,7 @@ import com.back.admin.monitoring.dto.BoardActivityResponse;
 import com.back.admin.monitoring.dto.CalendarIssueResponse;
 import com.back.admin.monitoring.dto.CohortRetentionRow;
 import com.back.admin.monitoring.dto.ContentReactionResponse;
+import com.back.admin.monitoring.dto.HealthSignalResponse;
 import com.back.admin.monitoring.dto.DateCountRow;
 import com.back.admin.monitoring.dto.MemberActivityRow;
 import com.back.admin.monitoring.dto.MonitoringSummaryResponse;
@@ -168,6 +169,16 @@ public class AdminInsightService {
         res.getRows().addAll(naver);
         res.getRows().addAll(stale);
         return res;
+    }
+
+    /** 기타 장애 신호 — DB 에 흔적이 남는 것만. 판정 기준: 접속 기록 3시간, 주간 가입 배치 2일 */
+    public HealthSignalResponse getHealthSignals() {
+        AuthUtils.requireAdmin();
+        HealthSignalResponse r = mapper.findHealthSignals(GoogleCalendarSyncService.MAX_RETRY);
+        LocalDateTime now = LocalDateTime.now();
+        r.setAccessStale(r.getLastAccessHour() == null || r.getLastAccessHour().isBefore(now.minusHours(3)));
+        r.setSignupBatchStale(r.getLastSignupCapturedAt() == null || r.getLastSignupCapturedAt().isBefore(now.minusDays(2)));
+        return r;
     }
 
     private static Integer median(List<Integer> values) {

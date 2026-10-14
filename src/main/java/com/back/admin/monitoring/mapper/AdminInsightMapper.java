@@ -4,6 +4,7 @@ import com.back.admin.monitoring.dto.BoardActivityResponse;
 import com.back.admin.monitoring.dto.CalendarIssueResponse;
 import com.back.admin.monitoring.dto.CohortRetentionRow;
 import com.back.admin.monitoring.dto.ContentReactionResponse;
+import com.back.admin.monitoring.dto.HealthSignalResponse;
 import com.back.admin.monitoring.dto.DateCountRow;
 import com.back.admin.monitoring.dto.MemberActivityRow;
 import org.apache.ibatis.annotations.Mapper;
@@ -84,4 +85,7 @@ public interface AdminInsightMapper {
 
     /** 마지막 반영이 days 일 넘게 없는 연동 (연동 단위) */
     List<CalendarIssueResponse.Row> findStaleCalendarLinks(@Param("days") int days);
+
+    /** 기타 장애 신호 — 접속 기록·급상승·주간 가입 배치의 마지막 흔적과 캘린더 상한 소진 회원 수 */
+    HealthSignalResponse findHealthSignals(@Param("maxRetry") int maxRetry);
 }

@@ -4,6 +4,7 @@ import com.back.admin.monitoring.dto.BoardActivityResponse;
 import com.back.admin.monitoring.dto.CalendarIssueResponse;
 import com.back.admin.monitoring.dto.CohortRetentionRow;
 import com.back.admin.monitoring.dto.ContentReactionResponse;
+import com.back.admin.monitoring.dto.HealthSignalResponse;
 import com.back.admin.monitoring.dto.MemberActivityRow;
 import com.back.admin.monitoring.dto.MonitoringSummaryResponse;
 import com.back.admin.monitoring.dto.TrendingReportResponse;
@@ -92,5 +93,14 @@ public class AdminInsightController {
     @GetMapping("/api/admin/monitoring/calendar/issues")
     public ResponseEntity<CalendarIssueResponse> calendarIssues(@Parameter(description = "며칠 넘게 반영 없으면 (기본 7)") @RequestParam(defaultValue = "7") int staleDays) {
         return ResponseEntity.ok(service.getCalendarIssues(staleDays));
+    }
+
+    @Operation(summary = "기타 장애 신호", description = """
+            `{ lastAccessHour, lastTrendingHour, lastSignupCapturedAt, calendarExhaustedMembers, accessStale, signupBatchStale }`
+            DB 에 흔적이 남는 것만 — accessStale: 접속 기록 3시간 넘게 없음, signupBatchStale: 주간 가입 배치(04:50) 2일 넘게 없음.
+            lastTrendingHour 는 적재 컷 미달 구간엔 행이 없어 판정하지 않는다. 푸시·메일 실패, 5xx, 정리 배치 이력은 DB 에 없다(서버 로그)""")
+    @GetMapping("/api/admin/monitoring/health-signals")
+    public ResponseEntity<HealthSignalResponse> healthSignals() {
+        return ResponseEntity.ok(service.getHealthSignals());
     }
 }

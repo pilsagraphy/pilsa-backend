@@ -240,6 +240,17 @@
         ORDER BY n.access_expires_at ASC, u.user_id
     </select>
 
+    <!-- 기타 장애 신호 — DB 에 남는 흔적만 -->
+    <select id="findHealthSignals" resultType="com.back.admin.monitoring.dto.HealthSignalResponse">
+        SELECT (SELECT MAX(access_hour) FROM stats_access_hourly)       AS lastAccessHour,
+               (SELECT MAX(stat_hour) FROM stats_post_hourly)           AS lastTrendingHour,
+               (SELECT MAX(captured_at) FROM stats_signup_weekly)       AS lastSignupCapturedAt,
+               (SELECT COUNT(DISTINCT x.user_id) FROM (
+                    SELECT user_id FROM user_calendar_events WHERE sync_status = 'FAILED' AND retry_count &gt;= #{maxRetry}
+                    UNION SELECT user_id FROM user_kakao_calendar_events WHERE sync_status = 'FAILED' AND retry_count &gt;= #{maxRetry}
+                ) x JOIN users u ON u.user_id = x.user_id AND u.is_deleted = 0) AS calendarExhaustedMembers
+    </select>
+
     <select id="findStaleCalendarLinks" resultType="com.back.admin.monitoring.dto.CalendarIssueResponse$Row">
         SELECT x.provider, 'STALE' AS issue, u.user_id AS userId, u.name, u.login_id AS loginId, u.member_type AS memberType,
                x.lastReflectedAt
