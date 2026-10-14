@@ -36,6 +36,34 @@
         SELECT COUNT(DISTINCT user_id) FROM notification_devices
     </select>
 
+    <!-- 간편로그인·캘린더 연동 현황 (PM 2026-10-13 "모니터링에 인사이트가 없다") — 탈퇴자는 뺀다 -->
+    <select id="countSocialByProvider" resultType="map">
+        SELECT s.provider, COUNT(*) AS cnt
+        FROM user_social_accounts s JOIN users u ON u.user_id = s.user_id AND u.is_deleted = 0
+        GROUP BY s.provider
+    </select>
+    <select id="countSocialLinkedMembers" resultType="int">
+        SELECT COUNT(DISTINCT s.user_id)
+        FROM user_social_accounts s JOIN users u ON u.user_id = s.user_id AND u.is_deleted = 0
+    </select>
+    <select id="countSocialOnlyMembers" resultType="int">
+        SELECT COUNT(*) FROM users WHERE is_deleted = 0 AND password_hash = 'SOCIAL_ONLY'
+    </select>
+    <select id="countCalendarByProvider" resultType="map">
+        SELECT 'google' AS provider, COUNT(*) AS cnt FROM user_google_calendar c JOIN users u ON u.user_id = c.user_id AND u.is_deleted = 0
+        UNION ALL
+        SELECT 'naver', COUNT(*) FROM user_naver_calendar c JOIN users u ON u.user_id = c.user_id AND u.is_deleted = 0
+        UNION ALL
+        SELECT 'kakao', COUNT(*) FROM user_kakao_calendar c JOIN users u ON u.user_id = c.user_id AND u.is_deleted = 0
+    </select>
+    <select id="countCalendarLinkedMembers" resultType="int">
+        SELECT COUNT(DISTINCT x.user_id) FROM (
+            SELECT user_id FROM user_google_calendar
+            UNION SELECT user_id FROM user_naver_calendar
+            UNION SELECT user_id FROM user_kakao_calendar
+        ) x JOIN users u ON u.user_id = x.user_id AND u.is_deleted = 0
+    </select>
+
     <sql id="memberColumns">
         u.user_id       AS userId,
         u.name,

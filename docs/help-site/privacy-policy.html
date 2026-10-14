@@ -58,7 +58,7 @@
       <tr>
         <td>필수 (계정 인증)</td>
         <td>아이디, 비밀번호(단방향 암호화 저장)</td>
-        <td>회원 가입 시 이용자가 직접 입력</td>
+        <td>회원 가입 시 이용자가 직접 입력. 간편로그인으로 가입하면 비밀번호 없이 가입하며, 원하면 나중에 마이페이지에서 만들 수 있습니다</td>
       </tr>
       <tr>
         <td>서비스 이용 중 생성</td>
@@ -76,22 +76,45 @@
         <td>로그인한 상태로 앱·웹을 이용할 때 서버가 회원 번호와 함께 자동 기록</td>
       </tr>
       <tr>
-        <td>선택 (구글 계정 연결)</td>
+        <td>선택 (간편로그인 · 구글)</td>
         <td>구글 계정 이메일 주소, 구글 계정 고유 식별자</td>
-        <td>이용자가 구글 계정 연결에 동의할 때 구글로부터 전달받음</td>
+        <td>이용자가 구글로 로그인·가입하거나 계정 연결에 동의할 때 구글로부터 전달받음</td>
+      </tr>
+      <tr>
+        <td>선택 (간편로그인 · 네이버)</td>
+        <td>네이버 회원 고유 식별자, 네이버 계정 이메일 주소</td>
+        <td>이용자가 네이버로 로그인·가입하거나 계정 연결에 동의할 때 네이버로부터 전달받음</td>
+      </tr>
+      <tr>
+        <td>선택 (간편로그인 · 카카오)</td>
+        <td>카카오 회원번호(고유 식별자), 카카오계정 이메일 주소(이용자가 제공에 동의하고 카카오가 제공하는 경우에만)</td>
+        <td>이용자가 카카오로 로그인·가입하거나 계정 연결에 동의할 때 카카오로부터 전달받음</td>
       </tr>
       <tr>
         <td>선택 (구글 캘린더 연동)</td>
         <td>구글 캘린더 접근 권한 토큰(암호화 저장), 연동한 캘린더 식별자, 동기화 기록</td>
         <td>이용자가 일정 연동에 동의할 때 구글로부터 발급·저장</td>
       </tr>
+      <tr>
+        <td>선택 (네이버 캘린더 연동)</td>
+        <td>네이버 캘린더 접근·갱신 토큰(암호화 저장), 네이버 계정 이메일, 일정 전송 기록(건수·시각)</td>
+        <td>이용자가 일정 연동에 동의할 때 네이버로부터 발급·저장</td>
+      </tr>
+      <tr>
+        <td>선택 (카카오 톡캘린더 연동)</td>
+        <td>톡캘린더 접근·갱신 토큰(암호화 저장), 카카오 프로필 닉네임(화면 표시용), 앱이 만든 일정의 식별자, 동기화 기록</td>
+        <td>이용자가 일정 연동에 동의할 때 카카오로부터 발급·저장</td>
+      </tr>
     </tbody>
   </table>
   <p>앱은 이용자의 위치정보, 연락처, 결제정보, 생체정보, 건강정보를 수집하지 않습니다.</p>
-  <p>구글 계정 연결과 구글 캘린더 연동은 <strong>선택 사항</strong>입니다. 동의하지 않아도 아이디·비밀번호로
-  모든 서비스를 그대로 이용할 수 있으며, 연결한 뒤에도 마이페이지에서 언제든 해제할 수 있습니다.
-  앱은 구글 캘린더에서 <strong>동아리 일정을 등록·수정·삭제하는 권한만</strong> 사용하며,
-  이용자의 다른 일정을 읽거나 구글 드라이브·메일 등 다른 서비스에는 접근하지 않습니다.</p>
+  <p>간편로그인(구글·네이버·카카오)과 캘린더 연동은 <strong>선택 사항</strong>입니다. 동의하지 않아도 아이디·비밀번호로
+  모든 서비스를 그대로 이용할 수 있으며, 연결한 뒤에도 마이페이지 &gt; 설정에서 언제든 해제할 수 있습니다.
+  간편로그인으로 가입하더라도 이름·학번·전공·휴대전화번호를 직접 입력하고 이메일 인증을 거치는 것은 같습니다.
+  간편로그인 연결과 캘린더 연동은 서로 별개라, 하나를 해제해도 다른 하나는 유지됩니다.</p>
+  <p>캘린더 연동은 <strong>동아리 일정을 이용자의 캘린더에 넣는 권한만</strong> 사용합니다.
+  구글 캘린더와 카카오 톡캘린더에는 동아리 일정을 등록·수정·삭제하고, 네이버 캘린더에는 일정 추가만 합니다(네이버가 수정·삭제 기능을 제공하지 않음).
+  이용자의 다른 일정을 읽거나 메일·드라이브·친구 목록 등 다른 서비스에는 접근하지 않습니다.</p>
 
   <h2>2. 개인정보의 이용 목적</h2>
   <ul>
@@ -101,9 +124,10 @@
     <li><strong>문의 대응 및 운영 관리</strong> — 이용 문의 처리, 커뮤니티 규칙 위반 게시물 대응</li>
     <li><strong>이용 통계 및 운영 점검</strong> — 접속 현황과 인기 글 집계, 앱 테스트 기간의 참여(앱 실행) 확인.
       회원별 접속 기록은 운영진만 볼 수 있으며 다른 이용자에게 공개되지 않습니다.</li>
-    <li><strong>구글 계정으로 로그인</strong>(선택) — 연결한 구글 계정으로 본인을 확인해 로그인합니다.
-      구글 계정만으로는 가입할 수 없으며, 이미 가입한 회원 계정에 연결하는 용도입니다.</li>
-    <li><strong>구글 캘린더 일정 연동</strong>(선택) — 동아리 일정을 이용자의 구글 캘린더에 등록·갱신합니다.</li>
+    <li><strong>간편로그인</strong>(선택, 구글·네이버·카카오) — 연결한 계정으로 본인을 확인해 로그인합니다.
+      간편로그인으로 처음 들어온 사람은 비밀번호 없이 가입할 수 있고, 이미 가입한 회원은 자기 계정에 연결해 씁니다.
+      전달받은 고유 식별자는 로그인할 때 회원을 찾는 데에만 사용합니다.</li>
+    <li><strong>캘린더 일정 연동</strong>(선택, 구글 캘린더·카카오 톡캘린더·네이버 캘린더) — 동아리 일정을 이용자의 캘린더에 넣고, 구글·카카오는 바뀌거나 지워진 일정도 반영합니다.</li>
   </ul>
 
   <h2>3. 다른 이용자에게 공개되는 정보</h2>
@@ -128,6 +152,10 @@
     <li><strong>브라우저 제공사의 푸시 서비스</strong>(Google 등) — 알림 메시지 전달 경로로만 사용되며, 알림 내용 외의 개인정보는 전송하지 않습니다.</li>
     <li><strong>Google LLC</strong> — 구글 계정 로그인 및 구글 캘린더 일정 연동(이용자가 동의한 경우에만).
       연동한 이용자의 구글 캘린더에 동아리 일정 내용이 전달됩니다.</li>
+    <li><strong>네이버 주식회사</strong> — 네이버 로그인 및 네이버 캘린더 일정 연동(이용자가 동의한 경우에만).
+      연동한 이용자의 네이버 캘린더에 동아리 일정 내용이 전달됩니다.</li>
+    <li><strong>주식회사 카카오</strong> — 카카오 로그인 및 카카오 톡캘린더 일정 연동(이용자가 동의한 경우에만).
+      연동한 이용자의 톡캘린더에 동아리 일정 내용이 전달됩니다.</li>
     <li><strong>Resend</strong> — 인증번호 등 안내 메일 발송. 받는 사람의 이메일 주소와 메일 내용만 전달됩니다.</li>
   </ul>
 
@@ -141,9 +169,13 @@
       커뮤니티 대화 맥락 유지를 위한 조치로, 작성자는 "탈퇴한 회원"으로 표시되어 식별할 수 없습니다.</li>
     <li><strong>명예의전당 후원 기록</strong> — 후원에 대한 감사 표시로서 <strong>탈퇴 후에도 유지</strong>됩니다.
       본인이 원하면 문의 이메일로 삭제 또는 익명 처리를 요청할 수 있습니다.</li>
-    <li><strong>구글 연동 정보</strong>(구글 계정 이메일·식별자, 캘린더 접근 토큰) —
-      이용자가 <strong>연동을 해제하거나 탈퇴하면 즉시 파기</strong>하며, 캘린더 접근 권한은 구글에도 회수를 요청합니다.
-      접근 토큰은 저장 시 암호화합니다.</li>
+    <li><strong>간편로그인 연결 정보</strong>(구글·네이버·카카오 계정의 식별자·이메일) —
+      이용자가 <strong>연결을 해제하거나 탈퇴하면 즉시 파기</strong>합니다.
+      각 서비스 쪽의 앱 연결은 구글·네이버·카카오의 계정 설정(연결된 서비스 관리)에서도 끊을 수 있습니다.</li>
+    <li><strong>캘린더 연동 정보</strong>(접근·갱신 토큰, 캘린더·일정 식별자, 동기화 기록) —
+      이용자가 <strong>연동을 해제하거나 탈퇴하면 즉시 파기</strong>하며, 각 서비스에 토큰 폐기(권한 회수)를 요청합니다.
+      토큰은 저장 시 암호화합니다. 이미 이용자의 캘린더에 들어간 일정은 이용자의 데이터라 자동으로 지우지 않으며,
+      구글·카카오는 해제할 때 지울지 고를 수 있습니다.</li>
     <li><strong>서비스 이용 기록</strong>(접속 일시, 앱 실행 일자) — 연도별·학기별 이용 통계를 위해 <strong>최대 5년</strong> 보관 후 새벽 배치가 자동 삭제합니다.
       회원 번호로만 기록되어 탈퇴 후에는 개인을 식별할 수 없는 통계 재료로만 남습니다.</li>
     <li><strong>법령상 보관 의무가 있는 정보</strong> — 관계 법령이 정한 기간 동안 보관 후 파기합니다.</li>
@@ -155,8 +187,11 @@
   <ul>
     <li>개인정보 <strong>열람</strong> 및 <strong>정정</strong> — 앱 내 마이페이지에서 직접 확인·수정</li>
     <li>개인정보 <strong>처리 정지</strong> 및 <strong>삭제</strong> — 앱 내 마이페이지에서 직접 회원 탈퇴</li>
-    <li><strong>구글 연동 해제</strong> — 앱 내 마이페이지에서 구글 계정 연결과 캘린더 연동을 각각 해제
-      (구글 계정 <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">보안 설정</a>에서도 권한을 회수할 수 있습니다)</li>
+    <li><strong>간편로그인·캘린더 연동 해제</strong> — 앱 내 마이페이지 &gt; 설정에서 구글·네이버·카카오의 계정 연결과 캘린더 연동을 각각 해제.
+      각 서비스에서도 권한을 회수할 수 있습니다
+      (<a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">구글 계정 보안 설정</a>,
+      네이버 › 내정보 › 이력관리 › 연결된 서비스 관리, 카카오계정 › 연결된 서비스 관리).
+      비밀번호 없이 간편로그인으로만 가입한 회원은 마지막 간편로그인 연결을 해제하기 전에 비밀번호를 먼저 만들어야 합니다.</li>
     <li>앱을 삭제했거나 로그인이 어려운 경우 —
       <a href="account-policy.html#by-email">계정 및 데이터 삭제 요청 안내</a>를 통해 요청</li>
   </ul>
@@ -168,6 +203,8 @@
   <ul>
     <li>앱과 서버 사이의 모든 통신은 <strong>HTTPS(TLS)로 암호화</strong>하여 전송합니다.</li>
     <li>비밀번호는 <strong>단방향 암호화</strong>하여 저장하므로 운영자도 원문을 알 수 없습니다.</li>
+    <li>네이버 캘린더·카카오 톡캘린더 연동에 쓰는 접근·갱신 토큰은 구글과 같은 <strong>AES-256-GCM</strong> 방식으로 암호화해 저장하며,
+      암호화 키는 데이터베이스와 분리된 서버 설정에만 보관합니다.</li>
     <li>개인정보에 접근할 수 있는 담당자를 최소한으로 제한하고 접근 권한을 관리합니다.</li>
   </ul>
 
@@ -237,25 +274,26 @@
     <p>This is a summary for convenience. The Korean text above is the binding version.</p>
     <ul>
       <li><strong>Who we are.</strong> Pilsagraphy is a members-only community app run by Pilsagraphy, a student club at Kyung Hee University (Korea). It is for adult current and former club members only and is not directed at children. Data protection officer: Park Geon-hee (박건희), <a href="mailto:help@pilsa.co.kr">help@pilsa.co.kr</a>.</li>
-      <li><strong>What we collect.</strong> Name, email, phone number, student ID and major (for membership verification); login ID and password (stored as a one-way hash); posts, comments and attachments you create; a push token if you enable notifications; usage records generated automatically while you are signed in (access time in hourly buckets, and the date you opened the installed app). Optionally, with your consent: your Google account email and ID (Google sign-in) and a Google Calendar access token (stored encrypted), the linked calendar ID and sync records (calendar sync).</li>
-      <li><strong>Why.</strong> To verify club membership, provide the community boards, calendar and notifications, respond to inquiries, compile usage statistics (active members, trending posts) and confirm participation during app test periods (staff only), and, only if you opt in, to let you sign in with Google and to add club events to your Google Calendar. We do not collect location, contacts, payment, biometric or health data.</li>
+      <li><strong>What we collect.</strong> Name, email, phone number, student ID and major (for membership verification); login ID and password (stored as a one-way hash; members who sign up with Google, Naver or Kakao have no password until they create one); posts, comments and attachments you create; a push token if you enable notifications; usage records generated automatically while you are signed in (access time in hourly buckets, and the date you opened the installed app). Optionally, with your consent: the account ID and email of the Google, Naver or Kakao account you sign in with (Kakao email only if you agree and Kakao provides it); and, for calendar sync, encrypted access/refresh tokens for Google Calendar, Naver Calendar or KakaoTalk Calendar, the linked calendar/event IDs, your Kakao profile nickname (display only) and sync records.</li>
+      <li><strong>Why.</strong> To verify club membership, provide the community boards, calendar and notifications, respond to inquiries, compile usage statistics (active members, trending posts) and confirm participation during app test periods (staff only), and, only if you opt in, to let you sign up or sign in with Google, Naver or Kakao and to add club events to your Google, Naver or Kakao calendar. Social sign-up still requires your name, student ID, major, phone number and a verified email. Account linking and calendar sync are independent of each other. We do not collect location, contacts, payment, biometric or health data.</li>
       <li><strong>Google data and Limited Use.</strong> We only request permission to create, update and delete club events in your Google Calendar; we do not read your other events or access Drive, Gmail or other services. Our use and transfer to any other app of information received from Google APIs will adhere to the Google API Services User Data Policy, including the Limited Use requirements: Google user data is used only to provide or improve user-facing features, never for advertising, never sold, not read by humans except with your consent, for security, or as required by law, not transferred to third parties except processors that only store or transmit it, and never used to train generalized AI or machine-learning models.</li>
-      <li><strong>Sharing.</strong> We do not sell or share personal data, except to law enforcement when legally required. Processors: Amazon Web Services (hosting), browser push services (notification delivery only), Google LLC (only when you link your account or calendar), Resend (transactional email).</li>
-      <li><strong>Retention.</strong> Account data is deleted immediately when you withdraw. A one-way hash of your student ID is kept for up to 90 days (longer while a suspension or permanent ban is in effect) solely to prevent abusive re-registration. Your posts remain with the author shown as "withdrawn member". Google account and calendar data is deleted immediately when you unlink or withdraw, and we ask Google to revoke the calendar permission.
+      <li><strong>Sharing.</strong> We do not sell or share personal data, except to law enforcement when legally required. Processors: Amazon Web Services (hosting), browser push services (notification delivery only), Google LLC, NAVER Corp. and Kakao Corp. (each only when you sign in with or link that service, or sync its calendar), Resend (transactional email).</li>
+      <li><strong>Retention.</strong> Account data is deleted immediately when you withdraw. A one-way hash of your student ID is kept for up to 90 days (longer while a suspension or permanent ban is in effect) solely to prevent abusive re-registration. Your posts remain with the author shown as "withdrawn member". Social sign-in links and calendar data (Google, Naver, Kakao) are deleted immediately when you unlink or withdraw, and we ask the provider to revoke the calendar token. Events already added to your calendar stay there unless you choose to remove them (Google, Kakao).
         Usage records (access times, app-launch dates) are kept for at most 5 years for yearly and per-semester statistics and then purged automatically; they contain only a member number, so they cannot identify you after withdrawal.</li>
-      <li><strong>Your rights.</strong> View and edit your data, unlink Google, or delete your account in My Page. If you cannot sign in, email <a href="mailto:help@pilsa.co.kr">help@pilsa.co.kr</a> (see <a href="account-policy.html#by-email">account deletion</a>). You can also revoke access at <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">Google account permissions</a>.</li>
+      <li><strong>Your rights.</strong> View and edit your data, unlink Google, Naver or Kakao and turn calendar sync off, or delete your account in My Page &gt; Settings. A password-less (social sign-up) member must create a password before removing their last social sign-in. If you cannot sign in, email <a href="mailto:help@pilsa.co.kr">help@pilsa.co.kr</a> (see <a href="account-policy.html#by-email">account deletion</a>). You can also revoke access at <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer">Google account permissions</a>.</li>
       <li><strong>Security.</strong> All traffic uses HTTPS (TLS); passwords are hashed; access to personal data is restricted to a minimum number of staff.
-        Google refresh tokens are encrypted at rest with AES-256-GCM (key stored separately from the database); access tokens are not stored.
+        Google refresh tokens are encrypted at rest with AES-256-GCM (key stored separately from the database); Google access tokens are not stored. Naver and Kakao calendar tokens are encrypted the same way.
         See <a href="#google-data-protection">Protection of Google user data</a> above.</li>
     </ul>
   </div>
 
   <footer>
     <p>관련 문서 · <a href="terms-of-service.html">서비스 이용약관</a> · <a href="account-policy.html">이용 제한 정책 및 계정 삭제 안내</a> · <a href="child-safety.html">아동 안전 표준</a></p>
-    <p>공고일자 · 2026년 9월 27일<br>
-    시행일자 · 2026년 9월 27일<br>
-    <span style="color:#919191">이전 방침 시행일 · 2026년 9월 26일 (구글 사용자 데이터 보호 조치 · 제한적 사용 준수 · 영어 요약) — 이번 개정은 자동 생성되는
-    서비스 이용 기록(접속 일시 · 앱 실행 일자)의 수집 사실과 이용 목적(이용 통계 · 운영 점검), 보관 기간(최대 5년)을 명시한 것입니다</span></p>
+    <p>공고일자 · 2026년 10월 15일<br>
+    시행일자 · 2026년 10월 15일<br>
+    <span style="color:#919191">이번 개정 · 네이버·카카오 간편로그인과 비밀번호 없는 간편로그인 가입, 네이버 캘린더·카카오 톡캘린더 연동을 추가하고
+    그에 따라 수집 항목·이용 목적·위탁(네이버·카카오)·파기·권리 행사 방법을 고쳤습니다.<br>
+    이전 방침 시행일 · 2026년 9월 27일 (서비스 이용 기록의 수집·이용 목적·보관 기간 명시), 2026년 9월 26일 (구글 사용자 데이터 보호 조치 · 제한적 사용 준수 · 영어 요약)</span></p>
   </footer>
 
 </div>

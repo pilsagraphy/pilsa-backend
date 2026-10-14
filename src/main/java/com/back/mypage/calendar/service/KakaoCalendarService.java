@@ -99,7 +99,7 @@ public class KakaoCalendarService {
         int removed = 0;
         if (removeEvents) removed = removeAllForUser(link);
         try {
-            kakao.unlink(accessTokenFor(link));
+            kakao.expireTokens(accessTokenFor(link)); // 앱 연결 끊기(unlink)가 아니라 토큰만 — 간편로그인 동의는 유지
         } catch (Exception e) {
             log.warn("카카오 토큰 정리 실패 (무시): {}", e.getMessage());
         }

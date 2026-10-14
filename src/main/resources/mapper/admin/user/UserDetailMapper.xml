@@ -39,6 +39,39 @@
         WHERE u.user_id = #{userId}
     </select>
 
+    <!-- 간편로그인 연결 — 어느 제공자로 로그인하는지 (PM 2026-10-13) -->
+    <select id="findSocialAccounts" resultType="map">
+        SELECT provider,
+               provider_email AS email,
+               linked_at      AS linkedAt
+        FROM user_social_accounts
+        WHERE user_id = #{userId}
+        ORDER BY linked_at ASC
+    </select>
+
+    <select id="findNaverCalendar" resultType="map">
+        SELECT naver_email  AS naverEmail,
+               linked_at    AS linkedAt,
+               last_sent_at AS lastSentAt,
+               sent_count   AS sentCount
+        FROM user_naver_calendar
+        WHERE user_id = #{userId}
+        LIMIT 1
+    </select>
+
+    <select id="findKakaoCalendar" resultType="map">
+        SELECT kakao_name     AS kakaoName,
+               linked_at      AS linkedAt,
+               last_synced_at AS lastSyncedAt
+        FROM user_kakao_calendar
+        WHERE user_id = #{userId}
+        LIMIT 1
+    </select>
+
+    <select id="findPasswordHash" resultType="string">
+        SELECT password_hash FROM users WHERE user_id = #{userId}
+    </select>
+
     <select id="findGoogleLink" resultType="map">
         SELECT google_email   AS googleEmail,
                linked_at      AS linkedAt,

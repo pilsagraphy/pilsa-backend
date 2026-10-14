@@ -25,7 +25,8 @@ public class AdminInsightController {
     private final AdminInsightService service;
 
     @Operation(summary = "요약 카드", description = """
-            `{ dau, wau, mau, membersTotal, signupsThisMonth, postsLast7, commentsLast7, postsLast30, commentsLast30, pendingReports, pushRegisteredMembers }`
+            `{ dau, wau, mau, membersTotal, signupsThisMonth, postsLast7, commentsLast7, postsLast30, commentsLast30, pendingReports, pushRegisteredMembers,
+               socialLinkedMembers, socialByProvider:{GOOGLE,NAVER,KAKAO}, socialOnlyMembers, calendarLinkedMembers, calendarByProvider:{google,naver,kakao} }`
             접속은 stats_access_hourly(로그인 요청이 있던 시간대) 기준. pendingReports 는 대상(글·댓글) 단위""")
     @GetMapping("/api/admin/monitoring/summary")
     public ResponseEntity<MonitoringSummaryResponse> summary() {

@@ -35,6 +35,7 @@ public class KakaoOAuthClient implements SocialOAuthClient {
     private static final String CAL_UPDATE_URL = "https://kapi.kakao.com/v2/api/calendar/update/event";
     private static final String CAL_DELETE_URL = "https://kapi.kakao.com/v2/api/calendar/delete/event";
     private static final String UNLINK_URL = "https://kapi.kakao.com/v1/user/unlink";
+    private static final String LOGOUT_URL = "https://kapi.kakao.com/v1/user/logout";
     public static final String CALENDAR_SCOPE = "talk_calendar";
     private static final int TITLE_MAX = 50; // 톡캘린더 제목 상한
 
@@ -182,7 +183,19 @@ public class KakaoOAuthClient implements SocialOAuthClient {
         }
     }
 
-    /** 연동 해제 — 카카오 쪽 앱 연결도 끊는다(토큰 폐기). 실패는 삼킨다 */
+    /**
+     * 토큰만 만료시킨다(카카오 로그아웃 API) — 앱 연결은 그대로라 같은 카카오 계정의 간편로그인 동의가 살아 있다.
+     * 톡캘린더를 끌 때 쓴다: 예전엔 unlink(앱 연결 끊기)를 불러 간편로그인 동의까지 사라질 수 있었다 — 계정 연결과 캘린더는 별개 (PM 2026-10-13). 실패는 삼킨다
+     */
+    public void expireTokens(String accessToken) {
+        try {
+            restClient.post().uri(LOGOUT_URL).header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken).retrieve().toBodilessEntity();
+        } catch (Exception e) {
+            log.warn("카카오 토큰 만료 실패 (무시): {}", e.getMessage());
+        }
+    }
+
+    /** 카카오 쪽 앱 연결까지 끊는다(동의 전부 회수). 실패는 삼킨다 */
     public void unlink(String accessToken) {
         try {
             restClient.post().uri(UNLINK_URL).header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken).retrieve().toBodilessEntity();

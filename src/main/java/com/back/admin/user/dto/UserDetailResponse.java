@@ -40,11 +40,34 @@ public class UserDetailResponse {
     private Map<String, Boolean> notificationSettings; // COMMENT/REPLY/PINNED_POST/EVENT
     private int muteCount;                          // 알림을 끈 글·댓글 수
 
-    // 구글 연동
+    // 간편로그인 연결 (PM 2026-10-13 "어떤 소셜로 로그인했는지") — [{ provider: GOOGLE|NAVER|KAKAO, label, email, linkedAt }]
+    private List<SocialAccount> socialAccounts;
+    private Boolean socialOnly;     // 비밀번호 없는 소셜 가입 회원 — 간편로그인으로만 들어온다
+
+    // 구글 캘린더 연동
     private Boolean googleLinked;
     private String googleEmail;
     private LocalDateTime googleLinkedAt;
     private LocalDateTime googleLastSyncedAt;
+    // 네이버 캘린더(새 일정 넣기만)
+    private Boolean naverCalendarLinked;
+    private String naverCalendarEmail;
+    private LocalDateTime naverCalendarLinkedAt;
+    private LocalDateTime naverCalendarLastSentAt;
+    private Integer naverCalendarSentCount;
+    // 카카오 톡캘린더
+    private Boolean kakaoCalendarLinked;
+    private String kakaoCalendarName;
+    private LocalDateTime kakaoCalendarLinkedAt;
+    private LocalDateTime kakaoCalendarLastSyncedAt;
+
+    @Data
+    public static class SocialAccount {
+        private String provider;
+        private String label;
+        private String email;
+        private LocalDateTime linkedAt;
+    }
 
     // 제재 요약
     private int cautionPoints;     // 유효 주의 점수 합

@@ -49,7 +49,22 @@ public class AdminInsightService {
         r.setCommentsLast30(mapper.countCommentsSince(d30));
         r.setPendingReports(mapper.countPendingReportTargets());
         r.setPushRegisteredMembers(mapper.countPushRegisteredMembers());
+        // 간편로그인·캘린더 연동 현황 (PM 2026-10-13)
+        r.setSocialLinkedMembers(mapper.countSocialLinkedMembers());
+        r.setSocialByProvider(toCountMap(mapper.countSocialByProvider()));
+        r.setSocialOnlyMembers(mapper.countSocialOnlyMembers());
+        r.setCalendarLinkedMembers(mapper.countCalendarLinkedMembers());
+        r.setCalendarByProvider(toCountMap(mapper.countCalendarByProvider()));
         return r;
+    }
+
+    private static java.util.Map<String, Integer> toCountMap(List<java.util.Map<String, Object>> rows) {
+        java.util.Map<String, Integer> m = new java.util.LinkedHashMap<>();
+        for (java.util.Map<String, Object> row : rows) {
+            Object cnt = row.get("cnt");
+            m.put(String.valueOf(row.get("provider")), cnt == null ? 0 : ((Number) cnt).intValue());
+        }
+        return m;
     }
 
     public List<MemberActivityRow> getInactiveMembers(int days) {
