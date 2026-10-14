@@ -139,9 +139,10 @@
   아래 <a href="#by-email">방법 2</a>로 이메일 요청을 보내주세요.</p>
   <ol>
     <li>Pilsagraphy 앱을 실행하고 로그인합니다.</li>
-    <li><strong>마이페이지</strong>로 이동합니다.</li>
-    <li><strong>회원 탈퇴</strong>를 선택합니다.</li>
-    <li>비밀번호를 다시 입력해 본인임을 확인하고 <strong>탈퇴하기</strong>를 눌러 확정합니다.</li>
+    <li><strong>마이페이지 › 설정</strong>으로 이동합니다.</li>
+    <li>맨 아래 <strong>회원 탈퇴</strong>를 선택하고 안내를 확인합니다.</li>
+    <li>비밀번호를 다시 입력해 본인임을 확인하고 <strong>탈퇴하기</strong>를 눌러 확정합니다.
+      구글·네이버·카카오 간편로그인으로 <strong>비밀번호 없이 가입한 계정</strong>은 비밀번호 대신 <strong>회원 탈퇴</strong>라고 그대로 입력합니다.</li>
   </ol>
   <p>탈퇴는 즉시 처리되며, 계정과 관련 데이터는 아래 표에 따라 처리됩니다.</p>
 
@@ -150,7 +151,7 @@
   <ul>
     <li><strong>이용 정지 또는 영구 제한을 받은 계정</strong> — 제한 중에는 로그인이 되지 않습니다</li>
     <li>앱을 이미 삭제한 경우</li>
-    <li>비밀번호를 잊어 로그인할 수 없는 경우</li>
+    <li>비밀번호를 잊었거나, 간편로그인에 쓰던 구글·네이버·카카오 계정을 더는 쓸 수 없어 로그인할 수 없는 경우</li>
   </ul>
 
   <p><a href="mailto:help@pilsa.co.kr?subject=Pilsagraphy%20계정%20삭제%20요청">help@pilsa.co.kr</a>으로
@@ -182,9 +183,14 @@
         <td>더 이상 알림이 발송되지 않습니다.</td>
       </tr>
       <tr>
-        <td>구글 연동 정보<br>(구글 계정 이메일·식별자, 캘린더 접근 토큰)</td>
+        <td>간편로그인 연결 정보<br>(구글·네이버·카카오 계정 식별자·이메일)</td>
         <td><strong>즉시 파기</strong></td>
-        <td>캘린더 접근 권한은 구글에도 회수를 요청합니다.</td>
+        <td>탈퇴하면 그 계정으로 다시 로그인할 수 없습니다. 각 서비스 쪽의 앱 연결은 해당 서비스의 연결된 서비스 관리에서 끊을 수 있습니다.</td>
+      </tr>
+      <tr>
+        <td>캘린더 연동 정보<br>(구글·네이버·카카오 캘린더 토큰, 일정 식별자)</td>
+        <td><strong>즉시 파기</strong></td>
+        <td>각 서비스에 토큰 폐기(권한 회수)를 요청합니다. 이미 내 캘린더에 들어간 일정은 그대로 남으니 필요하면 직접 지워 주세요.</td>
       </tr>
       <tr>
         <td>부정 이용 방지용 최소 식별 정보</td>
@@ -242,9 +248,9 @@
     </ul>
     <p><strong>Part 2 — Account and data deletion</strong></p>
     <ul>
-      <li><strong>In the app (recommended).</strong> Sign in → My Page → Withdraw → confirm your password. Deletion is immediate.</li>
-      <li><strong>By email.</strong> If you cannot sign in (suspended, app uninstalled, forgotten password), email <a href="mailto:help@pilsa.co.kr">help@pilsa.co.kr</a> with the name and email address (or login ID) you registered with. After identity verification we delete the account within 7 business days and confirm by email.</li>
-      <li><strong>What is deleted.</strong> Account data (name, email, phone, student ID, major, credentials) and push-notification device data are deleted immediately. Google account and calendar data is deleted immediately and we ask Google to revoke the calendar permission.</li>
+      <li><strong>In the app (recommended).</strong> Sign in → My Page → Settings → Withdraw → confirm your password (accounts created with Google, Naver or Kakao and no password type the confirmation text instead). Deletion is immediate.</li>
+      <li><strong>By email.</strong> If you cannot sign in (suspended, app uninstalled, forgotten password, or lost access to the Google, Naver or Kakao account you signed in with), email <a href="mailto:help@pilsa.co.kr">help@pilsa.co.kr</a> with the name and email address (or login ID) you registered with. After identity verification we delete the account within 7 business days and confirm by email.</li>
+      <li><strong>What is deleted.</strong> Account data (name, email, phone, student ID, major, credentials) and push-notification device data are deleted immediately. Social sign-in links (Google, Naver, Kakao) and calendar sync data are deleted immediately, and we ask each provider to revoke the calendar token. Events already added to your calendar stay there.</li>
       <li><strong>What is kept.</strong> Your posts, comments and attachments remain with the author shown as "withdrawn member". A one-way hash of your student ID is kept for up to 90 days (longer while a suspension or ban is in effect) only to block abusive re-registration. Hall of Fame donation records are kept as a thank-you; email us to delete or anonymize them. Usage records (access times, app-launch dates) remain only as anonymous statistics keyed by member number and are purged after at most 5 years. Records required by law are kept for the statutory period.</li>
       <li><strong>Re-registration.</strong> Possible 30 days after withdrawal; not until the suspension ends if you withdrew while suspended; never for permanently banned accounts. Previous activity is not restored.</li>
     </ul>
@@ -252,7 +258,8 @@
 
   <footer>
     <p>관련 문서 · <a href="terms-of-service.html">서비스 이용약관</a> · <a href="privacy-policy.html">개인정보처리방침</a> · <a href="child-safety.html">아동 안전 표준</a></p>
-    <p>최종 수정 · 2026년 9월 26일 (영어 요약 추가, 정책 내용 변경 없음)<br>
+    <p>최종 수정 · 2026년 10월 15일 (간편로그인 가입 계정의 탈퇴 방법, 네이버·카카오 연동 정보 파기 추가)<br>
+    <span style="color:#919191">2026년 9월 26일 · 영어 요약 추가</span><br>
     <span style="color:#919191">2026년 9월 20일 · 이용 제한 정책과 계정 삭제 안내를 한 문서로 합침 / 이전 문서 시행일 · 2026년 8월 16일</span></p>
   </footer>
 

@@ -44,7 +44,10 @@ public class UserDetailController {
               "joinedAt": "2026-03-01T10:00:00", "lastLoginAt": "2026-10-09T21:10:00", "banStatus": "none",
               "postCount": 3, "commentCount": 12, "likeGivenCount": 5, "likeReceivedCount": 9,
               "deviceCount": 1, "notificationSettings": { "COMMENT": true, "REPLY": true, "PINNED_POST": true, "EVENT": false }, "muteCount": 0,
+              "socialAccounts": [{"provider":"KAKAO","label":"카카오","email":"","linkedAt":"..."}], "socialOnly": false,
               "googleLinked": true, "googleEmail": "a@gmail.com", "googleLinkedAt": "...", "googleLastSyncedAt": "...",
+              "naverCalendarLinked": false, "naverCalendarEmail": null, "naverCalendarLinkedAt": null, "naverCalendarLastSentAt": null, "naverCalendarSentCount": null,
+              "kakaoCalendarLinked": true, "kakaoCalendarName": "홍길동", "kakaoCalendarLinkedAt": "...", "kakaoCalendarLastSyncedAt": "...",
               "cautionPoints": 2, "warningCount": 0, "lastBanStartAt": null, "lastBanEndAt": null,
               "lastAccessAt": "2026-10-10T09:00:00", "accessDays30": 18, "accessDaily": [{ "date": "2026-10-10", "count": 3 }],
               "lastAppLaunchAt": "2026-10-10T08:55:00", "appLaunchDays30": 12, "appLaunchDaily": [{ "date": "2026-10-10", "count": 2 }] }
@@ -66,6 +69,35 @@ public class UserDetailController {
             res.setGoogleEmail((String) google.get("googleEmail"));
             res.setGoogleLinkedAt(toDateTime(google.get("linkedAt")));
             res.setGoogleLastSyncedAt(toDateTime(google.get("lastSyncedAt")));
+        }
+
+        // 간편로그인 연결 — 어떤 제공자로 들어오는지 (PM 2026-10-13)
+        java.util.List<UserDetailResponse.SocialAccount> socials = new java.util.ArrayList<>();
+        for (Map<String, Object> row : mapper.findSocialAccounts(userId)) {
+            UserDetailResponse.SocialAccount a = new UserDetailResponse.SocialAccount();
+            a.setProvider((String) row.get("provider"));
+            a.setLabel(com.back.global.oauth.OAuthProvider.label(a.getProvider()));
+            a.setEmail((String) row.get("email"));
+            a.setLinkedAt(toDateTime(row.get("linkedAt")));
+            socials.add(a);
+        }
+        res.setSocialAccounts(socials);
+        res.setSocialOnly(com.back.auth.core.SocialOnlyPassword.is(mapper.findPasswordHash(userId)));
+
+        Map<String, Object> naver = mapper.findNaverCalendar(userId);
+        res.setNaverCalendarLinked(naver != null);
+        if (naver != null) {
+            res.setNaverCalendarEmail((String) naver.get("naverEmail"));
+            res.setNaverCalendarLinkedAt(toDateTime(naver.get("linkedAt")));
+            res.setNaverCalendarLastSentAt(toDateTime(naver.get("lastSentAt")));
+            res.setNaverCalendarSentCount(naver.get("sentCount") == null ? 0 : ((Number) naver.get("sentCount")).intValue());
+        }
+        Map<String, Object> kakao = mapper.findKakaoCalendar(userId);
+        res.setKakaoCalendarLinked(kakao != null);
+        if (kakao != null) {
+            res.setKakaoCalendarName((String) kakao.get("kakaoName"));
+            res.setKakaoCalendarLinkedAt(toDateTime(kakao.get("linkedAt")));
+            res.setKakaoCalendarLastSyncedAt(toDateTime(kakao.get("lastSyncedAt")));
         }
 
         Set<String> disabled = Set.copyOf(preferenceMapper.findDisabledTypes(userId));

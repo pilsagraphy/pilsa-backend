@@ -9,6 +9,7 @@ import org.apache.ibatis.annotations.Param;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 모니터링 고도화 조회 (PM 2026-10-10 밤) — 요약 카드 · 미접속 회원 · 게시판 활동 · 푸시 미등록 · 활동 상위.
@@ -32,6 +33,21 @@ public interface AdminInsightMapper {
     int countPendingReportTargets();
 
     int countPushRegisteredMembers();
+
+    /** 간편로그인 제공자별 연결 회원 수 [{ provider, cnt }] (탈퇴 제외) */
+    List<Map<String, Object>> countSocialByProvider();
+
+    /** 간편로그인을 하나라도 연결한 회원 수 (탈퇴 제외) */
+    int countSocialLinkedMembers();
+
+    /** 비밀번호 없는 소셜 가입 회원 수 */
+    int countSocialOnlyMembers();
+
+    /** 캘린더 종류별 연동 회원 수 [{ provider: google|naver|kakao, cnt }] (탈퇴 제외) */
+    List<Map<String, Object>> countCalendarByProvider();
+
+    /** 캘린더를 하나라도 연동한 회원 수 (탈퇴 제외) */
+    int countCalendarLinkedMembers();
 
     /** 마지막 접속(접속 기록 → 없으면 last_login_at)이 days 일보다 오래된 회원, 오래된 순 */
     List<MemberActivityRow> findInactiveMembers(@Param("days") int days);
