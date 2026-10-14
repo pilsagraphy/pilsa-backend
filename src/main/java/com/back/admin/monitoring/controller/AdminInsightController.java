@@ -1,6 +1,9 @@
 package com.back.admin.monitoring.controller;
 
 import com.back.admin.monitoring.dto.BoardActivityResponse;
+import com.back.admin.monitoring.dto.CalendarIssueResponse;
+import com.back.admin.monitoring.dto.CohortRetentionRow;
+import com.back.admin.monitoring.dto.ContentReactionResponse;
 import com.back.admin.monitoring.dto.MemberActivityRow;
 import com.back.admin.monitoring.dto.MonitoringSummaryResponse;
 import com.back.admin.monitoring.dto.TrendingReportResponse;
@@ -63,5 +66,31 @@ public class AdminInsightController {
     @GetMapping("/api/admin/monitoring/trending/policy")
     public ResponseEntity<TrendingReportResponse> trendingPolicy() {
         return ResponseEntity.ok(service.getTrendingPolicy());
+    }
+
+    @Operation(summary = "가입 코호트 잔존", description = """
+            가입 주(월요일 기준)별로 가입일+7N ~ +7N+7 일 창에 한 번이라도 접속(stats_access_hourly)한 회원 수. N=1·2·4.
+            `[{ weekStart, signups, w1Eligible, w1Retained, w2Eligible, w2Retained, w4Eligible, w4Retained }]` — eligible 은 창이 다 지난 회원(분모), 최근 주부터""")
+    @GetMapping("/api/admin/monitoring/cohort-retention")
+    public ResponseEntity<List<CohortRetentionRow>> cohortRetention(@Parameter(description = "최근 몇 주 (기본 12, 최대 52)") @RequestParam(defaultValue = "12") int weeks) {
+        return ResponseEntity.ok(service.getCohortRetention(weeks));
+    }
+
+    @Operation(summary = "콘텐츠 반응", description = """
+            기간 안 정상 글의 게시판별 반응. 댓글은 state='normal' 이고 비밀 댓글이 아닌 것만.
+            `{ days, boards: [{ boardId, boardName, postCount, commentCount, likeCount, zeroCommentPosts, medianFirstCommentMinutes }] }` — 첫 댓글은 글쓴이 본인 댓글 제외, 댓글 달린 글이 없으면 null""")
+    @GetMapping("/api/admin/monitoring/content-reaction")
+    public ResponseEntity<ContentReactionResponse> contentReaction(@Parameter(description = "최근 며칠 (기본 30, 최대 365)") @RequestParam(defaultValue = "30") int days) {
+        return ResponseEntity.ok(service.getContentReaction(days));
+    }
+
+    @Operation(summary = "캘린더 연동 장애", description = """
+            `{ staleDays, googleFailedMembers, kakaoFailedMembers, naverStuckMembers, staleLinks,
+               rows: [{ provider: google|kakao|naver, issue: FAILED|TOKEN|STALE, userId, name, loginId, memberType, failedCount, exhaustedCount, lastError, lastReflectedAt }] }`
+            FAILED = 구글·카카오 동기화 실패 매핑이 남은 회원, TOKEN = 네이버 토큰 갱신 실패로 멈춘 회원(만료 뒤 등록된 일정이 있는데 토큰이 그대로),
+            STALE = 마지막 반영(last_synced_at / last_sent_at, 없으면 연동 시각)이 staleDays 일 넘게 없는 연동""")
+    @GetMapping("/api/admin/monitoring/calendar/issues")
+    public ResponseEntity<CalendarIssueResponse> calendarIssues(@Parameter(description = "며칠 넘게 반영 없으면 (기본 7)") @RequestParam(defaultValue = "7") int staleDays) {
+        return ResponseEntity.ok(service.getCalendarIssues(staleDays));
     }
 }
