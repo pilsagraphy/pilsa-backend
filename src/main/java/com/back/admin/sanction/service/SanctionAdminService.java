@@ -33,6 +33,10 @@ public class SanctionAdminService {
         AuthUtils.requireAdmin(); // URL(/api/admin/**) 규칙과 별개의 서비스단 방어선
         SanctionedUserResponse base = sanctionMapper.findSanctionedUserById(userId);
         if (base == null) {
+            // 강제 탈퇴 회원 — 목록에 '강퇴' 로 나오므로 상세도 열린다 (PM 2026-10-17)
+            base = sanctionMapper.findWithdrawnSanctionRow(userId);
+        }
+        if (base == null) {
             throw new SanctionException("존재하지 않는 회원입니다.", HttpStatus.NOT_FOUND);
         }
 
@@ -43,6 +47,9 @@ public class SanctionAdminService {
 
         SanctionedUserDetailResponse detail = new SanctionedUserDetailResponse();
         detail.setTag(base.getTag());
+        detail.setWithdrawReason(base.getWithdrawReason());
+        detail.setWithdrawnAt(base.getWithdrawnAt());
+        detail.setWithdrawnByName(base.getWithdrawnByName());
         detail.setBanStatus(base.getBanStatus());
         detail.setBannedUntil(base.getBannedUntil());
         detail.setBanStartedAt(base.getBanStartedAt());

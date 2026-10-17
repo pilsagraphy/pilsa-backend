@@ -12,6 +12,9 @@ import java.util.List;
 @Mapper
 public interface SanctionMapper {
 
+    /** 강제 탈퇴 회원 행 (tag=withdrawn, 가린 이름·아이디). 이력이 없으면 null */
+    SanctionedUserResponse findWithdrawnSanctionRow(@Param("userId") Long userId);
+
     // 현재 유효한(회수되지 않고 만료되지 않은) 주의 포인트 합계
     int sumValidCautionPoints(@Param("userId") Long userId);
 
