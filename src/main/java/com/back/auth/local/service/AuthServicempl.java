@@ -169,8 +169,8 @@ public class AuthServicempl implements AuthService {
         // 정규식은 policy_settings(signup_*_regex)에서 로드한다. 프론트 검증만으로는 API 직접 호출을 못 막는다.
         validateSignupFormat(request);
         requireMatch(request.getPassword(), "signup_password_regex",
-                "^(?=.*[A-Za-z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,20}$",
-                "비밀번호는 문자, 숫자, 특수문자를 포함한 8~20자여야 합니다.");
+                "^(?=.*[A-Za-z])(?=.*[0-9]).{8,20}$",
+                "비밀번호는 문자와 숫자를 섞어 8~20자로 입력해주세요.");
         createUser(request, passwordEncoder.encode(request.getPassword()));
     }
 
@@ -444,8 +444,8 @@ public class AuthServicempl implements AuthService {
 
         // 새 비밀번호 형식 검증 — 회원가입과 동일 규칙 재사용. 초기화 경로로 규칙 위반 비밀번호가 설정되는 구멍 봉쇄
         requireMatch(request.getNewPassword(), "signup_password_regex",
-                "^(?=.*[A-Za-z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,20}$",
-                "비밀번호는 문자, 숫자, 특수문자를 포함한 8~20자여야 합니다.");
+                "^(?=.*[A-Za-z])(?=.*[0-9]).{8,20}$",
+                "비밀번호는 문자와 숫자를 섞어 8~20자로 입력해주세요.");
 
         // 이메일 인증(인증번호) 통과 여부를 서버에서 확인 — 없으면 아이디만 알면 남의 비밀번호를 바꿀 수 있다 (계정 탈취 구멍)
         String verifiedKey = "auth:mail:verified:" + user.getEmail();
@@ -492,8 +492,8 @@ public class AuthServicempl implements AuthService {
 
         // 회원가입과 동일 규칙 재사용(policy_settings.signup_password_regex)
         requireMatch(newPassword, "signup_password_regex",
-                "^(?=.*[A-Za-z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{8,20}$",
-                "비밀번호는 문자, 숫자, 특수문자를 포함한 8~20자여야 합니다.");
+                "^(?=.*[A-Za-z])(?=.*[0-9]).{8,20}$",
+                "비밀번호는 문자와 숫자를 섞어 8~20자로 입력해주세요.");
 
         if (!creating && passwordEncoder.matches(newPassword, me.getPasswordHash())) {
             throw new AuthException("새 비밀번호가 현재 비밀번호와 같습니다.", HttpStatus.BAD_REQUEST);

@@ -41,7 +41,7 @@ public class PasswordChangeController {
                     ※ 비밀번호 없는 소셜 가입 회원(GET /api/user/mypage 의 socialOnly)은 currentPassword 없이 보내면 "비밀번호 만들기" 로 동작하고
                       응답은 {"message":"비밀번호를 만들었어요. 다시 로그인해 주세요."} — 이 경우도 token_version 이 올라 다시 로그인해야 한다.
                     실패: 400 {"message":"현재 비밀번호가 일치하지 않습니다."}
-                    실패: 400 {"message":"비밀번호는 문자, 숫자, 특수문자를 포함한 8~20자여야 합니다."} (policy_settings.signup_password_regex)
+                    실패: 400 {"message":"비밀번호는 문자와 숫자를 섞어 8~20자로 입력해주세요."} (policy_settings.signup_password_regex)
                     실패: 400 {"message":"새 비밀번호가 현재 비밀번호와 같습니다."}
                     실패: 401 (미인증)
                     """)
