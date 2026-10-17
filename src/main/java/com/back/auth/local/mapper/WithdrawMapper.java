@@ -39,6 +39,14 @@ public interface WithdrawMapper {
     /** 후보의 잔여 알림 행 물리 삭제 (users FK 해제용 — 알림은 증적 가치 없음) */
     int deleteNotificationsByUserIds(@Param("userIds") List<Long> userIds);
 
+    /** 강제 탈퇴 이력 한 줄 (가린 이름·아이디만 — 원문은 남기지 않는다) */
+    int insertForceWithdrawLog(@Param("userId") Long userId, @Param("maskedName") String maskedName,
+                               @Param("maskedLoginId") String maskedLoginId, @Param("memberType") String memberType,
+                               @Param("reason") String reason, @Param("withdrawnBy") Long withdrawnBy);
+
+    /** 보관 기간(force_withdraw_log_days)이 지난 강제 탈퇴 이력 삭제 */
+    int deleteOldForceWithdrawLogs(@Param("retentionDays") int retentionDays);
+
     /** 탈퇴 행 물리 삭제 — findPurgeableWithdrawnUserIds 로 걸러진 id 만 넣을 것 */
     int deleteUsersByIds(@Param("userIds") List<Long> userIds);
 }

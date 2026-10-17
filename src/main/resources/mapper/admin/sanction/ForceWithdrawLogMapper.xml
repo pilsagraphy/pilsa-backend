@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.back.admin.sanction.mapper.ForceWithdrawLogMapper">
+
+    <sql id="where">
+        <where>
+            <if test="keyword != null and keyword != ''">
+                (l.masked_name LIKE CONCAT('%', #{keyword}, '%')
+                 OR l.masked_login_id LIKE CONCAT('%', #{keyword}, '%')
+                 OR l.reason LIKE CONCAT('%', #{keyword}, '%')
+                 OR CAST(l.user_id AS CHAR) = #{keyword})
+            </if>
+        </where>
+    </sql>
+
+    <select id="findPage" resultType="com.back.admin.sanction.dto.ForceWithdrawLogResponse$Row">
+        SELECT l.log_id          AS logId,
+               l.user_id         AS userId,
+               l.masked_name     AS maskedName,
+               l.masked_login_id AS maskedLoginId,
+               l.member_type     AS memberType,
+               l.reason,
+               l.withdrawn_by    AS withdrawnBy,
+               a.name            AS withdrawnByName,
+               l.created_at      AS createdAt
+        FROM admin_withdraw_log l
+        LEFT JOIN users a ON a.user_id = l.withdrawn_by
+        <include refid="where"/>
+        ORDER BY l.created_at DESC, l.log_id DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(*) FROM admin_withdraw_log l
+        <include refid="where"/>
+    </select>
+</mapper>
