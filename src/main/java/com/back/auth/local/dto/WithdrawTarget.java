@@ -12,4 +12,6 @@ public class WithdrawTarget {
     private String email;
     private String studentNo;
     private Integer adminLevel;
+    private String name;        // 강제 탈퇴 이력에 가린 이름으로 남긴다 (파기 전에 읽어 둔다)
+    private String memberType;
 }

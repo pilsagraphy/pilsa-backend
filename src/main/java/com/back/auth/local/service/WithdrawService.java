@@ -90,7 +90,7 @@ public class WithdrawService {
      * 처리 내용은 본인 탈퇴와 동일 — 재가입 쿨다운·제재 대조도 똑같이 적용된다.
      */
     @Transactional
-    public void forceWithdraw(Long targetUserId) {
+    public void forceWithdraw(Long targetUserId, String reason) {
         // 관리 조치 중 **유일하게 되돌릴 수 없는** 처리(개인정보 즉시 파기)라 최고 레벨만 허용한다.
         // 블라인드/삭제/제재는 전부 소프트삭제 + 로그라 복구 가능하므로 Lv1 부터 가능.
         AuthUtils.requireAdminLevel(3);
@@ -104,8 +104,21 @@ public class WithdrawService {
             throw new AuthException("관리자 계정은 강제 탈퇴할 수 없습니다. 관리 권한을 해제한 뒤 진행해주세요.", HttpStatus.BAD_REQUEST);
         }
 
+        // 사유 필수 — 되돌릴 수 없는 유일한 조치라 이유를 남긴다 (PM 2026-10-17)
+        String trimmedReason = reason == null ? "" : reason.trim();
+        if (trimmedReason.isEmpty()) {
+            throw new AuthException("강제 탈퇴 사유를 입력해주세요.", HttpStatus.BAD_REQUEST);
+        }
+        if (trimmedReason.length() > 300) {
+            throw new AuthException("사유는 300자까지 쓸 수 있어요.", HttpStatus.BAD_REQUEST);
+        }
+
+        Long adminId = AuthUtils.currentUserId();
+        // 이력은 파기 전에 가린 값으로 남긴다 — 이름·아이디 원문은 개인정보 즉시 파기 원칙에 따라 남기지 않는다
+        withdrawMapper.insertForceWithdrawLog(targetUserId, maskName(target.getName()), maskLoginId(target.getLoginId()),
+                target.getMemberType(), trimmedReason, adminId);
         anonymizeAndCleanup(targetUserId, target);
-        log.info("관리자 강제 탈퇴 처리 - targetUserId: {}, by: {}", targetUserId, AuthUtils.currentUserId());
+        log.info("관리자 강제 탈퇴 처리 - targetUserId: {}, by: {}", targetUserId, adminId);
     }
 
     // 본인 탈퇴/강제 탈퇴 공통 처리 — 개인정보 파기 + 부수 데이터 정리
@@ -145,6 +158,22 @@ public class WithdrawService {
         } catch (Exception e) {
             log.warn("탈퇴 시 Redis 정리 실패 - userId: {}, {}", userId, e.getMessage());
         }
+    }
+
+    /** 홍길동 → 홍*동, 남궁민수 → 남**수, 이현 → 이*. 누구인지 짐작만 되게 앞·끝 한 글자만 남긴다 */
+    static String maskName(String name) {
+        if (name == null || name.isBlank()) return null;
+        String n = name.trim();
+        if (n.length() == 1) return "*";
+        if (n.length() == 2) return n.charAt(0) + "*";
+        return n.charAt(0) + "*".repeat(n.length() - 2) + n.charAt(n.length() - 1);
+    }
+
+    /** wm5256 → wm***6 (간편로그인 대기 안내와 같은 규칙) */
+    static String maskLoginId(String loginId) {
+        if (loginId == null || loginId.isBlank()) return null;
+        if (loginId.length() <= 3) return loginId.charAt(0) + "***";
+        return loginId.substring(0, 2) + "***" + loginId.charAt(loginId.length() - 1);
     }
 
     /**

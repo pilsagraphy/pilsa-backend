@@ -27,6 +27,7 @@ import java.util.List;
 public class WithdrawnUserPurgeScheduler {
 
     private static final int DEFAULT_RETENTION_DAYS = 90;
+    private static final int DEFAULT_FORCE_LOG_DAYS = 365;
 
     private final WithdrawMapper withdrawMapper;
 
@@ -34,6 +35,11 @@ public class WithdrawnUserPurgeScheduler {
     @Transactional
     public void purgeInactiveWithdrawnUsers() {
         int retentionDays = parseDays(withdrawMapper.findPolicySetting("withdrawn_purge_days"));
+
+        // 강제 탈퇴 이력 — 보관 기간(force_withdraw_log_days, 기본 365일)이 지나면 지운다. 개인정보처리방침에 적은 기간
+        int logDays = parseDays(withdrawMapper.findPolicySetting("force_withdraw_log_days"), DEFAULT_FORCE_LOG_DAYS);
+        int removedLogs = withdrawMapper.deleteOldForceWithdrawLogs(logDays);
+        if (removedLogs > 0) log.info("강제 탈퇴 이력 정리 - 보관 {}일 경과 {}건 삭제", logDays, removedLogs);
 
         List<Long> targets = withdrawMapper.findPurgeableWithdrawnUserIds(retentionDays);
         if (targets.isEmpty()) {
@@ -46,10 +52,14 @@ public class WithdrawnUserPurgeScheduler {
     }
 
     private int parseDays(String value) {
+        return parseDays(value, DEFAULT_RETENTION_DAYS);
+    }
+
+    private int parseDays(String value, int fallback) {
         try {
             return Integer.parseInt(value);
         } catch (Exception e) {
-            return DEFAULT_RETENTION_DAYS;
+            return fallback;
         }
     }
 }

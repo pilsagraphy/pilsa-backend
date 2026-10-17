@@ -162,21 +162,24 @@ public class UserController {
                     ### 요청 예시
                     ```
                     PATCH /api/admin/users/105/withdraw
+                    {"reason":"동아리 회원 아님 (학번 불일치)"}
                     ```
-                    (본문 없음)
+                    reason 필수(300자 이하) — 가린 이름·아이디·회원 번호와 함께 강제 탈퇴 이력(GET /api/admin/sanctions/withdrawals)에 남는다
 
                     ### 응답 예시
                     ```json
                     {"message":"강제 탈퇴 처리되었습니다.","userId":105}
                     ```
+                    실패: 400 {"message":"강제 탈퇴 사유를 입력해주세요."}
                     실패: 404 {"message":"존재하지 않거나 이미 탈퇴한 회원입니다."}
                     실패: 400 {"message":"관리자 계정은 강제 탈퇴할 수 없습니다. 관리 권한을 해제한 뒤 진행해주세요."}
                     """)
     @PatchMapping("/api/admin/users/{userId}/withdraw")
     public ResponseEntity<UserResponse> forceWithdraw(
-            @Parameter(description = "강제 탈퇴할 회원 id", example = "105") @PathVariable Long userId) {
+            @Parameter(description = "강제 탈퇴할 회원 id", example = "105") @PathVariable Long userId,
+            @org.springframework.web.bind.annotation.RequestBody(required = false) java.util.Map<String, String> body) {
         log.info("[관리자] 회원 강제 탈퇴 요청 - userId: {}", userId);
-        withdrawService.forceWithdraw(userId);
+        withdrawService.forceWithdraw(userId, body == null ? null : body.get("reason"));
         return ResponseEntity.ok(new UserResponse("강제 탈퇴 처리되었습니다.", userId));
     }
 }
