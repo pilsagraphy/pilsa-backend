@@ -69,6 +69,12 @@ public class WithdrawService {
             throw new AuthException("탈퇴 처리할 수 없는 계정입니다.", HttpStatus.NOT_FOUND);
         }
 
+        // 관리 권한이 있는 계정은 바로 탈퇴하지 못한다 — 강제 탈퇴와 같은 규칙 (PM 2026-10-18).
+        // 그대로 탈퇴하면 탈퇴 행에 admin_level 이 남아 관리자 수 집계 등에 섞인다. 다른 관리자가 권한을 0으로 내린 뒤 진행
+        if (target.getAdminLevel() != null && target.getAdminLevel() >= 1) {
+            throw new AuthException("관리 권한이 있는 계정은 바로 탈퇴할 수 없어요. 다른 관리자에게 관리 권한 해제를 요청한 뒤 진행해 주세요.", HttpStatus.BAD_REQUEST);
+        }
+
         // 본인 확인 — 토큰 탈취만으로는 탈퇴할 수 없게 현재 비밀번호를 재확인한다.
         // 비밀번호 없는 소셜 전용 계정은 확인 문구("회원 탈퇴")를 그대로 입력받는다 (PM 2026-10-13)
         if (com.back.auth.core.SocialOnlyPassword.is(target.getPasswordHash())) {
