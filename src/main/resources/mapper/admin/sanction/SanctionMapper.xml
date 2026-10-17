@@ -86,7 +86,8 @@
                    WHEN u.ban_status = 'temporary' THEN 'temporary'
                    WHEN <include refid="hasValidCaution"/> THEN 'caution'
                    ELSE 'history'
-               END AS tag
+               END AS tag,
+               NULL AS withdrawReason, NULL AS withdrawnAt, NULL AS withdrawnByName
         FROM users u
         WHERE u.is_deleted = 0
           AND (
@@ -94,7 +95,31 @@
                OR <include refid="hasValidCaution"/>
                OR <include refid="hasHistory"/>
               )
-        ORDER BY u.user_id DESC
+        UNION ALL
+        <include refid="withdrawnRows"/>
+        ORDER BY userId DESC
+    </select>
+
+    <!-- 강제 탈퇴 회원 — admin_withdraw_log 의 회원별 최신 행. 이름·아이디는 가린 값 (탈퇴 즉시 원문 파기) -->
+    <sql id="withdrawnRows">
+        SELECT l.user_id         AS userId,
+               l.masked_login_id AS loginId,
+               l.masked_name     AS name,
+               NULL              AS email,
+               NULL              AS banStatus,
+               NULL              AS bannedUntil,
+               l.created_at      AS banStartedAt,
+               'withdrawn'       AS tag,
+               l.reason          AS withdrawReason,
+               l.created_at      AS withdrawnAt,
+               a.name            AS withdrawnByName
+        FROM admin_withdraw_log l
+        LEFT JOIN users a ON a.user_id = l.withdrawn_by
+        WHERE l.log_id IN (SELECT MAX(log_id) FROM admin_withdraw_log GROUP BY user_id)
+    </sql>
+
+    <select id="findWithdrawnSanctionRow" resultType="com.back.admin.sanction.dto.SanctionedUserResponse">
+        SELECT * FROM (<include refid="withdrawnRows"/>) w WHERE w.userId = #{userId}
     </select>
 
     <select id="findSanctionedUserById" resultType="com.back.admin.sanction.dto.SanctionedUserResponse">
