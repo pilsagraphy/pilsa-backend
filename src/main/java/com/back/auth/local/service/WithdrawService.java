@@ -52,6 +52,10 @@ public class WithdrawService {
     private final com.back.mypage.calendar.service.GoogleCalendarService googleCalendarService;
     private final com.back.mypage.calendar.service.KakaoCalendarService kakaoCalendarService;
     private final com.back.mypage.calendar.service.NaverCalendarService naverCalendarService;
+    // 연동 여부 선확인용 — 각 unlink 는 연동이 없으면 404 를 던지는데, 그 예외가 탈퇴 트랜잭션을 되돌린다 (anonymizeAndCleanup 주석)
+    private final com.back.mypage.calendar.mapper.GoogleCalendarMapper googleCalendarMapper;
+    private final com.back.mypage.calendar.mapper.KakaoCalendarMapper kakaoCalendarMapper;
+    private final com.back.mypage.calendar.mapper.NaverCalendarMapper naverCalendarMapper;
 
     /** 소셜 전용 계정의 탈퇴 확인 문구 — 프론트 WithdrawModal 과 같은 값 */
     public static final String WITHDRAW_CONFIRM_TEXT = "회원 탈퇴";
@@ -115,10 +119,13 @@ public class WithdrawService {
 
         // 간편로그인 연결 — 소셜 계정 ID 도 개인정보이고, 남겨 두면 그 소셜 계정을 다시는 못 쓴다
         socialAccountMapper.deleteByUserId(userId);
-        // 캘린더 연동 — 제공자 토큰 폐기까지. 연동이 없으면 404 가 나므로 조용히 넘긴다. 실패해도 탈퇴는 진행
-        unlinkCalendarQuietly("구글", () -> googleCalendarService.unlink(userId, false));
-        unlinkCalendarQuietly("카카오", () -> kakaoCalendarService.unlink(userId, false));
-        unlinkCalendarQuietly("네이버", () -> naverCalendarService.unlink(userId));
+        // 캘린더 연동 — 제공자 토큰 폐기까지 (폐기 실패는 각 unlink 가 삼킨다).
+        // 연동이 있을 때만 부른다: unlink 는 연동이 없으면 404 를 던지고, @Transactional 메서드가 던진 예외는 여기서 잡아도
+        // 이 탈퇴 트랜잭션을 rollback-only 로 만들어 커밋 때 UnexpectedRollbackException(500) — 탈퇴 전체가 되돌아간다.
+        // 캘린더 3종을 다 연동한 회원이 아니면 본인 탈퇴·강제 탈퇴가 전부 "서버 오류"로 실패하던 원인 (2026-10-17)
+        if (googleCalendarMapper.findByUserId(userId) != null) googleCalendarService.unlink(userId, false);
+        if (kakaoCalendarMapper.findByUserId(userId) != null) kakaoCalendarService.unlink(userId, false);
+        if (naverCalendarMapper.findByUserId(userId) != null) naverCalendarService.unlink(userId);
 
         // 임시저장(초안)과 초안에 묶인 선업로드 파일 정리 — 초안은 본인만 보던 미발행 개인 작업물이라
         // 개인정보 즉시 파기 원칙의 대상이고, 여기서 지우지 않으면 어떤 배치도 못 지운다:
@@ -137,16 +144,6 @@ public class WithdrawService {
             redisTemplate.delete("auth:mail:verified:" + target.getEmail());
         } catch (Exception e) {
             log.warn("탈퇴 시 Redis 정리 실패 - userId: {}, {}", userId, e.getMessage());
-        }
-    }
-
-    private void unlinkCalendarQuietly(String label, Runnable unlink) {
-        try {
-            unlink.run();
-        } catch (com.back.global.oauth.GoogleIntegrationException e) {
-            if (e.getStatus() != HttpStatus.NOT_FOUND) log.warn("탈퇴 시 {} 캘린더 연동 해제 실패 (무시): {}", label, e.getMessage());
-        } catch (Exception e) {
-            log.warn("탈퇴 시 {} 캘린더 연동 해제 실패 (무시): {}", label, e.getMessage());
         }
     }
 
