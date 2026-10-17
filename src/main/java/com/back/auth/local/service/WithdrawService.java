@@ -168,11 +168,14 @@ public class WithdrawService {
 
     /** 홍길동 → 홍*동, 남궁민수 → 남**수, 이현 → 이*. 누구인지 짐작만 되게 앞·끝 한 글자만 남긴다 */
     static String maskName(String name) {
+        // 길이의 약 1/3 만 가운데에서 가린다 (PM 2026-10-18 "비율 맞춰서") — 홍길동→홍*동, 남궁민수→남궁*수, 네이버테스터→네이**스터, 이현→이*
         if (name == null || name.isBlank()) return null;
         String n = name.trim();
-        if (n.length() == 1) return "*";
-        if (n.length() == 2) return n.charAt(0) + "*";
-        return n.charAt(0) + "*".repeat(n.length() - 2) + n.charAt(n.length() - 1);
+        int len = n.length();
+        if (len == 1) return "*";
+        int masked = Math.max(1, Math.round(len / 3f));
+        int start = (len - masked + 1) / 2; // 홀수 여백이면 뒤쪽을 하나 덜 남긴다 (남궁*수)
+        return n.substring(0, start) + "*".repeat(masked) + n.substring(start + masked);
     }
 
     /** wm5256 → wm***6 (간편로그인 대기 안내와 같은 규칙) */
