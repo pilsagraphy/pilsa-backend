@@ -13,10 +13,10 @@ public interface TrendingNotifyMapper {
     Long findBoardIdByName(@Param("name") String name);
 
     /** 지난 7일 급상승으로 선정됐던 글 — final_score 높은 순, 글당 1행 */
-    List<TrendingNotifyPost> findTrendingPosts(@Param("boardId") Long boardId, @Param("limit") int limit);
+    List<TrendingNotifyPost> findTrendingPosts(@Param("boardId") Long boardId, @Param("limit") int limit, @Param("days") int days);
 
-    /** 급상승이 없던 주의 대안 — 지난 7일 반응(조회+좋아요×5+댓글×3) 상위 */
-    List<TrendingNotifyPost> findTopReactedPosts(@Param("boardId") Long boardId, @Param("limit") int limit);
+    /** 급상승이 없던 기간의 대안 — 지난 days 일 반응(조회+좋아요×5+댓글×3) 상위 */
+    List<TrendingNotifyPost> findTopReactedPosts(@Param("boardId") Long boardId, @Param("limit") int limit, @Param("days") int days);
 
     /** N일 이상 접속 기록이 없는 회원 (기록이 아예 없는 회원 포함). 탈퇴·차단 제외 */
     List<Long> findInactiveUserIds(@Param("days") int days, @Param("activeWithinDays") int activeWithinDays);
