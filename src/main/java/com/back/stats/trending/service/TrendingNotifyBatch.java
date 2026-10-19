@@ -11,12 +11,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.stream.Collectors;
 
 /**
  * 주간 인기 글 알림 — 오래 안 들어온 회원에게 자유게시판의 이번 주 인기 글을 모아 보낸다 (PM 2026-10-10).
- * 흔한 커뮤니티 앱의 "돌아오세요" 알림. 매주 화요일 10시(Asia/Seoul).
+ * 흔한 커뮤니티 앱의 "돌아오세요" 알림. 화요일 10시(Asia/Seoul), 2주에 한 번 (trending_notify_interval_weeks, PM 2026-10-19).
  *
  * 수치는 전부 policy_settings:
  *   notify_trending (0/1, 운영 관리 > 알림 설정 스위치) · trending_notify_inactive_days (기본 7)
@@ -38,6 +41,12 @@ public class TrendingNotifyBatch {
     private static final String ACTIVE_WITHIN_DAYS = "trending_notify_active_within_days";
     private static final String BOARD_NAME = "trending_notify_board_name";
     private static final String MAX_POSTS = "trending_notify_max_posts";
+    // 발송 주기 (PM 2026-10-19 "2주에 한번") — 배치는 매주 화요일에 깨어나되 기준일부터 interval 주가 되는 주에만 보낸다.
+    // 기준일은 첫 발송일(2026-10-13). 재시작·재배포에도 같은 주를 고르도록 상태를 저장하지 않고 날짜로만 판정한다
+    private static final String INTERVAL_WEEKS = "trending_notify_interval_weeks";
+    private static final String ANCHOR_DATE = "trending_notify_anchor_date";
+    private static final int DEFAULT_INTERVAL_WEEKS = 2;
+    private static final String DEFAULT_ANCHOR_DATE = "2026-10-13";
     private static final int DEFAULT_INACTIVE_DAYS = 7;
     private static final int DEFAULT_ACTIVE_WITHIN_DAYS = 183; // 반년
     private static final String DEFAULT_BOARD_NAME = "자유게시판";
@@ -56,6 +65,15 @@ public class TrendingNotifyBatch {
             log.info("주간 인기 글 알림 — notify_trending 꺼짐, 건너뜀");
             return;
         }
+        int intervalWeeks = intSetting(INTERVAL_WEEKS, DEFAULT_INTERVAL_WEEKS);
+        LocalDate anchor = parseDate(stringSetting(ANCHOR_DATE, DEFAULT_ANCHOR_DATE));
+        long weeks = ChronoUnit.WEEKS.between(anchor, LocalDate.now(ZoneId.of("Asia/Seoul")));
+        if (weeks < 0 || weeks % intervalWeeks != 0) {
+            log.info("주간 인기 글 알림 — {}주 주기라 이번 주는 건너뜀 (기준일 {}부터 {}주째)", intervalWeeks, anchor, weeks);
+            return;
+        }
+        // 글은 지난 발송 이후 기간(주기×7일)에서 고른다
+        int pickDays = intervalWeeks * 7;
         int inactiveDays = intSetting(INACTIVE_DAYS, DEFAULT_INACTIVE_DAYS);
         int activeWithinDays = Math.max(inactiveDays + 1, intSetting(ACTIVE_WITHIN_DAYS, DEFAULT_ACTIVE_WITHIN_DAYS));
         int maxPosts = intSetting(MAX_POSTS, DEFAULT_MAX_POSTS);
@@ -66,8 +84,8 @@ public class TrendingNotifyBatch {
             log.warn("주간 인기 글 알림 — 게시판 '{}' 이 없어 건너뜀", boardName);
             return;
         }
-        List<TrendingNotifyPost> posts = mapper.findTrendingPosts(boardId, maxPosts);
-        if (posts.isEmpty()) posts = mapper.findTopReactedPosts(boardId, maxPosts);
+        List<TrendingNotifyPost> posts = mapper.findTrendingPosts(boardId, maxPosts, pickDays);
+        if (posts.isEmpty()) posts = mapper.findTopReactedPosts(boardId, maxPosts, pickDays);
         if (posts.isEmpty()) {
             log.info("주간 인기 글 알림 — 지난주 글이 없어 건너뜀 (board={})", boardName);
             return;
@@ -109,6 +127,14 @@ public class TrendingNotifyBatch {
     private String stringSetting(String code, String fallback) {
         String v = policyMapper.findPolicySetting(code);
         return v == null || v.isBlank() ? fallback : v.trim();
+    }
+
+    private static LocalDate parseDate(String v) {
+        try {
+            return LocalDate.parse(v);
+        } catch (Exception e) {
+            return LocalDate.parse(DEFAULT_ANCHOR_DATE);
+        }
     }
 
     private static String truncate(String s, int max) {

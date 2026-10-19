@@ -18,7 +18,7 @@
             FROM stats_post_hourly s
             WHERE s.board_id = #{boardId}
               AND s.is_trending = 1
-              AND s.stat_hour >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+              AND s.stat_hour >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
             GROUP BY s.post_id
         ) t
         JOIN posts p ON p.post_id = t.post_id AND p.state = 'normal'
@@ -33,7 +33,7 @@
         FROM posts p
         WHERE p.board_id = #{boardId}
           AND p.state = 'normal'
-          AND p.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+          AND p.created_at >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
         ORDER BY (p.view_count
                   + 5 * (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.post_id)
                   + 3 * (SELECT COUNT(*) FROM comments c WHERE c.post_id = p.post_id AND c.state = 'normal')) DESC,
