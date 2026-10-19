@@ -49,6 +49,8 @@
         FROM users u
         WHERE u.is_deleted = 0
           AND u.ban_status &lt;&gt; 'permanent'
+          -- 알림 받을 기기를 등록한 회원만 (PM 2026-10-19 "기기 등록 안 한 사람한테는 발송 안 하고 싶다") — 없으면 어차피 닿지 않는데 발송 수에만 잡혔다
+          AND EXISTS (SELECT 1 FROM notification_devices d WHERE d.user_id = u.user_id)
           AND EXISTS (
               SELECT 1 FROM stats_access_hourly a
               WHERE a.user_id = u.user_id
