@@ -23,6 +23,9 @@ public interface NotificationMapper {
      */
     void insertNotification(NotificationCreate command);
 
+    /** 푸시 전용 알림 기록 — state='push_only' (알림함에 안 보임, 읽음 API 로 읽음만 찍힌다) */
+    void insertPushOnlyNotification(NotificationCreate command);
+
     /**
      * 게시판 열람 대상 회원 전원 (중요 글 알림 수신자). 탈퇴자는 제외.
      * readScope 판정은 BoardPolicy.canRead 와 같다 — 관리자는 항상, MEMBER 는 전원, 그 외는 member_type 일치

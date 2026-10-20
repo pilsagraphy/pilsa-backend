@@ -79,12 +79,23 @@ public class NotificationPublisher {
 
     /**
      * 알림함에 쌓지 않고 OS 푸시만 보낸다 — 주간 인기 글처럼 "지금 들어와 보라" 는 안내용 (PM 2026-10-10: 알림 상자에 누적시키지 말 것).
-     * toastId 가 없으므로 누르면 읽음 처리 없이 대상 화면으로만 간다. 관리자 스위치(notify_*)는 똑같이 본다.
+     * 다만 발송·읽음 기록은 남긴다 (PM 2026-10-20): state='push_only' 행을 만들고 그 id 를 toastId 로 실어,
+     * 누르면 기존 읽음 API 가 is_read/read_at 을 찍는다. 기록 저장이 실패해도 푸시는 toastId 없이 그대로 보낸다.
+     * 관리자 스위치(notify_*)는 똑같이 본다.
      */
     public void pushOnly(Long receiverId, NotificationType type,
                          String targetType, Long targetId, Long boardId,
                          String title, String message) {
         if (!notificationPolicy.isEnabled(type)) return;
-        pushService.sendToUser(receiverId, null, type.name(), title, message, targetType, targetId, boardId);
+        Long toastId = null;
+        try {
+            NotificationCreate command = new NotificationCreate(
+                    receiverId, type.name(), title, message, targetType, targetId);
+            notificationMapper.insertPushOnlyNotification(command);
+            toastId = command.getNotificationId();
+        } catch (Exception e) {
+            log.warn("푸시 전용 알림 기록 실패 - type={}, receiverId={}: {}", type, receiverId, e.getMessage());
+        }
+        pushService.sendToUser(receiverId, toastId, type.name(), title, message, targetType, targetId, boardId);
     }
 }

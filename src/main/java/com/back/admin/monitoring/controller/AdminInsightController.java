@@ -7,6 +7,7 @@ import com.back.admin.monitoring.dto.ContentReactionResponse;
 import com.back.admin.monitoring.dto.HealthSignalResponse;
 import com.back.admin.monitoring.dto.MemberActivityRow;
 import com.back.admin.monitoring.dto.MonitoringSummaryResponse;
+import com.back.admin.monitoring.dto.NotificationReportResponse;
 import com.back.admin.monitoring.dto.TrendingReportResponse;
 import com.back.admin.monitoring.service.AdminInsightService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -14,10 +15,12 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 
 /** 운영 관리 > 모니터링 고도화 (PM 2026-10-10 밤). 전부 관리자(Lv1+) 조회 전용 */
@@ -102,5 +105,21 @@ public class AdminInsightController {
     @GetMapping("/api/admin/monitoring/health-signals")
     public ResponseEntity<HealthSignalResponse> healthSignals() {
         return ResponseEntity.ok(service.getHealthSignals());
+    }
+
+    @Operation(summary = "알림 발송·읽음", description = """
+            notifications 행 기준 (알림함 알림 + 푸시 전용 push_only, 알림함에서 지운 것도 포함). 읽음은 알림함·푸시 클릭으로 읽음 API 가 찍은 것.
+            `{ days, types: [{ type, sent, read, readRate, medianReadMinutes }], batches: [{ date, type, title, sent, read }] }` — batches 는 날짜·종류별, 최근부터""")
+    @GetMapping("/api/admin/monitoring/notifications")
+    public ResponseEntity<NotificationReportResponse> notificationReport(@Parameter(description = "최근 며칠 (기본 30, 최대 365)") @RequestParam(defaultValue = "30") int days) {
+        return ResponseEntity.ok(service.getNotificationReport(days));
+    }
+
+    @Operation(summary = "알림 발송 묶음의 수신자", description = "그날(date) 그 종류(type) 알림을 받은 회원. 읽은 사람 먼저. `[{ notificationId, userId, name, loginId, title, state, read, sentAt, readAt }]`")
+    @GetMapping("/api/admin/monitoring/notifications/recipients")
+    public ResponseEntity<List<NotificationReportResponse.RecipientRow>> notificationRecipients(
+            @Parameter(description = "발송 날짜 yyyy-MM-dd") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @Parameter(description = "알림 종류 (예: TRENDING, COMMENT)") @RequestParam String type) {
+        return ResponseEntity.ok(service.getNotificationRecipients(date, type));
     }
 }

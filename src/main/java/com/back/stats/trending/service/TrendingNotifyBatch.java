@@ -105,7 +105,7 @@ public class TrendingNotifyBatch {
         int sent = 0;
         for (Long receiverId : receivers) {
             try {
-                // 알림함에는 쌓지 않는다 — OS 푸시만, 누르면 그 글로 (PM 2026-10-10)
+                // 알림함에는 쌓지 않는다 — OS 푸시만, 누르면 그 글로 (PM 2026-10-10). 발송·읽음 기록은 push_only 행으로 남는다 (PM 2026-10-20)
                 publisher.pushOnly(receiverId, NotificationType.TRENDING, "post", first.getPostId(), boardId, title, message);
                 sent++;
             } catch (Exception e) {
