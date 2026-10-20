@@ -7,6 +7,7 @@ import com.back.admin.monitoring.dto.ContentReactionResponse;
 import com.back.admin.monitoring.dto.HealthSignalResponse;
 import com.back.admin.monitoring.dto.DateCountRow;
 import com.back.admin.monitoring.dto.MemberActivityRow;
+import com.back.admin.monitoring.dto.NotificationReportResponse;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -88,4 +89,16 @@ public interface AdminInsightMapper {
 
     /** 기타 장애 신호 — 접속 기록·급상승·주간 가입 배치의 마지막 흔적과 캘린더 상한 소진 회원 수 */
     HealthSignalResponse findHealthSignals(@Param("maxRetry") int maxRetry);
+
+    /** from 이후 알림 종류별 발송·읽음 수 (state 무관) */
+    List<NotificationReportResponse.TypeRow> findNotificationTypeStats(@Param("from") LocalDateTime from);
+
+    /** from 이후 읽은 알림마다 발송→읽음 분 */
+    List<NotificationReportResponse.ReadMinutesRow> findNotificationReadMinutes(@Param("from") LocalDateTime from);
+
+    /** from 이후 날짜·종류별 발송 묶음, 최근부터 */
+    List<NotificationReportResponse.BatchRow> findNotificationBatches(@Param("from") LocalDateTime from);
+
+    /** 그날(date) 그 종류(type) 알림의 수신자 */
+    List<NotificationReportResponse.RecipientRow> findNotificationRecipients(@Param("date") LocalDate date, @Param("type") String type);
 }

@@ -265,4 +265,56 @@
         ORDER BY x.lastReflectedAt ASC, u.user_id
     </select>
 
+    <!-- 알림 발송·읽음 (PM 2026-10-20) — state 는 가리지 않는다 (알림함에서 지운 것도, push_only 도 보낸 건 사실) -->
+    <select id="findNotificationTypeStats" resultType="com.back.admin.monitoring.dto.NotificationReportResponse$TypeRow">
+        SELECT type,
+               COUNT(*)                       AS sent,
+               COALESCE(SUM(is_read = 1), 0)  AS `read`
+        FROM notifications
+        WHERE created_at &gt;= #{from}
+        GROUP BY type
+        ORDER BY sent DESC
+    </select>
+
+    <select id="findNotificationReadMinutes" resultType="com.back.admin.monitoring.dto.NotificationReportResponse$ReadMinutesRow">
+        SELECT type,
+               TIMESTAMPDIFF(MINUTE, created_at, read_at) AS minutes
+        FROM notifications
+        WHERE created_at &gt;= #{from}
+          AND is_read = 1
+          AND read_at IS NOT NULL
+    </select>
+
+    <select id="findNotificationBatches" resultType="com.back.admin.monitoring.dto.NotificationReportResponse$BatchRow">
+        SELECT DATE(n.created_at)                                          AS date,
+               n.type,
+               SUBSTRING_INDEX(GROUP_CONCAT(n.title ORDER BY n.created_at DESC SEPARATOR '
+'), '
+', 1) AS title,
+               COUNT(*)                                                    AS sent,
+               COALESCE(SUM(n.is_read = 1), 0)                             AS `read`
+        FROM notifications n
+        WHERE n.created_at &gt;= #{from}
+        GROUP BY DATE(n.created_at), n.type
+        ORDER BY date DESC, sent DESC
+    </select>
+
+    <select id="findNotificationRecipients" resultType="com.back.admin.monitoring.dto.NotificationReportResponse$RecipientRow">
+        SELECT n.notification_id AS notificationId,
+               n.user_id         AS userId,
+               u.name,
+               u.login_id        AS loginId,
+               n.title,
+               n.state,
+               n.is_read = 1     AS `read`,
+               n.created_at      AS sentAt,
+               n.read_at         AS readAt
+        FROM notifications n
+        LEFT JOIN users u ON u.user_id = n.user_id
+        WHERE n.created_at &gt;= #{date}
+          AND n.created_at &lt; DATE_ADD(#{date}, INTERVAL 1 DAY)
+          AND n.type = #{type}
+        ORDER BY n.is_read DESC, n.read_at, u.name
+    </select>
+
 </mapper>

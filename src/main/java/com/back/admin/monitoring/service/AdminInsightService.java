@@ -7,6 +7,7 @@ import com.back.admin.monitoring.dto.ContentReactionResponse;
 import com.back.admin.monitoring.dto.HealthSignalResponse;
 import com.back.admin.monitoring.dto.DateCountRow;
 import com.back.admin.monitoring.dto.MemberActivityRow;
+import com.back.admin.monitoring.dto.NotificationReportResponse;
 import com.back.admin.monitoring.dto.MonitoringSummaryResponse;
 import com.back.admin.monitoring.dto.TrendingReportResponse;
 import com.back.admin.monitoring.mapper.AdminInsightMapper;
@@ -179,6 +180,33 @@ public class AdminInsightService {
         r.setAccessStale(r.getLastAccessHour() == null || r.getLastAccessHour().isBefore(now.minusHours(3)));
         r.setSignupBatchStale(r.getLastSignupCapturedAt() == null || r.getLastSignupCapturedAt().isBefore(now.minusDays(2)));
         return r;
+    }
+
+    /** 알림 발송·읽음 (PM 2026-10-20) — 기간(days) 안 종류별 합계와 날짜·종류별 묶음 */
+    public NotificationReportResponse getNotificationReport(int days) {
+        AuthUtils.requireAdmin();
+        int d = Math.max(1, Math.min(days, 365));
+        LocalDateTime from = LocalDate.now().minusDays(d - 1L).atStartOfDay();
+        Map<String, List<Integer>> minutes = new HashMap<>();
+        for (NotificationReportResponse.ReadMinutesRow row : mapper.findNotificationReadMinutes(from)) {
+            if (row.getMinutes() != null) minutes.computeIfAbsent(row.getType(), k -> new ArrayList<>()).add(Math.max(0, row.getMinutes()));
+        }
+        NotificationReportResponse r = new NotificationReportResponse();
+        r.setDays(d);
+        List<NotificationReportResponse.TypeRow> types = mapper.findNotificationTypeStats(from);
+        for (NotificationReportResponse.TypeRow t : types) {
+            t.setReadRate(t.getSent() == 0 ? null : (double) t.getRead() / t.getSent());
+            t.setMedianReadMinutes(median(minutes.get(t.getType())));
+        }
+        r.setTypes(types);
+        r.setBatches(mapper.findNotificationBatches(from));
+        return r;
+    }
+
+    /** 발송 묶음(그날·그 종류)의 수신자와 읽음 여부 */
+    public List<NotificationReportResponse.RecipientRow> getNotificationRecipients(LocalDate date, String type) {
+        AuthUtils.requireAdmin();
+        return mapper.findNotificationRecipients(date, type);
     }
 
     private static Integer median(List<Integer> values) {

@@ -10,6 +10,15 @@
         VALUES (#{userId}, #{type}, #{title}, #{message}, #{targetType}, #{targetId}, 0, 'normal', NOW())
     </insert>
 
+    <!-- 푸시 전용 알림의 발송 기록 (PM 2026-10-20) — state='push_only' 라 알림함 목록·안읽음 수에는 안 잡히고,
+         푸시를 누르면 읽음 API(markAsRead)가 is_read/read_at 을 찍어 모니터링 '알림 발송·읽음' 에 남는다 -->
+    <insert id="insertPushOnlyNotification"
+            parameterType="com.back.mypage.notification.dto.NotificationCreate"
+            useGeneratedKeys="true" keyProperty="notificationId" keyColumn="notification_id">
+        INSERT INTO notifications (user_id, type, title, message, target_type, target_id, is_read, state, created_at)
+        VALUES (#{userId}, #{type}, #{title}, #{message}, #{targetType}, #{targetId}, 0, 'push_only', NOW())
+    </insert>
+
     <!-- 중요 글 알림 수신자: 그 게시판을 열람할 수 있는 회원 전원 (BoardPolicy.canRead 와 같은 판정) -->
     <select id="findReadableUserIds" resultType="long">
         SELECT user_id
@@ -52,17 +61,17 @@
           AND created_at >= DATE_SUB(NOW(), INTERVAL #{months} MONTH)
     </select>
 
-    <!-- 단건 읽음: 본인 normal 미읽음만 (이미 읽었으면 0행) -->
+    <!-- 단건 읽음: 본인 normal·push_only 미읽음만 (이미 읽었으면 0행). push_only 는 푸시를 누른 기록용 -->
     <update id="markAsRead">
         UPDATE notifications
         SET is_read = 1, read_at = NOW()
         WHERE notification_id = #{toastId}
           AND user_id = #{userId}
-          AND state = 'normal'
+          AND state IN ('normal', 'push_only')
           AND is_read = 0
     </update>
 
-    <!-- 읽음 응답용 이동정보: 본인 normal 알림이 아니면 결과 없음 → 서비스가 404 -->
+    <!-- 읽음 응답용 이동정보: 본인 normal·push_only 알림이 아니면 결과 없음 → 서비스가 404 -->
     <select id="findMoveInfo" resultType="com.back.mypage.notification.dto.NotificationReadResponse">
         SELECT n.notification_id AS toastId,
                n.type,
@@ -73,7 +82,7 @@
         LEFT JOIN posts p ON n.target_type = 'post' AND n.target_id = p.post_id
         WHERE n.notification_id = #{toastId}
           AND n.user_id = #{userId}
-          AND n.state = 'normal'
+          AND n.state IN ('normal', 'push_only')
     </select>
 
     <!-- 전체 읽음: 본인 normal 미읽음(최근 N개월) -->
