@@ -27,9 +27,10 @@ import java.util.stream.Collectors;
  *
  * 글 고르기: 지난 7일 stats_post_hourly 에서 is_trending=1 이었던 글을 final_score 순으로. 하나도 없으면 지난 7일 반응
  * (조회+좋아요×5+댓글×3) 상위로 대신한다 — 조용한 주에도 "아무것도 없어서 안 보냄" 보다는 보내는 편이 목적(재유입)에 맞다.
- * 그래도 없으면(글이 없음) 건너뛴다.
+ * 그래도 없으면(글이 없음) 건너뛴다. 이미 보낸 글(trending_notify_log)은 두 경로 모두 다시 고르지 않는다 (PM 2026-10-25).
  * 받는 사람: 탈퇴·차단이 아니고, 최근 trending_notify_active_within_days(기본 183)일 안에 접속한 적은 있지만
  * 최근 N일 동안은 접속하지 않은 회원 (PM 2026-10-11 "최근 반년 이내 접속했지만 최근 1주일 미접속"). 접속 기록이 없는 회원은 제외.
+ * 그중 누르면 가는 글(첫 글)을 이미 읽은 회원(post_views)과 그 글 작성자도 뺀다 (PM 2026-10-25).
  * 회원 설정 스위치는 두지 않는다(PM) — NotificationPreferenceService.USER_TYPES 에 TRENDING 이 없어 항상 통과한다.
  */
 @Slf4j
@@ -90,13 +91,13 @@ public class TrendingNotifyBatch {
             log.info("주간 인기 글 알림 — 지난주 글이 없어 건너뜀 (board={})", boardName);
             return;
         }
-        List<Long> receivers = mapper.findInactiveUserIds(inactiveDays, activeWithinDays);
+        TrendingNotifyPost first = posts.get(0);
+        List<Long> receivers = mapper.findInactiveUserIds(inactiveDays, activeWithinDays, first.getPostId());
         if (receivers.isEmpty()) {
-            log.info("주간 인기 글 알림 — 최근 {}일 안에 접속했지만 {}일 이상 미접속인 회원 없음", activeWithinDays, inactiveDays);
+            log.info("주간 인기 글 알림 — 최근 {}일 안에 접속했지만 {}일 이상 미접속이고 글 {} 을 안 읽은 회원 없음", activeWithinDays, inactiveDays, first.getPostId());
             return;
         }
 
-        TrendingNotifyPost first = posts.get(0);
         String title = truncate("[" + boardName + "] 이번 주 인기 글", TITLE_MAX);
         String message = truncate(posts.size() == 1
                 ? first.getTitle()
@@ -112,6 +113,8 @@ public class TrendingNotifyBatch {
                 log.warn("주간 인기 글 알림 발행 실패 - userId: {}, {}", receiverId, e.getMessage());
             }
         }
+        // 한 명에게라도 나갔으면 담은 글을 전부 기록 — 다음 회차에 같은 글을 다시 고르지 않게
+        if (sent > 0) mapper.insertSentPosts(posts.stream().map(TrendingNotifyPost::getPostId).toList());
         log.info("주간 인기 글 알림 — 글 {}편, 최근 {}일 접속·{}일 미접속 {}명 중 {}명 발송", posts.size(), activeWithinDays, inactiveDays, receivers.size(), sent);
     }
 
